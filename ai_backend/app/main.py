@@ -3,8 +3,9 @@
 from fastapi import FastAPI, HTTPException
 from .services import llm_service
 
-from .services import rag_service # <-- ADD THIS IMPORT
-
+# CHANGE THIS: Point to the new manual service instead of the old one
+from .services import rag_manual_service as rag_service
+from contextlib import asynccontextmanager
 # # Initialize the FastAPI app
 # app = FastAPI(
 #     title="AI Engineering API",
@@ -17,7 +18,7 @@ from .services import rag_service # <-- ADD THIS IMPORT
 async def lifespan(app: FastAPI):
     # This code runs on startup
     print("Application startup...")
-    rag_service.initialize_rag_chain()
+    rag_service.initialize_manual_rag()
     yield
     # This code runs on shutdown (not used here, but good practice)
     print("Application shutdown...")
@@ -160,7 +161,7 @@ def ask_document(request: llm_service.TextRequest):
     Endpoint to ask questions about a pre-loaded document.
     """
     try:
-        answer = rag_service.query_document(request)
+        answer = rag_service.query_manual_rag(request)
         return llm_service.GenerationResponse(generated_text=answer)
     except ConnectionError as e:
         raise HTTPException(status_code=503, detail=str(e))

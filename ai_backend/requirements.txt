@@ -1,37 +1,29 @@
-# requirements.txt
+# requirements.txt — pinned, Windows-friendly set for your project
 
-# --- Core Web Backend ---
+# --- Web / server ---
 fastapi==0.104.1
-uvicorn[standard]
-python-dotenv
+uvicorn[standard]==0.22.0
+python-dotenv==1.0.0
+pydantic==1.10.13
 
-# --- Local, Free AI Models (CPU-based) ---
-torch
-transformers
-sentencepiece
-
-
-# The CRITICAL pin: Forcing Pydantic to version 1.x.x
-# This is required by the older version of LangChain.
-pydantic<2.0.0
-
-# --- External API Tools ---
-requests
-
-# --- LangChain Orchestration Framework ---
-# Pinning to a late 0.0.x version of LangChain, before the big refactor.
-langchain==0.0.354
-# This version of the google package is compatible with the older langchain.
+# --- LangChain 0.0.x ecosystem (compatible pinned versions) ---
+langchain==0.0.330
+langchain-core==0.1.23
+langchain-community==0.0.20
 langchain-google-genai==0.0.9
+langsmith==0.0.87
 
+# --- AI & local models ---
+torch==2.2.2
+transformers==4.36.0
+sentencepiece==0.1.99
 
+# --- Vector DB / RAG ---
+chromadb==0.4.24
+pypdf==3.14.0
+tiktoken==0.4.0
 
-# --- For RAG and Vector Databases ---
-# Vector Database
-chromadb
-# For loading documents (e.g., PDFs)
-pypdf
-# LangChain's text splitting utilities rely on this
-tiktoken
-# Document loaders and vector store integrations are in the community package
-langchain-community
+# --- External APIs & utilities ---
+requests==2.31.0
+openai==1.14.3
+python-multipart==0.0.6
