@@ -1,7 +1,37 @@
-fastapi==0.100.2
-uvicorn[standard]==0.22.0
-httpx==0.24.1
-python-dotenv==1.0.0
-pydantic==1.10.12
-loguru==0.7.0
-pytest==7.4.0
+# requirements.txt
+
+# --- Core Web Backend ---
+fastapi==0.104.1
+uvicorn[standard]
+python-dotenv
+
+# --- Local, Free AI Models (CPU-based) ---
+torch
+transformers
+sentencepiece
+
+
+# The CRITICAL pin: Forcing Pydantic to version 1.x.x
+# This is required by the older version of LangChain.
+pydantic<2.0.0
+
+# --- External API Tools ---
+requests
+
+# --- LangChain Orchestration Framework ---
+# Pinning to a late 0.0.x version of LangChain, before the big refactor.
+langchain==0.0.354
+# This version of the google package is compatible with the older langchain.
+langchain-google-genai==0.0.9
+
+
+
+# --- For RAG and Vector Databases ---
+# Vector Database
+chromadb
+# For loading documents (e.g., PDFs)
+pypdf
+# LangChain's text splitting utilities rely on this
+tiktoken
+# Document loaders and vector store integrations are in the community package
+langchain-community

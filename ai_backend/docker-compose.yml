@@ -1,0 +1,19 @@
+# docker-compose.yml
+version: '3.8'
+
+services:
+  web:
+    # Build the image from the Dockerfile in the current directory.
+    build: .
+
+    # Map port 5444 on your host machine to port 5444 in the container.
+    ports:
+      - "5444:5444"
+
+    # Securely pass API keys and other secrets from your .env file
+    # into the container as environment variables.
+    env_file:
+      - .env
+
+    # Give the container a friendly name.
+    container_name: ai_engineering_api
