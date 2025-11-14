@@ -1,0 +1,179 @@
+{
+  "info": {
+    "_postman_id": "2897a641-39e3-40bd-9cef-a517af2e23f2",
+    "name": "Local RAG (LlamaCpp) API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "llm-generated"
+  },
+  "item": [
+    {
+      "name": "Health Check",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "http://127.0.0.1:8000/api/local/health"
+      }
+    },
+    {
+      "name": "Add File to RAG",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            {
+              "key": "file",
+              "type": "file",
+              "src": "/absolute/path/to/your/file.txt"
+            }
+          ]
+        },
+        "url": "http://127.0.0.1:8000/api/local/add-file"
+      }
+    },
+    {
+      "name": "Add Raw Text",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"text\": \"This is a test document about ducks and ponds.\",\n  \"source_name\": \"doc1\"\n}"
+        },
+        "url": "http://127.0.0.1:8000/api/local/add"
+      }
+    },
+    {
+      "name": "Query RAG + LLM",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"question\": \"What is the document about?\",\n  \"top_k\": 3,\n  \"use_llm\": true\n}"
+        },
+        "url": "http://127.0.0.1:8000/api/local/query"
+      }
+    },
+    {
+      "name": "Query RAG (No LLM)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"question\": \"ducks?\",\n  \"top_k\": 3,\n  \"use_llm\": false\n}"
+        },
+        "url": "http://127.0.0.1:8000/api/local/query"
+      }
+    },
+    {
+      "name": "Reset Vector DB",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "url": "http://127.0.0.1:8000/api/local/reset"
+      }
+    },
+    {
+      "name": "Seed Default Mission.txt",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "url": "http://127.0.0.1:8000/api/local/seed-default"
+      }
+    },
+    {
+      "name": "Debug Python / LlamaCpp",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "http://127.0.0.1:8000/debug/_debug/python"
+      }
+    },
+    {
+      "name": "LLM Sanity Check",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"question\": \"Say hello.\",\n  \"top_k\": 0\n}"
+        },
+        "url": "http://127.0.0.1:8000/api/local/query"
+      }
+    },
+    {
+      "name": "Stress Test - Add Doc A",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"text\": \"This is document A. It discusses apples.\",\n  \"source_name\": \"A\"\n}"
+        },
+        "url": "http://127.0.0.1:8000/api/local/add"
+      }
+    },
+    {
+      "name": "Stress Test - Add Doc B",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"text\": \"Document B is all about bananas.\",\n  \"source_name\": \"B\"\n}"
+        },
+        "url": "http://127.0.0.1:8000/api/local/add"
+      }
+    },
+    {
+      "name": "Stress Test - Query B",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"question\": \"What does document B talk about?\",\n  \"top_k\": 3\n}"
+        },
+        "url": "http://127.0.0.1:8000/api/local/query"
+      }
+    }
+  ]
+}
