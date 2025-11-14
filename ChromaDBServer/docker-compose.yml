@@ -1,0 +1,21 @@
+# docker-compose.yml
+
+services:
+  # 1. ChromaDB Standalone Server Service
+  chroma:
+    image: chromadb/chroma:0.4.24
+    container_name: chroma_server
+    # Expose the internal port 8000 to a known host port, e.g., 7002
+    ports:
+      - "7002:8000" 
+    # Use a volume for persistence
+    volumes:
+      - chroma_storage:/chroma/chroma 
+    environment:
+      - IS_PERSISTENT=TRUE
+      - ANONYMIZED_TELEMETRY=False
+
+# Volumes section for persistence
+volumes:
+  chroma_storage:
+    driver: local

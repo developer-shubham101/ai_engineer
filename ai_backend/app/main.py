@@ -3,6 +3,11 @@
 from fastapi import FastAPI, HTTPException
 from .services import llm_service
 
+# We need these for file uploads
+from fastapi import File, UploadFile
+# Re-using the Pydantic model structure
+from .services.llm_service import GenerationResponse
+
 # CHANGE THIS: Point to the new manual service instead of the old one
 from .services import rag_manual_service as rag_service
 from contextlib import asynccontextmanager
@@ -167,3 +172,36 @@ def ask_document(request: llm_service.TextRequest):
         raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# --- NEW Document Ingestion Endpoint ---
+
+# We define the response as a simple message, re-using a Pydantic model for simplicity
+@app.post("/add-document",
+          response_model=GenerationResponse,  # Re-using for its 'text' field
+          tags=["RAG Services"])
+async def add_document(file: UploadFile = File(...)):
+    """
+    Endpoint to dynamically add a new document (e.g., a text file)
+    to the persistent RAG knowledge base.
+    """
+    try:
+        # 1. Read the file content
+        content = await file.read()
+        document_text = content.decode("utf-8")
+
+        # 2. Call the new RAG service function
+        chunks_added = rag_service.add_document_to_rag(document_text, source_name=file.filename)
+
+        # 3. Return a success message
+        if chunks_added > 0:
+            message = f"Successfully processed and added '{file.filename}'. {chunks_added} chunks ingested."
+            return GenerationResponse(generated_text=message)
+        else:
+            raise HTTPException(status_code=400, detail="The file was empty or could not be processed.")
+
+    except ConnectionError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    except Exception as e:
+        # Use a more descriptive error for file issues
+        raise HTTPException(status_code=500, detail=f"Failed to process document: {e}")
