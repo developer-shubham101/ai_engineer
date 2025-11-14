@@ -1,1 +1,5 @@
-ai_backend/.env
+*.env
+*.gguf
+ai_backend/app/chroma_storage/*
+ai_backend/embeddings_models/all-MiniLM-L6-v2/*
+*.log

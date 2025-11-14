@@ -5,18 +5,21 @@ from .services import llm_service
 
 # We need these for file uploads
 from fastapi import File, UploadFile
+
+from app.logging_config import setup_logging
+
 # Re-using the Pydantic model structure
 from .services.llm_service import GenerationResponse
 
 # CHANGE THIS: Point to the new manual service instead of the old one
 from .services import rag_manual_service as rag_service
 from contextlib import asynccontextmanager
-# # Initialize the FastAPI app
-# app = FastAPI(
-#     title="AI Engineering API",
-#     description="A foundational API for AI engineering skills development.",
-#     version="1.0.0",
-# )
+
+from app.api_routes_local import router as local_router
+from app.services.rag_local_service import seed_from_file
+
+logger = setup_logging()
+
 
 # --- Add this lifespan event handler ---
 @asynccontextmanager
@@ -24,17 +27,27 @@ async def lifespan(app: FastAPI):
     # This code runs on startup
     print("Application startup...")
     rag_service.initialize_manual_rag()
+
+    # seed optionally at startup; ignore if file missing
+    try:
+        seeded_ids = seed_from_file()
+        print("Seeded default file, ids count: %d", len(seeded_ids))
+    except Exception as e:
+        print("Seeding at startup failed or no seed file found: %s", e)
+
     yield
     # This code runs on shutdown (not used here, but good practice)
     print("Application shutdown...")
 
-# Update your FastAPI app initialization
+# # Initialize the FastAPI app
 app = FastAPI(
     title="AI Engineering API",
     description="A foundational API for AI engineering skills development.",
     version="1.0.0",
     lifespan=lifespan # <-- ADD THIS
 )
+
+app.include_router(local_router)
 
 # --- API Endpoints ---
 
@@ -204,4 +217,51 @@ async def add_document(file: UploadFile = File(...)):
         raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
         # Use a more descriptive error for file issues
+        raise HTTPException(status_code=500, detail=f"Failed to process document: {e}")
+
+
+
+from app.services.rag_local_service import add_document_to_rag_local
+
+
+
+
+@app.post("/add-document-local",
+             response_model=GenerationResponse,
+             tags=["Local RAG"])
+async def add_document_local(file: UploadFile = File(...)):
+    """
+    Add a new text document to the *local* RAG knowledge base.
+    Fully offline: local embeddings + local Chroma + local LLM.
+    """
+    try:
+        # 1) Read uploaded file
+        raw = await file.read()
+        if not raw:
+            raise HTTPException(status_code=400, detail="Uploaded file is empty.")
+
+        document_text = raw.decode("utf-8", errors="ignore")
+
+        # 2) Add to RAG (returns list of chunk IDs)
+        chunk_ids = add_document_to_rag_local(
+            source_name=file.filename,
+            text=document_text
+        )
+
+        # 3) Success message
+        if chunk_ids:
+            msg = (
+                f"Successfully ingested '{file.filename}'. "
+                f"{len(chunk_ids)} chunks created and stored."
+            )
+            return GenerationResponse(generated_text=msg)
+        else:
+            raise HTTPException(status_code=400, detail="Failed to process file or file was empty.")
+
+    except HTTPException:
+        raise
+    except ConnectionError as ce:
+        raise HTTPException(status_code=503, detail=str(ce))
+    except Exception as e:
+        print("File ingestion failed: %s", e)
         raise HTTPException(status_code=500, detail=f"Failed to process document: {e}")
