@@ -1,0 +1,8 @@
+Saarthi Infotech Personal Salary Record (example)
+
+Employee Name: Arun Sharma
+Employee ID: emp-101
+Gross Salary: INR 85,000 per month
+Allowances: INR 12,000
+Deductions: INR 5,000
+This information is strictly confidential and accessible only to HR, Legal, Executives, and the employee.

@@ -1,0 +1,8 @@
+Mission Name: USA_Mission_58. Country: USA. Date: 1992-05-08. Outcome: Passed.
+Type: Unmanned lunar lander. Description: USA's USA_Mission_58, launched
+1992-05-08, performed a Unmanned lunar lander mission. Primary goals were to map
+surface composition, test landing and navigation systems, characterize the local
+environment, and return telemetry to ground stations. It achieved its objectives
+and provided valuable data that contributed to scientific knowledge and
+subsequent missions. International collaborations were often leveraged for
+instrument contributions and data analysis.

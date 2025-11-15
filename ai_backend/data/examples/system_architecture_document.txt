@@ -1,0 +1,6 @@
+Saarthi Infotech System Architecture Document (example)
+
+1. Backend: Services communicate using gRPC with load-balanced endpoints.
+2. Secrets: Stored in HashiCorp Vault with role-based authentication.
+3. Scaling: Auto-scaling happens on Kubernetes based on CPU and memory thresholds.
+4. Monitoring: Prometheus + Grafana dashboard pipelines.

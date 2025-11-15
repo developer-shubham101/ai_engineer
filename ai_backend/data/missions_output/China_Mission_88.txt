@@ -1,0 +1,8 @@
+Mission Name: China_Mission_88. Country: China. Date: 2015-03-09. Outcome:
+Passed. Type: Deep space probe. Description: Launched on 2015-03-09,
+China_Mission_88 from China served as a Deep space probe. Primary goals were to
+map surface composition, test landing and navigation systems, characterize the
+local environment, and return telemetry to ground stations. It achieved its
+objectives and provided valuable data that contributed to scientific knowledge
+and subsequent missions. The mission added to the global understanding of
+planetary formation, surface processes, and potential resources.

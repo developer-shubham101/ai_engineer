@@ -1,0 +1,8 @@
+Mission Name: Chandrayaan-1. Country: India. Date: 2008-10-22. Outcome: Passed.
+Type: Unmanned lunar orbiter. Description: Launched on 2008-10-22, Chandrayaan-1
+from India served as a Unmanned lunar orbiter. The mission's objectives included
+scientific observation, technology demonstration, and data collection to support
+future exploration. It achieved its objectives and provided valuable data that
+contributed to scientific knowledge and subsequent missions. Onboard instruments
+typically included imagers, spectrometers, magnetometers, and sometimes landers
+or rovers for in-situ study.

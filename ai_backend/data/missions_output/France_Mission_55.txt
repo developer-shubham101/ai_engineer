@@ -1,0 +1,8 @@
+Mission Name: France_Mission_55. Country: France. Date: 1987-09-04. Outcome:
+Failed. Type: Technology demonstrator. Description: Launched on 1987-09-04,
+France_Mission_55 from France served as a Technology demonstrator. Engineers
+used this flight to validate hardware, improve communications, and gather
+operational experience for follow-up missions. The mission encountered critical
+failures and did not meet its primary objectives, but lessons learned informed
+later programs. The mission added to the global understanding of planetary
+formation, surface processes, and potential resources.

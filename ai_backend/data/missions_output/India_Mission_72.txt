@@ -1,0 +1,8 @@
+Mission Name: India_Mission_72. Country: India. Date: 2003-02-02. Outcome:
+Passed. Type: Solar observatory (L1/L2). Description: India_Mission_72 was a
+Solar observatory (L1/L2) launched by India on 2003-02-02. Primary goals were to
+map surface composition, test landing and navigation systems, characterize the
+local environment, and return telemetry to ground stations. It achieved its
+objectives and provided valuable data that contributed to scientific knowledge
+and subsequent missions. The mission added to the global understanding of
+planetary formation, surface processes, and potential resources.

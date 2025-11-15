@@ -1,0 +1,9 @@
+Mission Name: Germany_Mission_86. Country: Germany. Date: 2013-01-22. Outcome:
+Failed. Type: Crewed lunar mission. Description: Launched on 2013-01-22,
+Germany_Mission_86 from Germany served as a Crewed lunar mission. Primary goals
+were to map surface composition, test landing and navigation systems,
+characterize the local environment, and return telemetry to ground stations. The
+mission encountered critical failures and did not meet its primary objectives,
+but lessons learned informed later programs. Onboard instruments typically
+included imagers, spectrometers, magnetometers, and sometimes landers or rovers
+for in-situ study.

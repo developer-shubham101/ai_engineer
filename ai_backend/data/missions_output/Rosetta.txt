@@ -1,0 +1,8 @@
+Mission Name: Rosetta. Country: ESA. Date: 2004-03-02. Outcome: Passed. Type:
+Unmanned comet rendezvous and lander. Description: Rosetta was a Unmanned comet
+rendezvous and lander launched by ESA on 2004-03-02. The mission's objectives
+included scientific observation, technology demonstration, and data collection
+to support future exploration. It achieved its objectives and provided valuable
+data that contributed to scientific knowledge and subsequent missions. The
+mission added to the global understanding of planetary formation, surface
+processes, and potential resources.

@@ -1,0 +1,9 @@
+Mission Name: Pioneer_10. Country: USA (NASA). Date: 1972-03-02. Outcome:
+Passed. Type: Unmanned Jupiter flyby / interstellar probe. Description:
+Pioneer_10 was a Unmanned Jupiter flyby / interstellar probe launched by USA
+(NASA) on 1972-03-02. Engineers used this flight to validate hardware, improve
+communications, and gather operational experience for follow-up missions. It
+achieved its objectives and provided valuable data that contributed to
+scientific knowledge and subsequent missions. The mission added to the global
+understanding of planetary formation, surface processes, and potential
+resources.

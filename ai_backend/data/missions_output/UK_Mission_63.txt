@@ -1,0 +1,8 @@
+Mission Name: UK_Mission_63. Country: UK. Date: 1997-06-01. Outcome: Passed.
+Type: Unmanned Mars orbiter. Description: UK's UK_Mission_63, launched
+1997-06-01, performed a Unmanned Mars orbiter mission. The mission's objectives
+included scientific observation, technology demonstration, and data collection
+to support future exploration. It achieved its objectives and provided valuable
+data that contributed to scientific knowledge and subsequent missions. Onboard
+instruments typically included imagers, spectrometers, magnetometers, and
+sometimes landers or rovers for in-situ study.

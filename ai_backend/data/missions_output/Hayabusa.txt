@@ -1,0 +1,8 @@
+Mission Name: Hayabusa. Country: Japan. Date: 2003-05-09. Outcome: Passed. Type:
+Unmanned asteroid sample return. Description: Japan's Hayabusa, launched
+2003-05-09, performed a Unmanned asteroid sample return mission. Engineers used
+this flight to validate hardware, improve communications, and gather operational
+experience for follow-up missions. It achieved its objectives and provided
+valuable data that contributed to scientific knowledge and subsequent missions.
+Onboard instruments typically included imagers, spectrometers, magnetometers,
+and sometimes landers or rovers for in-situ study.

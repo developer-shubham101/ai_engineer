@@ -1,0 +1,5 @@
+Saarthi Infotech Network Security Configuration (example)
+
+1. Firewall: Outbound traffic allowed only on ports 443 and 22.
+2. VPN: Internal access uses WireGuard-based tunnels.
+3. Intrusion Detection: Alerts managed by the IT Security team.

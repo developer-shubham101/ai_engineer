@@ -1,0 +1,8 @@
+Mission Name: Israel_Mission_34. Country: Israel. Date: 1975-07-08. Outcome:
+Passed. Type: Deep space probe. Description: Israel's Israel_Mission_34,
+launched 1975-07-08, performed a Deep space probe mission. Primary goals were to
+map surface composition, test landing and navigation systems, characterize the
+local environment, and return telemetry to ground stations. It achieved its
+objectives and provided valuable data that contributed to scientific knowledge
+and subsequent missions. International collaborations were often leveraged for
+instrument contributions and data analysis.

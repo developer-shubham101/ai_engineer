@@ -1,0 +1,8 @@
+Mission Name: India_Mission_43. Country: India. Date: 1979-09-24. Outcome:
+Passed. Type: Crewed lunar mission. Description: India's India_Mission_43,
+launched 1979-09-24, performed a Crewed lunar mission mission. Engineers used
+this flight to validate hardware, improve communications, and gather operational
+experience for follow-up missions. It achieved its objectives and provided
+valuable data that contributed to scientific knowledge and subsequent missions.
+Onboard instruments typically included imagers, spectrometers, magnetometers,
+and sometimes landers or rovers for in-situ study.

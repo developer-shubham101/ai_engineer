@@ -1,0 +1,9 @@
+Mission Name: Chandrayaan-2_Orbiter. Country: India. Date: 2019-07-22. Outcome:
+Passed (orbiter); lander failed. Type: Unmanned lunar orbiter + lander.
+Description: Launched on 2019-07-22, Chandrayaan-2_Orbiter from India served as
+a Unmanned lunar orbiter + lander. The mission's objectives included scientific
+observation, technology demonstration, and data collection to support future
+exploration. It achieved its objectives and provided valuable data that
+contributed to scientific knowledge and subsequent missions. International
+collaborations were often leveraged for instrument contributions and data
+analysis.

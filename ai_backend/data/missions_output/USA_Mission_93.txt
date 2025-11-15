@@ -1,0 +1,8 @@
+Mission Name: USA_Mission_93. Country: USA. Date: 2018-12-05. Outcome: Passed.
+Type: Unmanned lunar lander. Description: USA_Mission_93 was a Unmanned lunar
+lander launched by USA on 2018-12-05. The mission's objectives included
+scientific observation, technology demonstration, and data collection to support
+future exploration. It achieved its objectives and provided valuable data that
+contributed to scientific knowledge and subsequent missions. Onboard instruments
+typically included imagers, spectrometers, magnetometers, and sometimes landers
+or rovers for in-situ study.

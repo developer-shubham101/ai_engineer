@@ -1,0 +1,7 @@
+Saarthi Infotech Leave Policy (example)
+
+1. Annual Leave: Employees are eligible for 21 days of paid annual leave per year.
+2. Sick Leave: Employees have 10 days of paid sick leave per year.
+3. Bonus: Annual bonus is prorated by months worked in the financial year. Formula: (months_worked / 12) * annual_bonus_amount. For probationary employees, bonus may be subject to manager approval.
+4. Approval: Leave must be approved by the manager at least 2 working days in advance for planned leaves.
+5. Confidentiality: Salary details are confidential and not disclosed by this document.

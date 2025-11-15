@@ -1,0 +1,8 @@
+Mission Name: UK_Mission_40. Country: UK. Date: 1977-02-28. Outcome: Passed.
+Type: Space telescope. Description: UK_Mission_40 was a Space telescope launched
+by UK on 1977-02-28. The mission's objectives included scientific observation,
+technology demonstration, and data collection to support future exploration. It
+achieved its objectives and provided valuable data that contributed to
+scientific knowledge and subsequent missions. Onboard instruments typically
+included imagers, spectrometers, magnetometers, and sometimes landers or rovers
+for in-situ study.

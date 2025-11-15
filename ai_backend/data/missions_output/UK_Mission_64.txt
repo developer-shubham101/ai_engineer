@@ -1,0 +1,8 @@
+Mission Name: UK_Mission_64. Country: UK. Date: 1997-01-03. Outcome: Passed.
+Type: Crewed lunar mission. Description: UK_Mission_64 was a Crewed lunar
+mission launched by UK on 1997-01-03. The mission's objectives included
+scientific observation, technology demonstration, and data collection to support
+future exploration. It achieved its objectives and provided valuable data that
+contributed to scientific knowledge and subsequent missions. The mission added
+to the global understanding of planetary formation, surface processes, and
+potential resources.

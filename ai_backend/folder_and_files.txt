@@ -1,0 +1,216 @@
+📂 ai_backend/
+├── 📄 .dockerignore
+├── 📄 .env
+├── 📄 .env.example
+├── 📄 .gitignore
+├── 📁 .idea/
+│   ├── 📄 .gitignore
+│   ├── 📄 ai_backend.iml
+│   ├── 📁 inspectionProfiles/
+│   │   └── 📄 profiles_settings.xml
+│   ├── 📄 misc.xml
+│   ├── 📄 modules.xml
+│   ├── 📄 vcs.xml
+│   └── 📄 workspace.xml
+├── 📄 Dockerfile
+├── 📄 Local-RAG-LlamaCpp.postman_collection.json
+├── 📄 alternative_lib.md
+├── 📁 app/
+│   ├── 📄 __init__.py
+│   ├── 📁 __pycache__/
+│   │   ├── 📄 __init__.cpython-310.pyc
+│   │   ├── 📄 api_routes_local.cpython-310.pyc
+│   │   ├── 📄 logging_config.cpython-310.pyc
+│   │   └── 📄 main.cpython-310.pyc
+│   ├── 📄 api_routes_local.py
+│   ├── 📁 chroma_storage/
+│   │   ├── 📄 chroma.sqlite3
+│   │   └── 📁 d0f80dc9-3972-451f-b4c2-b417d025547b/
+│   │       ├── 📄 data_level0.bin
+│   │       ├── 📄 header.bin
+│   │       ├── 📄 length.bin
+│   │       └── 📄 link_lists.bin
+│   ├── 📄 download_model.py
+│   ├── 📄 logging_config.py
+│   ├── 📄 main.py
+│   ├── 📄 quick_test.py
+│   └── 📁 services/
+│       ├── 📄 __init__.py
+│       ├── 📁 __pycache__/
+│       │   ├── 📄 __init__.cpython-310.pyc
+│       │   ├── 📄 auth.cpython-310.pyc
+│       │   ├── 📄 google_models.cpython-310.pyc
+│       │   ├── 📄 llm_service.cpython-310.pyc
+│       │   ├── 📄 local_models.cpython-310.pyc
+│       │   ├── 📄 openai_models.cpython-310.pyc
+│       │   ├── 📄 rag_local_service.cpython-310.pyc
+│       │   ├── 📄 rag_manual_service.cpython-310.pyc
+│       │   └── 📄 rag_service.cpython-310.pyc
+│       ├── 📄 auth.py
+│       ├── 📄 google_models.py
+│       ├── 📄 huggingface_api_models.py
+│       ├── 📄 llm_service.py
+│       ├── 📄 local_models.py
+│       ├── 📄 openai_models.py
+│       ├── 📄 rag_local_service.py
+│       ├── 📄 rag_local_service.txt
+│       ├── 📄 rag_manual_service.py
+│       └── 📄 rag_service.py
+├── 📁 chroma_storage/
+│   ├── 📁 6b717a9e-790f-443f-b14a-1ce9fac2c248/
+│   │   ├── 📄 data_level0.bin
+│   │   ├── 📄 header.bin
+│   │   ├── 📄 length.bin
+│   │   └── 📄 link_lists.bin
+│   └── 📄 chroma.sqlite3
+├── 📄 create_template.py
+├── 📁 data/
+│   ├── 📁 examples/
+│   │   ├── 📄 finance_expense_policy.txt
+│   │   └── 📄 hr_leave_policy.txt
+│   ├── 📄 mission.py
+│   ├── 📄 mission.txt
+│   └── 📁 missions_output/
+│       ├── 📄 Aditya-L1.txt
+│       ├── 📄 Apollo_11.txt
+│       ├── 📄 Apollo_13.txt
+│       ├── 📄 Apollo_Project.txt
+│       ├── 📄 Argentina_Mission_67.txt
+│       ├── 📄 Argentina_Mission_76.txt
+│       ├── 📄 Australia_Mission_39.txt
+│       ├── 📄 Australia_Mission_85.txt
+│       ├── 📄 Australia_Mission_94.txt
+│       ├── 📄 Beresheet.txt
+│       ├── 📄 Brazil_Mission_38.txt
+│       ├── 📄 Brazil_Mission_44.txt
+│       ├── 📄 Canada_Mission_45.txt
+│       ├── 📄 Canada_Mission_46.txt
+│       ├── 📄 Canada_Mission_47.txt
+│       ├── 📄 Canada_Mission_54.txt
+│       ├── 📄 Canada_Mission_81.txt
+│       ├── 📄 Canada_Mission_83.txt
+│       ├── 📄 Canada_Mission_98.txt
+│       ├── 📄 Chandrayaan-1.txt
+│       ├── 📄 Chandrayaan-2_Orbiter.txt
+│       ├── 📄 Chandrayaan-3.txt
+│       ├── 📄 Chang_e_3.txt
+│       ├── 📄 Chang_e_4.txt
+│       ├── 📄 Chang_e_5.txt
+│       ├── 📄 China_Mission_31.txt
+│       ├── 📄 China_Mission_32.txt
+│       ├── 📄 China_Mission_37.txt
+│       ├── 📄 China_Mission_41.txt
+│       ├── 📄 China_Mission_51.txt
+│       ├── 📄 China_Mission_70.txt
+│       ├── 📄 China_Mission_84.txt
+│       ├── 📄 China_Mission_88.txt
+│       ├── 📄 China_Mission_96.txt
+│       ├── 📄 Company Overview.txt
+│       ├── 📄 Curiosity_MSL.txt
+│       ├── 📄 ESA_Mission_42.txt
+│       ├── 📄 ESA_Mission_57.txt
+│       ├── 📄 ESA_Mission_78.txt
+│       ├── 📄 France_Mission_35.txt
+│       ├── 📄 France_Mission_36.txt
+│       ├── 📄 France_Mission_48.txt
+│       ├── 📄 France_Mission_55.txt
+│       ├── 📄 France_Mission_82.txt
+│       ├── 📄 France_Mission_90.txt
+│       ├── 📄 France_Mission_92.txt
+│       ├── 📄 Germany_Mission_56.txt
+│       ├── 📄 Germany_Mission_62.txt
+│       ├── 📄 Germany_Mission_86.txt
+│       ├── 📄 Germany_Mission_87.txt
+│       ├── 📄 Germany_Mission_95.txt
+│       ├── 📄 Hayabusa.txt
+│       ├── 📄 Hayabusa2.txt
+│       ├── 📄 ISS_Zarya_core.txt
+│       ├── 📄 India_Mission_43.txt
+│       ├── 📄 India_Mission_59.txt
+│       ├── 📄 India_Mission_72.txt
+│       ├── 📄 India_Mission_79.txt
+│       ├── 📄 Israel_Mission_34.txt
+│       ├── 📄 Israel_Mission_74.txt
+│       ├── 📄 Israel_Mission_89.txt
+│       ├── 📄 Japan_Mission_50.txt
+│       ├── 📄 Japan_Mission_60.txt
+│       ├── 📄 Kaguya_SELENE.txt
+│       ├── 📄 LADEE.txt
+│       ├── 📄 Luna_2.txt
+│       ├── 📄 Luna_9.txt
+│       ├── 📄 Mariner_2.txt
+│       ├── 📄 Mars_Pathfinder.txt
+│       ├── 📄 Mir.txt
+│       ├── 📄 Perseverance.txt
+│       ├── 📄 Pioneer_10.txt
+│       ├── 📄 Rosetta.txt
+│       ├── 📄 SMART-1.txt
+│       ├── 📄 South_Mission_49.txt
+│       ├── 📄 South_Mission_61.txt
+│       ├── 📄 South_Mission_68.txt
+│       ├── 📄 South_Mission_71.txt
+│       ├── 📄 South_Mission_91.txt
+│       ├── 📄 Sputnik_1.txt
+│       ├── 📄 UAE_Mission_52.txt
+│       ├── 📄 UAE_Mission_75.txt
+│       ├── 📄 UK_Mission_40.txt
+│       ├── 📄 UK_Mission_63.txt
+│       ├── 📄 UK_Mission_64.txt
+│       ├── 📄 UK_Mission_66.txt
+│       ├── 📄 UK_Mission_80.txt
+│       ├── 📄 UK_Mission_97.txt
+│       ├── 📄 UK_Mission_99.txt
+│       ├── 📄 USA_Mission_33.txt
+│       ├── 📄 USA_Mission_53.txt
+│       ├── 📄 USA_Mission_58.txt
+│       ├── 📄 USA_Mission_73.txt
+│       ├── 📄 USA_Mission_93.txt
+│       ├── 📄 USSR_Russia_Mission_100.txt
+│       ├── 📄 USSR_Russia_Mission_65.txt
+│       ├── 📄 USSR_Russia_Mission_69.txt
+│       ├── 📄 USSR_Russia_Mission_77.txt
+│       ├── 📄 Venera_7.txt
+│       ├── 📄 Vostok_1.txt
+│       ├── 📄 Voyager_1.txt
+│       └── 📄 Zond_5.txt
+├── 📄 docker-compose.yml
+├── 📄 download_emb.md
+├── 📄 download_minilm.py
+├── 📄 download_model.md
+├── 📁 embeddings_models/
+│   └── 📁 all-MiniLM-L6-v2/
+│       ├── 📁 1_Pooling/
+│       │   └── 📄 config.json
+│       ├── 📁 2_Normalize/
+│       ├── 📄 README.md
+│       ├── 📄 config.json
+│       ├── 📄 config_sentence_transformers.json
+│       ├── 📄 model.safetensors
+│       ├── 📄 modules.json
+│       ├── 📄 sentence_bert_config.json
+│       ├── 📄 special_tokens_map.json
+│       ├── 📄 tokenizer.json
+│       ├── 📄 tokenizer_config.json
+│       └── 📄 vocab.txt
+├── 📄 fix_windows_error.md
+├── 📄 how to use properly cloud and local model.md
+├── 📁 logs/
+│   └── 📄 rag_app.log
+├── 📁 models/
+│   ├── 📁 .cache/
+│   │   └── 📁 huggingface/
+│   │       ├── 📄 .gitignore
+│   │       └── 📁 download/
+│   │           └── 📄 mistral-7b-instruct-v0.2.Q3_K_M.gguf.metadata
+│   └── 📄 mistral-7b-instruct-v0.2.Q3_K_M.gguf
+├── 📄 other_model_info.md
+├── 📁 project_info/
+│   ├── 📄 Role-based enterprise AI design.md
+│   └── 📄 task_for_ai.md
+├── 📄 readme.md
+├── 📄 real_world_projects.md
+├── 📄 requirements.txt
+└── 📁 scripts/
+    └── 📄 seed_examples.py
+
+Process finished with exit code 0

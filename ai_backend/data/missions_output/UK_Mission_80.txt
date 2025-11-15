@@ -1,0 +1,8 @@
+Mission Name: UK_Mission_80. Country: UK. Date: 2009-01-20. Outcome: Passed.
+Type: Crewed lunar mission. Description: Launched on 2009-01-20, UK_Mission_80
+from UK served as a Crewed lunar mission. The mission's objectives included
+scientific observation, technology demonstration, and data collection to support
+future exploration. It achieved its objectives and provided valuable data that
+contributed to scientific knowledge and subsequent missions. International
+collaborations were often leveraged for instrument contributions and data
+analysis.

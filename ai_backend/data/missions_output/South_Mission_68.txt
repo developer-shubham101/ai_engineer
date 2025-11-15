@@ -1,0 +1,9 @@
+Mission Name: South_Mission_68. Country: South Korea. Date: 2000-07-15. Outcome:
+Failed. Type: Planetary flyby. Description: Launched on 2000-07-15,
+South_Mission_68 from South Korea served as a Planetary flyby. Primary goals
+were to map surface composition, test landing and navigation systems,
+characterize the local environment, and return telemetry to ground stations. The
+mission encountered critical failures and did not meet its primary objectives,
+but lessons learned informed later programs. Onboard instruments typically
+included imagers, spectrometers, magnetometers, and sometimes landers or rovers
+for in-situ study.

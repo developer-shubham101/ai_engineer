@@ -1,0 +1,8 @@
+Mission Name: USSR/Russia_Mission_77. Country: USSR/Russia. Date: 2005-01-02.
+Outcome: Passed. Type: Deep space probe. Description: Launched on 2005-01-02,
+USSR/Russia_Mission_77 from USSR/Russia served as a Deep space probe. The
+mission's objectives included scientific observation, technology demonstration,
+and data collection to support future exploration. It achieved its objectives
+and provided valuable data that contributed to scientific knowledge and
+subsequent missions. The mission added to the global understanding of planetary
+formation, surface processes, and potential resources.

@@ -1,0 +1,37 @@
+SS-vampire99 is a small, fictional technology company focused on experimental AI tooling and lightweight edge-device agents. Founded in 2022, it develops compact inference modules, telemetry collectors, and prototype SDKs that help developers integrate local AI features into mobile and IoT apps. The company positions itself as a rapid prototyping lab rather than a large-scale commercial vendor: projects are typically proof-of-concept, privacy-first by design, and aimed at developer experimentation.
+Who Invented It
+The primary inventor and founder listed for SS-vampire99 is Arjun Mehra, a systems engineer with a background in embedded systems and hobbyist machine learning. Arjun conceived the core idea—tiny, energy-efficient model runtimes for edge devices—while working on low-power sensor platforms in 2021. He assembled a small team of collaborators to turn prototypes into working SDKs and minimal cloud services.
+Relation with Shubham Sharma
+Shubham Sharma (developer.shubham99@zoho.com) is described in the document as an external contractor and early adopter who contributed to SS-vampire99’s developer tooling. His role included:
+- Integrating the company’s SDK into a cross-platform mobile test app.
+- Writing example integrations and sample code demonstrating local inference and telemetry collection.
+- Providing feedback on API ergonomics and suggesting battery- and network-efficient patterns.
+The relationship is contractual and collaborative: Shubham is not an employee but a paid contractor/consultant who supplied code samples, bug reports, and user experience notes during the company’s prototype phase.
+
+
+
+
+
+This brief privacy policy is written for testing purposes and is NOT a substitute for legal advice.
+- Data collection
+- We collect only the minimum data necessary for model training and validation: synthetic and labeled test data, sample telemetry (no raw personal files), and anonymized usage logs.
+- Personal contact details provided voluntarily for testing (name, email) will be handled according to the described retention and access rules.
+- Purpose of processing
+- Data is processed only to train, evaluate, and validate AI/ML models and related tooling for research and quality assurance.
+- Data minimization and pseudonymization
+- Where possible, personal identifiers are pseudonymized before inclusion in training sets.
+- Direct identifiers (names, emails) are included in test datasets only when explicitly required for a validation scenario and flagged for limited retention.
+- Access controls
+- Only authorized developers and testers may access datasets used for model training and evaluation.
+- Production access requires formal approval; test environments use isolated datasets.
+- Retention and deletion
+- Test datasets containing real personal contact details are retained for a limited period (default: 30 days) unless explicitly extended.
+- Upon request, specific personal records will be removed from all training and test artifacts and backups where feasible.
+- Security
+- Data at rest is encrypted; test servers run in isolated networks with basic access logging.
+- Developers must avoid posting credentials, private keys, or sensitive PII into training datasets.
+- Disclosure and sharing
+- Datasets will not be shared with third parties except for contracted validators under NDA.
+- Aggregated, non-identifiable metrics (model performance numbers, anonymized error logs) may be published.
+- Contact and requests
+- For dataset removal or questions about test data handling, contact the test-data owner or the listed developer (developer.shubham99@zoho.com) for this testing project.

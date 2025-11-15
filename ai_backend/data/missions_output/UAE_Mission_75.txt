@@ -1,0 +1,8 @@
+Mission Name: UAE_Mission_75. Country: UAE. Date: 2004-05-14. Outcome: Passed.
+Type: Unmanned Mars lander. Description: UAE's UAE_Mission_75, launched
+2004-05-14, performed a Unmanned Mars lander mission. The mission's objectives
+included scientific observation, technology demonstration, and data collection
+to support future exploration. It achieved its objectives and provided valuable
+data that contributed to scientific knowledge and subsequent missions. The
+mission added to the global understanding of planetary formation, surface
+processes, and potential resources.

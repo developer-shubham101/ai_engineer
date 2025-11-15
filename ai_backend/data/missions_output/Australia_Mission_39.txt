@@ -1,0 +1,9 @@
+Mission Name: Australia_Mission_39. Country: Australia. Date: 1976-12-03.
+Outcome: Passed. Type: Crewed lunar mission. Description: Launched on
+1976-12-03, Australia_Mission_39 from Australia served as a Crewed lunar
+mission. The mission's objectives included scientific observation, technology
+demonstration, and data collection to support future exploration. It achieved
+its objectives and provided valuable data that contributed to scientific
+knowledge and subsequent missions. Onboard instruments typically included
+imagers, spectrometers, magnetometers, and sometimes landers or rovers for in-
+situ study.

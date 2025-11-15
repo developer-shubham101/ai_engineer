@@ -1,0 +1,8 @@
+Mission Name: Chang_e_4. Country: China. Date: 2018-12-07. Outcome: Passed.
+Type: Unmanned far-side lunar lander + rover. Description: China's Chang_e_4,
+launched 2018-12-07, performed a Unmanned far-side lunar lander + rover mission.
+Engineers used this flight to validate hardware, improve communications, and
+gather operational experience for follow-up missions. It achieved its objectives
+and provided valuable data that contributed to scientific knowledge and
+subsequent missions. International collaborations were often leveraged for
+instrument contributions and data analysis.

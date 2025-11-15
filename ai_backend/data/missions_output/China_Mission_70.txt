@@ -1,0 +1,8 @@
+Mission Name: China_Mission_70. Country: China. Date: 2000-04-18. Outcome:
+Passed. Type: Unmanned Mars orbiter. Description: China's China_Mission_70,
+launched 2000-04-18, performed a Unmanned Mars orbiter mission. Engineers used
+this flight to validate hardware, improve communications, and gather operational
+experience for follow-up missions. It achieved its objectives and provided
+valuable data that contributed to scientific knowledge and subsequent missions.
+Onboard instruments typically included imagers, spectrometers, magnetometers,
+and sometimes landers or rovers for in-situ study.

@@ -1,0 +1,8 @@
+Mission Name: Germany_Mission_95. Country: Germany. Date: 2020-06-07. Outcome:
+Passed. Type: Planetary flyby. Description: Germany_Mission_95 was a Planetary
+flyby launched by Germany on 2020-06-07. The mission's objectives included
+scientific observation, technology demonstration, and data collection to support
+future exploration. It achieved its objectives and provided valuable data that
+contributed to scientific knowledge and subsequent missions. Onboard instruments
+typically included imagers, spectrometers, magnetometers, and sometimes landers
+or rovers for in-situ study.

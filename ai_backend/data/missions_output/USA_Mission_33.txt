@@ -1,0 +1,8 @@
+Mission Name: USA_Mission_33. Country: USA. Date: 1973-04-17. Outcome: Passed.
+Type: Unmanned lunar lander. Description: Launched on 1973-04-17, USA_Mission_33
+from USA served as a Unmanned lunar lander. Engineers used this flight to
+validate hardware, improve communications, and gather operational experience for
+follow-up missions. It achieved its objectives and provided valuable data that
+contributed to scientific knowledge and subsequent missions. Onboard instruments
+typically included imagers, spectrometers, magnetometers, and sometimes landers
+or rovers for in-situ study.

@@ -1,0 +1,8 @@
+Mission Name: Chang_e_3. Country: China. Date: 2013-12-01. Outcome: Passed.
+Type: Unmanned lunar lander + rover. Description: Launched on 2013-12-01,
+Chang_e_3 from China served as a Unmanned lunar lander + rover. The mission's
+objectives included scientific observation, technology demonstration, and data
+collection to support future exploration. It achieved its objectives and
+provided valuable data that contributed to scientific knowledge and subsequent
+missions. International collaborations were often leveraged for instrument
+contributions and data analysis.

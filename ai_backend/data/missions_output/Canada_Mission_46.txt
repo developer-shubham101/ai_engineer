@@ -1,0 +1,8 @@
+Mission Name: Canada_Mission_46. Country: Canada. Date: 1981-02-07. Outcome:
+Partial Success. Type: Unmanned asteroid mission. Description: Canada_Mission_46
+was a Unmanned asteroid mission launched by Canada on 1981-02-07. Engineers used
+this flight to validate hardware, improve communications, and gather operational
+experience for follow-up missions. Some objectives were met while others were
+not; the partial success still yielded scientific returns and engineering
+lessons. International collaborations were often leveraged for instrument
+contributions and data analysis.

@@ -1,0 +1,8 @@
+Mission Name: China_Mission_41. Country: China. Date: 1978-08-21. Outcome:
+Failed. Type: Unmanned asteroid mission. Description: China_Mission_41 was a
+Unmanned asteroid mission launched by China on 1978-08-21. Primary goals were to
+map surface composition, test landing and navigation systems, characterize the
+local environment, and return telemetry to ground stations. The mission
+encountered critical failures and did not meet its primary objectives, but
+lessons learned informed later programs. International collaborations were often
+leveraged for instrument contributions and data analysis.

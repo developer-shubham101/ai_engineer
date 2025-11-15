@@ -1,0 +1,8 @@
+Mission Name: USA_Mission_73. Country: USA. Date: 2003-03-14. Outcome: Passed.
+Type: Unmanned lunar lander. Description: Launched on 2003-03-14, USA_Mission_73
+from USA served as a Unmanned lunar lander. Primary goals were to map surface
+composition, test landing and navigation systems, characterize the local
+environment, and return telemetry to ground stations. It achieved its objectives
+and provided valuable data that contributed to scientific knowledge and
+subsequent missions. International collaborations were often leveraged for
+instrument contributions and data analysis.

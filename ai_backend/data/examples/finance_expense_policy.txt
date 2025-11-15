@@ -1,0 +1,6 @@
+Saarthi Infotech Expense Reimbursement Policy (example)
+
+1. Reimbursement: Employees can submit expenses up to INR 50,000 with manager approval.
+2. Process: Submit expense form, attach receipts, get manager sign-off, then send to Finance for reimbursement.
+3. Travel: Travel must be booked on approved vendors. International travel requires Finance + Legal pre-approval.
+4. Timeline: Finance will process approved reimbursements within 30 days.

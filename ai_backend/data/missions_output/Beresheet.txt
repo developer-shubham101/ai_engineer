@@ -1,0 +1,8 @@
+Mission Name: Beresheet. Country: Israel. Date: 2019-02-21. Outcome: Failed.
+Type: Unmanned lunar lander (crash). Description: Beresheet was a Unmanned lunar
+lander (crash) launched by Israel on 2019-02-21. Primary goals were to map
+surface composition, test landing and navigation systems, characterize the local
+environment, and return telemetry to ground stations. The mission encountered
+critical failures and did not meet its primary objectives, but lessons learned
+informed later programs. The mission added to the global understanding of
+planetary formation, surface processes, and potential resources.

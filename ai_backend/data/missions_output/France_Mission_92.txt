@@ -1,0 +1,8 @@
+Mission Name: France_Mission_92. Country: France. Date: 2018-09-23. Outcome:
+Passed. Type: Manned orbital. Description: France's France_Mission_92, launched
+2018-09-23, performed a Manned orbital mission. The mission's objectives
+included scientific observation, technology demonstration, and data collection
+to support future exploration. It achieved its objectives and provided valuable
+data that contributed to scientific knowledge and subsequent missions.
+International collaborations were often leveraged for instrument contributions
+and data analysis.

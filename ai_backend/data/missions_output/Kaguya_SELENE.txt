@@ -1,0 +1,8 @@
+Mission Name: Kaguya_SELENE. Country: Japan. Date: 2007-09-14. Outcome: Passed.
+Type: Unmanned lunar orbiter. Description: Japan's Kaguya_SELENE, launched
+2007-09-14, performed a Unmanned lunar orbiter mission. Primary goals were to
+map surface composition, test landing and navigation systems, characterize the
+local environment, and return telemetry to ground stations. It achieved its
+objectives and provided valuable data that contributed to scientific knowledge
+and subsequent missions. The mission added to the global understanding of
+planetary formation, surface processes, and potential resources.

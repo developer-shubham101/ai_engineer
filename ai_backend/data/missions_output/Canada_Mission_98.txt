@@ -1,0 +1,8 @@
+Mission Name: Canada_Mission_98. Country: Canada. Date: 2023-11-28. Outcome:
+Passed. Type: Space telescope. Description: Canada's Canada_Mission_98, launched
+2023-11-28, performed a Space telescope mission. Primary goals were to map
+surface composition, test landing and navigation systems, characterize the local
+environment, and return telemetry to ground stations. It achieved its objectives
+and provided valuable data that contributed to scientific knowledge and
+subsequent missions. The mission added to the global understanding of planetary
+formation, surface processes, and potential resources.

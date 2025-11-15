@@ -1,0 +1,8 @@
+Mission Name: UK_Mission_66. Country: UK. Date: 1998-04-18. Outcome: Passed.
+Type: Unmanned Mars lander. Description: UK_Mission_66 was a Unmanned Mars
+lander launched by UK on 1998-04-18. The mission's objectives included
+scientific observation, technology demonstration, and data collection to support
+future exploration. It achieved its objectives and provided valuable data that
+contributed to scientific knowledge and subsequent missions. The mission added
+to the global understanding of planetary formation, surface processes, and
+potential resources.

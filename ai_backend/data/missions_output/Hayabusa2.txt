@@ -1,0 +1,8 @@
+Mission Name: Hayabusa2. Country: Japan. Date: 2014-12-03. Outcome: Passed.
+Type: Unmanned asteroid sample return. Description: Launched on 2014-12-03,
+Hayabusa2 from Japan served as a Unmanned asteroid sample return. Engineers used
+this flight to validate hardware, improve communications, and gather operational
+experience for follow-up missions. It achieved its objectives and provided
+valuable data that contributed to scientific knowledge and subsequent missions.
+Onboard instruments typically included imagers, spectrometers, magnetometers,
+and sometimes landers or rovers for in-situ study.

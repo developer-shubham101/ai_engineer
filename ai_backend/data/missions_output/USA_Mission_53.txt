@@ -1,0 +1,8 @@
+Mission Name: USA_Mission_53. Country: USA. Date: 1986-11-18. Outcome: Passed.
+Type: Lunar sample return. Description: USA's USA_Mission_53, launched
+1986-11-18, performed a Lunar sample return mission. Primary goals were to map
+surface composition, test landing and navigation systems, characterize the local
+environment, and return telemetry to ground stations. It achieved its objectives
+and provided valuable data that contributed to scientific knowledge and
+subsequent missions. The mission added to the global understanding of planetary
+formation, surface processes, and potential resources.

@@ -1,0 +1,8 @@
+Mission Name: China_Mission_31. Country: China. Date: 1971-04-08. Outcome:
+Passed. Type: Unmanned lunar orbiter. Description: China's China_Mission_31,
+launched 1971-04-08, performed a Unmanned lunar orbiter mission. Engineers used
+this flight to validate hardware, improve communications, and gather operational
+experience for follow-up missions. It achieved its objectives and provided
+valuable data that contributed to scientific knowledge and subsequent missions.
+International collaborations were often leveraged for instrument contributions
+and data analysis.

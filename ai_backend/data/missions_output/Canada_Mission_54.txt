@@ -1,0 +1,8 @@
+Mission Name: Canada_Mission_54. Country: Canada. Date: 1987-07-06. Outcome:
+Passed. Type: Unmanned lunar lander. Description: Canada's Canada_Mission_54,
+launched 1987-07-06, performed a Unmanned lunar lander mission. Engineers used
+this flight to validate hardware, improve communications, and gather operational
+experience for follow-up missions. It achieved its objectives and provided
+valuable data that contributed to scientific knowledge and subsequent missions.
+International collaborations were often leveraged for instrument contributions
+and data analysis.

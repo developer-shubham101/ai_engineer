@@ -1,0 +1,8 @@
+Mission Name: China_Mission_32. Country: China. Date: 1973-02-19. Outcome:
+Passed. Type: Lunar sample return. Description: Launched on 1973-02-19,
+China_Mission_32 from China served as a Lunar sample return. Primary goals were
+to map surface composition, test landing and navigation systems, characterize
+the local environment, and return telemetry to ground stations. It achieved its
+objectives and provided valuable data that contributed to scientific knowledge
+and subsequent missions. The mission added to the global understanding of
+planetary formation, surface processes, and potential resources.

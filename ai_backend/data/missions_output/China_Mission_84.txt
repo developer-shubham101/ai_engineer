@@ -1,0 +1,8 @@
+Mission Name: China_Mission_84. Country: China. Date: 2011-04-17. Outcome:
+Passed. Type: Unmanned lunar lander. Description: Launched on 2011-04-17,
+China_Mission_84 from China served as a Unmanned lunar lander. The mission's
+objectives included scientific observation, technology demonstration, and data
+collection to support future exploration. It achieved its objectives and
+provided valuable data that contributed to scientific knowledge and subsequent
+missions. The mission added to the global understanding of planetary formation,
+surface processes, and potential resources.

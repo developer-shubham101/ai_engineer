@@ -1,0 +1,9 @@
+Mission Name: Voyager_1. Country: USA (NASA). Date: 1977-09-05. Outcome: Passed.
+Type: Unmanned planetary / interstellar probe. Description: USA (NASA)'s
+Voyager_1, launched 1977-09-05, performed a Unmanned planetary / interstellar
+probe mission. Primary goals were to map surface composition, test landing and
+navigation systems, characterize the local environment, and return telemetry to
+ground stations. It achieved its objectives and provided valuable data that
+contributed to scientific knowledge and subsequent missions. International
+collaborations were often leveraged for instrument contributions and data
+analysis.

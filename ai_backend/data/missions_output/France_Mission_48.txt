@@ -1,0 +1,8 @@
+Mission Name: France_Mission_48. Country: France. Date: 1982-12-18. Outcome:
+Passed. Type: Manned orbital. Description: France_Mission_48 was a Manned
+orbital launched by France on 1982-12-18. The mission's objectives included
+scientific observation, technology demonstration, and data collection to support
+future exploration. It achieved its objectives and provided valuable data that
+contributed to scientific knowledge and subsequent missions. International
+collaborations were often leveraged for instrument contributions and data
+analysis.

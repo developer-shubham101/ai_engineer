@@ -1,0 +1,8 @@
+Mission Name: Japan_Mission_50. Country: Japan. Date: 1984-02-25. Outcome:
+Passed. Type: Technology demonstrator. Description: Japan's Japan_Mission_50,
+launched 1984-02-25, performed a Technology demonstrator mission. The mission's
+objectives included scientific observation, technology demonstration, and data
+collection to support future exploration. It achieved its objectives and
+provided valuable data that contributed to scientific knowledge and subsequent
+missions. Onboard instruments typically included imagers, spectrometers,
+magnetometers, and sometimes landers or rovers for in-situ study.
