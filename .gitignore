@@ -3,3 +3,6 @@
 ai_backend/app/chroma_storage/*
 ai_backend/embeddings_models/all-MiniLM-L6-v2/*
 *.log
+ai_backend/chroma_storage/*
+/vector_databases/.idea
+/vector_databases/.chromadb

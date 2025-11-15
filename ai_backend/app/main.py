@@ -18,6 +18,11 @@ from contextlib import asynccontextmanager
 from app.api_routes_local import router as local_router
 from app.services.rag_local_service import seed_from_file
 
+from fastapi.middleware.cors import CORSMiddleware
+
+# from .api_routes import router as api_router
+# from .api_routes_local import router as local_router
+
 logger = setup_logging()
 
 
@@ -48,6 +53,24 @@ app = FastAPI(
 )
 
 app.include_router(local_router)
+
+origins = [
+    "http://127.0.0.1:5500",
+    "http://localhost:5500",
+    "http://127.0.0.1:3000",
+    "http://localhost:3000",
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,    # specify exact origins you trust
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# app.include_router(api_router, prefix="/api")
+# app.include_router(local_router, prefix="/api/local")
 
 # --- API Endpoints ---
 
