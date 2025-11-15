@@ -1,0 +1,9 @@
+Mission Name: Mars_Pathfinder. Country: USA (NASA). Date: 1996-12-04. Outcome:
+Passed. Type: Unmanned Mars lander + rover. Description: USA (NASA)'s
+Mars_Pathfinder, launched 1996-12-04, performed a Unmanned Mars lander + rover
+mission. Primary goals were to map surface composition, test landing and
+navigation systems, characterize the local environment, and return telemetry to
+ground stations. It achieved its objectives and provided valuable data that
+contributed to scientific knowledge and subsequent missions. International
+collaborations were often leveraged for instrument contributions and data
+analysis.

@@ -1,0 +1,8 @@
+Mission Name: Venera_7. Country: USSR. Date: 1970-12-15. Outcome: Passed. Type:
+Unmanned Venus lander. Description: USSR's Venera_7, launched 1970-12-15,
+performed a Unmanned Venus lander mission. Primary goals were to map surface
+composition, test landing and navigation systems, characterize the local
+environment, and return telemetry to ground stations. It achieved its objectives
+and provided valuable data that contributed to scientific knowledge and
+subsequent missions. International collaborations were often leveraged for
+instrument contributions and data analysis.

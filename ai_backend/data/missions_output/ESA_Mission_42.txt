@@ -1,0 +1,8 @@
+Mission Name: ESA_Mission_42. Country: ESA. Date: 1979-04-22. Outcome: Passed.
+Type: Planetary flyby. Description: ESA_Mission_42 was a Planetary flyby
+launched by ESA on 1979-04-22. Primary goals were to map surface composition,
+test landing and navigation systems, characterize the local environment, and
+return telemetry to ground stations. It achieved its objectives and provided
+valuable data that contributed to scientific knowledge and subsequent missions.
+The mission added to the global understanding of planetary formation, surface
+processes, and potential resources.

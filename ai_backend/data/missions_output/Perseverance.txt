@@ -1,0 +1,9 @@
+Mission Name: Perseverance. Country: USA (NASA). Date: 2020-07-30. Outcome:
+Passed. Type: Unmanned Mars rover + sample caching. Description: USA (NASA)'s
+Perseverance, launched 2020-07-30, performed a Unmanned Mars rover + sample
+caching mission. Primary goals were to map surface composition, test landing and
+navigation systems, characterize the local environment, and return telemetry to
+ground stations. It achieved its objectives and provided valuable data that
+contributed to scientific knowledge and subsequent missions. International
+collaborations were often leveraged for instrument contributions and data
+analysis.

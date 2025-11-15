@@ -1,0 +1,8 @@
+Mission Name: LADEE. Country: USA (NASA). Date: 2013-09-06. Outcome: Passed.
+Type: Unmanned lunar exosphere mission. Description: LADEE was a Unmanned lunar
+exosphere mission launched by USA (NASA) on 2013-09-06. Engineers used this
+flight to validate hardware, improve communications, and gather operational
+experience for follow-up missions. It achieved its objectives and provided
+valuable data that contributed to scientific knowledge and subsequent missions.
+The mission added to the global understanding of planetary formation, surface
+processes, and potential resources.

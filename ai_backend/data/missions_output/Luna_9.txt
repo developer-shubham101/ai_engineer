@@ -1,0 +1,8 @@
+Mission Name: Luna_9. Country: USSR. Date: 1966-02-03. Outcome: Passed. Type:
+Unmanned lunar soft lander. Description: Launched on 1966-02-03, Luna_9 from
+USSR served as a Unmanned lunar soft lander. Engineers used this flight to
+validate hardware, improve communications, and gather operational experience for
+follow-up missions. It achieved its objectives and provided valuable data that
+contributed to scientific knowledge and subsequent missions. International
+collaborations were often leveraged for instrument contributions and data
+analysis.

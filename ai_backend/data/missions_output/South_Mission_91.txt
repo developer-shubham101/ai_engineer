@@ -1,0 +1,8 @@
+Mission Name: South_Mission_91. Country: South Korea. Date: 2017-01-11. Outcome:
+Passed. Type: Unmanned Mars lander. Description: South_Mission_91 was a Unmanned
+Mars lander launched by South Korea on 2017-01-11. Primary goals were to map
+surface composition, test landing and navigation systems, characterize the local
+environment, and return telemetry to ground stations. It achieved its objectives
+and provided valuable data that contributed to scientific knowledge and
+subsequent missions. Onboard instruments typically included imagers,
+spectrometers, magnetometers, and sometimes landers or rovers for in-situ study.

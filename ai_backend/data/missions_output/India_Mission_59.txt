@@ -1,0 +1,8 @@
+Mission Name: India_Mission_59. Country: India. Date: 1993-02-25. Outcome:
+Passed. Type: Unmanned lunar lander. Description: Launched on 1993-02-25,
+India_Mission_59 from India served as a Unmanned lunar lander. Engineers used
+this flight to validate hardware, improve communications, and gather operational
+experience for follow-up missions. It achieved its objectives and provided
+valuable data that contributed to scientific knowledge and subsequent missions.
+Onboard instruments typically included imagers, spectrometers, magnetometers,
+and sometimes landers or rovers for in-situ study.

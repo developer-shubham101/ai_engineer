@@ -1,0 +1,8 @@
+Mission Name: China_Mission_96. Country: China. Date: 2022-07-20. Outcome:
+Passed. Type: Planetary flyby. Description: Launched on 2022-07-20,
+China_Mission_96 from China served as a Planetary flyby. Engineers used this
+flight to validate hardware, improve communications, and gather operational
+experience for follow-up missions. It achieved its objectives and provided
+valuable data that contributed to scientific knowledge and subsequent missions.
+Onboard instruments typically included imagers, spectrometers, magnetometers,
+and sometimes landers or rovers for in-situ study.

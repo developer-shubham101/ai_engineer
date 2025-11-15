@@ -1,0 +1,8 @@
+Mission Name: UK_Mission_97. Country: UK. Date: 2022-07-01. Outcome: Passed.
+Type: Manned orbital. Description: UK's UK_Mission_97, launched 2022-07-01,
+performed a Manned orbital mission. The mission's objectives included scientific
+observation, technology demonstration, and data collection to support future
+exploration. It achieved its objectives and provided valuable data that
+contributed to scientific knowledge and subsequent missions. The mission added
+to the global understanding of planetary formation, surface processes, and
+potential resources.

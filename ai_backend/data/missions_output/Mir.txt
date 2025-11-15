@@ -1,0 +1,8 @@
+Mission Name: Mir. Country: USSR/Russia. Date: 1986-02-20. Outcome: Passed.
+Type: Crewed space station. Description: USSR/Russia's Mir, launched 1986-02-20,
+performed a Crewed space station mission. The mission's objectives included
+scientific observation, technology demonstration, and data collection to support
+future exploration. It achieved its objectives and provided valuable data that
+contributed to scientific knowledge and subsequent missions. The mission added
+to the global understanding of planetary formation, surface processes, and
+potential resources.

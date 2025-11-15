@@ -1,0 +1,9 @@
+Mission Name: Argentina_Mission_76. Country: Argentina. Date: 2004-05-07.
+Outcome: Partial Success. Type: Manned orbital. Description:
+Argentina_Mission_76 was a Manned orbital launched by Argentina on 2004-05-07.
+Primary goals were to map surface composition, test landing and navigation
+systems, characterize the local environment, and return telemetry to ground
+stations. Some objectives were met while others were not; the partial success
+still yielded scientific returns and engineering lessons. The mission added to
+the global understanding of planetary formation, surface processes, and
+potential resources.

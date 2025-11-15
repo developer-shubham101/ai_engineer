@@ -1,0 +1,9 @@
+Mission Name: South_Mission_49. Country: South Korea. Date: 1983-06-08. Outcome:
+Partial Success. Type: Crewed lunar mission. Description: South Korea's
+South_Mission_49, launched 1983-06-08, performed a Crewed lunar mission mission.
+Primary goals were to map surface composition, test landing and navigation
+systems, characterize the local environment, and return telemetry to ground
+stations. Some objectives were met while others were not; the partial success
+still yielded scientific returns and engineering lessons. Onboard instruments
+typically included imagers, spectrometers, magnetometers, and sometimes landers
+or rovers for in-situ study.

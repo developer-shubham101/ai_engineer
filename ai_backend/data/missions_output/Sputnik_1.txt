@@ -1,0 +1,9 @@
+Mission Name: Sputnik_1. Country: USSR. Date: 1957-10-04. Outcome: Passed. Type:
+Unmanned orbital (first artificial satellite). Description: Sputnik_1 was a
+Unmanned orbital (first artificial satellite) launched by USSR on 1957-10-04.
+Primary goals were to map surface composition, test landing and navigation
+systems, characterize the local environment, and return telemetry to ground
+stations. It achieved its objectives and provided valuable data that contributed
+to scientific knowledge and subsequent missions. The mission added to the global
+understanding of planetary formation, surface processes, and potential
+resources.

@@ -1,0 +1,9 @@
+Mission Name: ISS_Zarya_core. Country: International. Date: 1998-11-20. Outcome:
+Passed. Type: Crewed space station (international). Description: Launched on
+1998-11-20, ISS_Zarya_core from International served as a Crewed space station
+(international). The mission's objectives included scientific observation,
+technology demonstration, and data collection to support future exploration. It
+achieved its objectives and provided valuable data that contributed to
+scientific knowledge and subsequent missions. The mission added to the global
+understanding of planetary formation, surface processes, and potential
+resources.

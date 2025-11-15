@@ -1,0 +1,9 @@
+Mission Name: Brazil_Mission_44. Country: Brazil. Date: 1980-11-23. Outcome:
+Passed. Type: Unmanned asteroid mission. Description: Brazil's
+Brazil_Mission_44, launched 1980-11-23, performed a Unmanned asteroid mission
+mission. Engineers used this flight to validate hardware, improve
+communications, and gather operational experience for follow-up missions. It
+achieved its objectives and provided valuable data that contributed to
+scientific knowledge and subsequent missions. The mission added to the global
+understanding of planetary formation, surface processes, and potential
+resources.

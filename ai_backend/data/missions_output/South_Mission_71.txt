@@ -1,0 +1,9 @@
+Mission Name: South_Mission_71. Country: South Korea. Date: 2001-08-08. Outcome:
+Failed. Type: Manned orbital. Description: South Korea's South_Mission_71,
+launched 2001-08-08, performed a Manned orbital mission. Primary goals were to
+map surface composition, test landing and navigation systems, characterize the
+local environment, and return telemetry to ground stations. The mission
+encountered critical failures and did not meet its primary objectives, but
+lessons learned informed later programs. The mission added to the global
+understanding of planetary formation, surface processes, and potential
+resources.

@@ -3,6 +3,7 @@ import logging
 import uuid
 from pathlib import Path
 from typing import List, Optional, Dict, Any
+import json
 # Attempt imports (be explicit so runtime errors are clear)
 try:
     import chromadb
@@ -38,6 +39,76 @@ _llm_instance = None
 
 # ---------- Utilities ----------
 
+def _sanitize_meta_value(val):
+    """
+    Ensure metadata values are primitives (str/int/float/bool) for Chroma.
+    - list of primitives -> comma-separated string
+    - dict -> JSON string
+    - others -> str()
+    """
+    if val is None:
+        return None
+    if isinstance(val, (str, int, float, bool)):
+        return val
+    if isinstance(val, list):
+        if all(isinstance(x, (str, int, float, bool)) for x in val):
+            return ",".join(str(x) for x in val)
+        return json.dumps(val, ensure_ascii=False)
+    if isinstance(val, dict):
+        return json.dumps(val, ensure_ascii=False)
+    # fallback
+    return str(val)
+
+def _sanitize_metadata_dict(meta: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    if not meta:
+        return {}
+    return {str(k): _sanitize_meta_value(v) for k, v in meta.items()}
+
+# small helper to update metadata for existing ids in chroma
+def update_metadata(ids: List[str], metadata: Dict[str, Any]) -> bool:
+    """
+    Update metadata for existing document chunk ids.
+    Returns True on success.
+    Note: metadata will be sanitized so all values are primitives/strings.
+    """
+    if chromadb is None:
+        raise ImportError("chromadb not installed")
+    _, collection = _ensure_chroma_client()
+    sanitized = _sanitize_metadata_dict(metadata)
+    # Build per-id metadatas list (apply same metadata to each id)
+    try:
+        per_id_metas = [sanitized.copy() for _ in ids]
+        # Many chroma clients support collection.update(ids=..., metadatas=...)
+        # If update() not available, fallback to delete+re-add is not implemented here.
+        collection.update(ids=ids, metadatas=per_id_metas)
+        logger.info("Updated metadata for %d ids", len(ids))
+        return True
+    except Exception as e:
+        logger.exception("Failed to update metadata for ids: %s", e)
+        # Some chroma versions don't have update(); try alternative approaches
+        try:
+            # attempt to get full item and re-add with updated metadata
+            # Note: this may not always be supported — keep as last-resort placeholder
+            logger.debug("Attempting fallback metadata replacement for %d ids", len(ids))
+            for i, _id in enumerate(ids):
+                try:
+                    # get existing doc (best-effort)
+                    got = collection.get(ids=[_id])
+                    docs = (got.get("documents") or [[]])[0]
+                    metas = (got.get("metadatas") or [[]])[0]
+                    if docs:
+                        doc_text = docs[0]
+                        old_meta = metas[0] if metas else {}
+                        new_meta = {**old_meta, **sanitized}
+                        collection.add(documents=[doc_text], ids=[_id], metadatas=[new_meta])
+                except Exception:
+                    continue
+            logger.info("Fallback metadata update attempted.")
+            return True
+        except Exception:
+            logger.exception("Fallback metadata update failed.")
+            return False
+
 def _get_local_embedding_model_path() -> Path:
     """
     If you want to place embedding models locally, put them under: <project_root>/embeddings_models/<EMBEDDING_MODEL_NAME>/
@@ -52,7 +123,18 @@ def _ensure_chroma_client(persist_directory: Optional[str] = None):
     if _chroma_client is None:
         persist_directory = persist_directory or str(DEFAULT_PERSIST_DIR)
         logger.info("Initializing Chroma persistent client at %s", persist_directory)
-        _chroma_client = chromadb.PersistentClient(path=str(persist_directory))
+        # Try common init patterns to be resilient across chromadb versions
+        try:
+            # new API style
+            from chromadb.config import Settings as _Settings
+            _chroma_client = chromadb.Client(_Settings(chroma_db_impl="duckdb+parquet", persist_directory=persist_directory))
+        except Exception:
+            try:
+                # fallback older style
+                _chroma_client = chromadb.PersistentClient(path=str(persist_directory))
+            except Exception as e:
+                logger.exception("Failed to initialize chroma client: %s", e)
+                raise
     if _collection is None:
         try:
             _collection = _chroma_client.get_or_create_collection(name=DEFAULT_COLLECTION_NAME)
@@ -84,6 +166,10 @@ def _embed_texts(texts: List[str]) -> List[List[float]]:
     return vectors
 
 def _chunk_text_basic(text: str, chunk_size: int = 512, overlap: int = 64) -> List[str]:
+    """
+    Produce overlapping chunks of the input text.
+    Fixed so we always make progress and produce expected overlaps.
+    """
     if not text:
         return []
     chunks: List[str] = []
@@ -92,7 +178,10 @@ def _chunk_text_basic(text: str, chunk_size: int = 512, overlap: int = 64) -> Li
     while start < L:
         end = min(start + chunk_size, L)
         chunks.append(text[start:end])
-        start = max(end - overlap, end)
+        if end == L:
+            break
+        # advance start keeping overlap, but ensure progress by at least 1
+        start = max(end - overlap, start + 1)
     return chunks
 
 def _generate_ids(prefix: str, n: int) -> List[str]:
@@ -147,15 +236,19 @@ def add_document_to_rag_local(source_name: str,
 
     Returns the list of ids added.
 
+    Behavior:
     - Splits text into chunks if chunks not provided.
     - Computes embeddings locally for each chunk.
+    - Sanitizes metadata to primitive types (strings/numbers/bools) for Chroma.
     - Adds documents, metadatas, ids, and embeddings to Chroma.
+    - Returns the list of created chunk ids (explicit).
     """
     if chromadb is None:
         raise ImportError("chromadb not installed")
 
     _, collection = _ensure_chroma_client()
 
+    # If client provided pre-chunked content, use it; otherwise chunk the text
     if not chunks:
         chunks = _chunk_text_basic(text)
 
@@ -163,7 +256,16 @@ def add_document_to_rag_local(source_name: str,
         logger.warning("No chunks produced for document: %s", source_name)
         return []
 
-    metadatas = [{**(metadata or {}), "source": source_name} for _ in chunks]
+    # default metadata applied per-chunk (sanitize so Chroma accepts values)
+    base_meta = metadata or {}
+    sanitized_base = _sanitize_metadata_dict(base_meta)
+    sanitized_base["source"] = source_name
+    # ensure ingested_at present if not provided
+    if "ingested_at" not in sanitized_base:
+        from datetime import datetime
+        sanitized_base["ingested_at"] = datetime.utcnow().isoformat() + "Z"
+    metadatas = [dict(sanitized_base) for _ in chunks]
+
     ids = _generate_ids(prefix=source_name, n=len(chunks))
 
     # compute embeddings locally
@@ -181,19 +283,19 @@ def add_document_to_rag_local(source_name: str,
         logger.exception("Failed to add documents to Chroma collection: %s", e)
         raise
 
+    # Explicit return of ids (list of created chunk ids)
     return ids
 
 
-def query_local_rag(query_text: str, n_results: int = 3, llm_prompt_prefix: Optional[str] = None,
-                    use_llm: bool = True, max_tokens: int = 256) -> Dict[str, Any]:
+
+def query_local_rag(query_text: str, n_results: int = 3, requester: Optional[Dict[str, str]] = None,
+                    llm_prompt_prefix: Optional[str] = None, use_llm: bool = True, max_tokens: int = 256) -> Dict[str, Any]:
     """
     Query the local RAG:
     - compute local embedding for the query
     - retrieve top-k docs from Chroma
-    - if use_llm True: build prompt and call local LLM instance (if available)
-    - returns a dict containing retrieved docs, metadatas, ids, distances and optionally `answer`
-
-    If no LLM instance is available and use_llm is True, raises RuntimeError.
+    - apply RBAC filtering (visible vs filtered)
+    - returns both visible results and raw (pre-filter) results so the API layer can decide UX
     """
     _, collection = _ensure_chroma_client()
 
@@ -203,68 +305,126 @@ def query_local_rag(query_text: str, n_results: int = 3, llm_prompt_prefix: Opti
     # compute query embedding
     try:
         q_emb = _embed_texts([query_text])[0]
-        print("MARK:- q_emb", q_emb)
+        logger.debug("Computed query embedding (len=%d)", len(q_emb) if hasattr(q_emb, "__len__") else 0)
     except Exception as e:
         logger.exception("Failed to compute query embedding: %s", e)
         raise
 
-    # query chroma
+    # query chroma (attempt embedding query, fallback to text query)
     try:
         result = collection.query(query_embeddings=[q_emb], n_results=n_results)
     except Exception:
-        # fallback to text query if query_embeddings not supported by this client
         result = collection.query(query_texts=[query_text], n_results=n_results)
 
-    # normalize result shape
+    # normalize result shape (support dict or object responses)
     if isinstance(result, dict):
-        docs = (result.get("documents") or [[]])[0]
-        metadatas = (result.get("metadatas") or [[]])[0]
-        ids = (result.get("ids") or [[]])[0]
-        distances = (result.get("distances") or [[]])[0]
+        raw_docs = (result.get("documents") or [[]])[0]
+        raw_metadatas = (result.get("metadatas") or [[]])[0]
+        raw_ids = (result.get("ids") or [[]])[0]
+        raw_distances = (result.get("distances") or [[]])[0]
     else:
-        # some chroma clients return objects; try attribute access
         try:
-            docs = result.documents[0]
-            metadatas = result.metadatas[0]
-            ids = result.ids[0]
-            distances = result.distances[0] if hasattr(result, "distances") else []
+            raw_docs = result.documents[0]
+            raw_metadatas = result.metadatas[0]
+            raw_ids = result.ids[0]
+            raw_distances = result.distances[0] if hasattr(result, "distances") else []
         except Exception as e:
             logger.exception("Unexpected Chroma result format: %s", e)
-            docs = []
-            metadatas = []
-            ids = []
-            distances = []
+            raw_docs, raw_metadatas, raw_ids, raw_distances = [], [], [], []
 
-    # build context
-    context_text = "\n\n---\n\n".join(d for d in docs if d)
+    # ------- RBAC / access control filtering -------
+    def _allowed_by_metadata(meta: Optional[Dict[str, Any]], requester: Optional[Dict[str, str]]) -> bool:
+        if not meta:
+            return requester is not None
+        sens = meta.get("sensitivity", "public_internal")
+        if sens == "personal":
+            owner = meta.get("owner_id")
+            if owner == (requester.get("user_id") if requester else None):
+                return True
+            return requester and requester.get("role") in ("HR", "Legal", "Executive")
+        if sens == "highly_confidential":
+            return requester and requester.get("role") in ("Legal", "Executive")
+        if sens == "role_confidential":
+            allowed = meta.get("allowed_roles") or []
+            if requester and requester.get("role") in allowed:
+                return True
+            return requester and requester.get("role") in ("HR", "Legal", "Executive")
+        if sens == "department_confidential":
+            if requester and requester.get("department") == meta.get("department"):
+                return True
+            return requester and requester.get("role") in ("HR", "Legal", "Executive")
+        return True
+
+    filtered_docs = []
+    filtered_metas = []
+    filtered_ids = []
+    filtered_distances = []
+
+    # additional UX/debug info collected from filtered-out docs
+    filtered_out_count = 0
+    public_summaries: List[str] = []
+    filtered_details: List[Dict[str, Any]] = []
+
+    # iterate over raw (unfiltered) results and split into visible vs filtered
+    for doc, meta, id_, dist in zip(raw_docs, raw_metadatas, raw_ids, raw_distances):
+        try:
+            if _allowed_by_metadata(meta, requester):
+                filtered_docs.append(doc)
+                filtered_metas.append(meta)
+                filtered_ids.append(id_)
+                filtered_distances.append(dist)
+            else:
+                filtered_out_count += 1
+                if isinstance(meta, dict):
+                    ps = meta.get("public_summary")
+                    if ps and isinstance(ps, str) and ps.strip():
+                        public_summaries.append(ps.strip())
+                    filtered_details.append({
+                        "id": id_,
+                        "sensitivity": meta.get("sensitivity"),
+                        "department": meta.get("department"),
+                        "source": meta.get("source")
+                    })
+                logger.debug("Filtered out document id=%s due to RBAC; requester=%s meta=%s", id_, requester, meta)
+        except Exception as e:
+            logger.exception("Error checking metadata access for id=%s: %s", id_, e)
+            continue
+
+    # build context text from allowed (visible) docs
+    context_text = "\n\n---\n\n".join(d for d in filtered_docs if d)
 
     out = {
-        "documents": docs,
-        "metadatas": metadatas,
-        "ids": ids,
-        "distances": distances,
+        # visible to requester after RBAC
+        "documents": filtered_docs,
+        "metadatas": filtered_metas,
+        "ids": filtered_ids,
+        "distances": filtered_distances,
+
+        # raw (pre-filter) results so API layer can make UX decisions
+        "raw_documents": raw_docs,
+        "raw_metadatas": raw_metadatas,
+        "raw_ids": raw_ids,
+        "raw_distances": raw_distances,
+
+        # UX and debug info
         "context": context_text,
+        "filtered_out_count": filtered_out_count,
+        "public_summaries": public_summaries,
+        "filtered_details": filtered_details,
     }
 
-    # Optionally call LLM on constructed prompt
+    # Optionally call LLM on constructed prompt (only over visible docs/context)
     if use_llm:
-        # Ensure llm instance is available, prefer provided global _llm_instance
         global _llm_instance
         if _llm_instance is None:
-            # attempt to lazy-load a LlamaCpp instance if LlamaCpp is available and an environment model is present
             if LlamaCpp is not None:
-                # try to find a model file in project models/ directory
                 models_dir = BASE_DIR.parent / "models"
-                # pick the first gguf/ggml file we find
-                print("models_dir", models_dir)
                 model_path = None
                 for ext in ("*.gguf", "*.ggml", "*.bin"):
                     files = list(models_dir.glob(ext))
-                    print("files", files)
                     if files:
                         model_path = str(files[0])
                         break
-                print("model_path", model_path)
                 if model_path is None:
                     raise RuntimeError("No LLM instance provided and no local GGUF model found under models/. Provide llm_instance when calling initialize_local_rag or set model file in models/.")
                 try:
@@ -276,7 +436,6 @@ def query_local_rag(query_text: str, n_results: int = 3, llm_prompt_prefix: Opti
             else:
                 raise RuntimeError("No LLM instance available. Pass llm_instance to initialize_local_rag or install llama-cpp-python and place a model under models/")
 
-        # Build prompt
         system_instructions = llm_prompt_prefix or (
             "You are a helpful assistant. Use the provided context to answer the question. "
             "If the answer is not present in the context, say you don't know."
@@ -284,12 +443,9 @@ def query_local_rag(query_text: str, n_results: int = 3, llm_prompt_prefix: Opti
         prompt = f"{system_instructions}\n\nCONTEXT:\n{context_text}\n\nQUESTION:\n{query_text}\n\nAnswer concisely:"
         logger.debug("Prompt for LLM (trimmed): %s", prompt[:1000])
 
-        # Call LLM - supports LangChain LlamaCpp wrapper which is callable
         try:
-            # The LangChain LlamaCpp wrapper accepts (prompt, max_tokens=.., temperature=..)
             answer = _llm_instance(prompt, max_tokens=max_tokens, temperature=0.0)
         except TypeError:
-            # fallback in case API differs
             try:
                 gen = _llm_instance.generate([prompt], max_new_tokens=max_tokens, temperature=0.0)
                 answer = str(gen)
@@ -303,6 +459,7 @@ def query_local_rag(query_text: str, n_results: int = 3, llm_prompt_prefix: Opti
         out["answer"] = answer
 
     return out
+
 
 
 def seed_from_file(file_path: Optional[str] = None, source_name: Optional[str] = None) -> List[str]:

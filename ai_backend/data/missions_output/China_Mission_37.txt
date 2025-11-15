@@ -1,0 +1,8 @@
+Mission Name: China_Mission_37. Country: China. Date: 1976-10-09. Outcome:
+Failed. Type: Planetary flyby. Description: China's China_Mission_37, launched
+1976-10-09, performed a Planetary flyby mission. Engineers used this flight to
+validate hardware, improve communications, and gather operational experience for
+follow-up missions. The mission encountered critical failures and did not meet
+its primary objectives, but lessons learned informed later programs. The mission
+added to the global understanding of planetary formation, surface processes, and
+potential resources.

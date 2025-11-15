@@ -1,0 +1,9 @@
+Mission Name: South_Mission_61. Country: South Korea. Date: 1996-12-23. Outcome:
+Passed. Type: Unmanned Mars orbiter. Description: South Korea's
+South_Mission_61, launched 1996-12-23, performed a Unmanned Mars orbiter
+mission. Primary goals were to map surface composition, test landing and
+navigation systems, characterize the local environment, and return telemetry to
+ground stations. It achieved its objectives and provided valuable data that
+contributed to scientific knowledge and subsequent missions. Onboard instruments
+typically included imagers, spectrometers, magnetometers, and sometimes landers
+or rovers for in-situ study.

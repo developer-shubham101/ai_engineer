@@ -1,0 +1,8 @@
+Mission Name: France_Mission_90. Country: France. Date: 2017-05-28. Outcome:
+Passed. Type: Technology demonstrator. Description: France_Mission_90 was a
+Technology demonstrator launched by France on 2017-05-28. Engineers used this
+flight to validate hardware, improve communications, and gather operational
+experience for follow-up missions. It achieved its objectives and provided
+valuable data that contributed to scientific knowledge and subsequent missions.
+International collaborations were often leveraged for instrument contributions
+and data analysis.

@@ -1,0 +1,6 @@
+Saarthi Infotech Engineering Onboarding Guide (example)
+
+1. Access Setup: New engineers must request access to Git, Jira, and internal tools.
+2. Codebase: The primary monorepo uses a microservices architecture.
+3. Security Keys: Developers must configure SSH keys and complete security training.
+4. Buddy System: Each new joinee is assigned a mentor.

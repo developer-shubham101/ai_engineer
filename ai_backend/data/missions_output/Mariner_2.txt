@@ -1,0 +1,8 @@
+Mission Name: Mariner_2. Country: USA (NASA). Date: 1962-08-27. Outcome: Passed.
+Type: Unmanned Venus flyby. Description: USA (NASA)'s Mariner_2, launched
+1962-08-27, performed a Unmanned Venus flyby mission. The mission's objectives
+included scientific observation, technology demonstration, and data collection
+to support future exploration. It achieved its objectives and provided valuable
+data that contributed to scientific knowledge and subsequent missions.
+International collaborations were often leveraged for instrument contributions
+and data analysis.

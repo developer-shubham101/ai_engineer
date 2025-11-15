@@ -1,0 +1,9 @@
+Mission Name: Aditya-L1. Country: India. Date: 2023-09-02. Outcome: Passed.
+Type: Unmanned solar observatory (L1). Description: India's Aditya-L1, launched
+2023-09-02, performed a Unmanned solar observatory (L1) mission. Primary goals
+were to map surface composition, test landing and navigation systems,
+characterize the local environment, and return telemetry to ground stations. It
+achieved its objectives and provided valuable data that contributed to
+scientific knowledge and subsequent missions. The mission added to the global
+understanding of planetary formation, surface processes, and potential
+resources.

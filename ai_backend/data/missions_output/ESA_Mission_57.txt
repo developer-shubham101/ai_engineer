@@ -1,0 +1,8 @@
+Mission Name: ESA_Mission_57. Country: ESA. Date: 1991-01-20. Outcome: Passed.
+Type: Technology demonstrator. Description: Launched on 1991-01-20,
+ESA_Mission_57 from ESA served as a Technology demonstrator. Primary goals were
+to map surface composition, test landing and navigation systems, characterize
+the local environment, and return telemetry to ground stations. It achieved its
+objectives and provided valuable data that contributed to scientific knowledge
+and subsequent missions. Onboard instruments typically included imagers,
+spectrometers, magnetometers, and sometimes landers or rovers for in-situ study.

@@ -1,0 +1,8 @@
+Mission Name: Australia_Mission_94. Country: Australia. Date: 2020-03-14.
+Outcome: Passed. Type: Crewed lunar mission. Description: Australia_Mission_94
+was a Crewed lunar mission launched by Australia on 2020-03-14. The mission's
+objectives included scientific observation, technology demonstration, and data
+collection to support future exploration. It achieved its objectives and
+provided valuable data that contributed to scientific knowledge and subsequent
+missions. International collaborations were often leveraged for instrument
+contributions and data analysis.

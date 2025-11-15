@@ -1,0 +1,9 @@
+Mission Name: Argentina_Mission_67. Country: Argentina. Date: 1999-07-07.
+Outcome: Passed. Type: Unmanned Mars orbiter. Description: Launched on
+1999-07-07, Argentina_Mission_67 from Argentina served as a Unmanned Mars
+orbiter. Primary goals were to map surface composition, test landing and
+navigation systems, characterize the local environment, and return telemetry to
+ground stations. It achieved its objectives and provided valuable data that
+contributed to scientific knowledge and subsequent missions. International
+collaborations were often leveraged for instrument contributions and data
+analysis.

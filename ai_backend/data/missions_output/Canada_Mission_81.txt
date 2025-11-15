@@ -1,0 +1,8 @@
+Mission Name: Canada_Mission_81. Country: Canada. Date: 2009-11-23. Outcome:
+Passed. Type: Unmanned Mars lander. Description: Canada's Canada_Mission_81,
+launched 2009-11-23, performed a Unmanned Mars lander mission. The mission's
+objectives included scientific observation, technology demonstration, and data
+collection to support future exploration. It achieved its objectives and
+provided valuable data that contributed to scientific knowledge and subsequent
+missions. The mission added to the global understanding of planetary formation,
+surface processes, and potential resources.

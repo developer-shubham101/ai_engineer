@@ -1,0 +1,8 @@
+Mission Name: Canada_Mission_45. Country: Canada. Date: 1980-04-27. Outcome:
+Passed. Type: Space telescope. Description: Launched on 1980-04-27,
+Canada_Mission_45 from Canada served as a Space telescope. Primary goals were to
+map surface composition, test landing and navigation systems, characterize the
+local environment, and return telemetry to ground stations. It achieved its
+objectives and provided valuable data that contributed to scientific knowledge
+and subsequent missions. Onboard instruments typically included imagers,
+spectrometers, magnetometers, and sometimes landers or rovers for in-situ study.

@@ -1,0 +1,8 @@
+Mission Name: France_Mission_36. Country: France. Date: 1975-06-04. Outcome:
+Passed. Type: Manned orbital. Description: Launched on 1975-06-04,
+France_Mission_36 from France served as a Manned orbital. Engineers used this
+flight to validate hardware, improve communications, and gather operational
+experience for follow-up missions. It achieved its objectives and provided
+valuable data that contributed to scientific knowledge and subsequent missions.
+International collaborations were often leveraged for instrument contributions
+and data analysis.

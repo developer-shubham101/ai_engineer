@@ -1,0 +1,9 @@
+Mission Name: Germany_Mission_62. Country: Germany. Date: 1997-08-17. Outcome:
+Passed. Type: Unmanned asteroid mission. Description: Launched on 1997-08-17,
+Germany_Mission_62 from Germany served as a Unmanned asteroid mission. Primary
+goals were to map surface composition, test landing and navigation systems,
+characterize the local environment, and return telemetry to ground stations. It
+achieved its objectives and provided valuable data that contributed to
+scientific knowledge and subsequent missions. The mission added to the global
+understanding of planetary formation, surface processes, and potential
+resources.
