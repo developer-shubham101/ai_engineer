@@ -2,15 +2,9 @@ from __future__ import annotations
 import logging
 import uuid
 from pathlib import Path
-from typing import List, Optional, Dict, Any
-import json
-# Attempt imports (be explicit so runtime errors are clear)
-try:
-    import chromadb
-    from chromadb.config import Settings
-except Exception as e:
-    chromadb = None
+from typing import List, Optional, Dict, Any, Tuple
 
+# Embed/LLM imports (optional at runtime)
 try:
     from sentence_transformers import SentenceTransformer
 except Exception:
@@ -20,6 +14,19 @@ try:
     from langchain.llms import LlamaCpp
 except Exception:
     LlamaCpp = None
+
+# Chroma utils (centralized DB helpers)
+from app.services.chroma_utils import (
+    ensure_chroma_client,
+    add_documents_to_collection,
+    query_collection,
+    get_collection_data,
+    get_documents_by_ids,
+    update_metadatas,
+    delete_ids,
+    delete_all_documents,
+    delete_collection_by_name,
+)
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -32,25 +39,32 @@ DEFAULT_COLLECTION_NAME = "local_manual_rag"
 EMBEDDING_MODEL_NAME = "all-MiniLM-L6-v2"  # small & CPU-friendly
 
 # Internal global handles
-_chroma_client = None
-_collection = None
 _embedding_model = None
 _llm_instance = None
 
 # ---------- Utilities ----------
 
+def _get_local_embedding_model_path() -> Path:
+    """
+    If you want to place embedding models locally, put them under: <project_root>/embeddings_models/<EMBEDDING_MODEL_NAME>/
+    This function returns that path.
+    """
+    return BASE_DIR.parent / "embeddings_models" / EMBEDDING_MODEL_NAME
+
 def _sanitize_meta_value(val):
     """
-    Ensure metadata values are primitives (str/int/float/bool) for Chroma.
-    - list of primitives -> comma-separated string
-    - dict -> JSON string
-    - others -> str()
+    Ensure metadata values are primitives (str, int, float, bool) for Chroma.
+    - If val is list of primitives -> join with commas
+    - If val is dict -> json.dumps
+    - Else convert to str
     """
+    import json
     if val is None:
         return None
     if isinstance(val, (str, int, float, bool)):
         return val
     if isinstance(val, list):
+        # if list of primitives, join; otherwise json-dump
         if all(isinstance(x, (str, int, float, bool)) for x in val):
             return ",".join(str(x) for x in val)
         return json.dumps(val, ensure_ascii=False)
@@ -63,85 +77,6 @@ def _sanitize_metadata_dict(meta: Optional[Dict[str, Any]]) -> Dict[str, Any]:
     if not meta:
         return {}
     return {str(k): _sanitize_meta_value(v) for k, v in meta.items()}
-
-# small helper to update metadata for existing ids in chroma
-def update_metadata(ids: List[str], metadata: Dict[str, Any]) -> bool:
-    """
-    Update metadata for existing document chunk ids.
-    Returns True on success.
-    Note: metadata will be sanitized so all values are primitives/strings.
-    """
-    if chromadb is None:
-        raise ImportError("chromadb not installed")
-    _, collection = _ensure_chroma_client()
-    sanitized = _sanitize_metadata_dict(metadata)
-    # Build per-id metadatas list (apply same metadata to each id)
-    try:
-        per_id_metas = [sanitized.copy() for _ in ids]
-        # Many chroma clients support collection.update(ids=..., metadatas=...)
-        # If update() not available, fallback to delete+re-add is not implemented here.
-        collection.update(ids=ids, metadatas=per_id_metas)
-        logger.info("Updated metadata for %d ids", len(ids))
-        return True
-    except Exception as e:
-        logger.exception("Failed to update metadata for ids: %s", e)
-        # Some chroma versions don't have update(); try alternative approaches
-        try:
-            # attempt to get full item and re-add with updated metadata
-            # Note: this may not always be supported — keep as last-resort placeholder
-            logger.debug("Attempting fallback metadata replacement for %d ids", len(ids))
-            for i, _id in enumerate(ids):
-                try:
-                    # get existing doc (best-effort)
-                    got = collection.get(ids=[_id])
-                    docs = (got.get("documents") or [[]])[0]
-                    metas = (got.get("metadatas") or [[]])[0]
-                    if docs:
-                        doc_text = docs[0]
-                        old_meta = metas[0] if metas else {}
-                        new_meta = {**old_meta, **sanitized}
-                        collection.add(documents=[doc_text], ids=[_id], metadatas=[new_meta])
-                except Exception:
-                    continue
-            logger.info("Fallback metadata update attempted.")
-            return True
-        except Exception:
-            logger.exception("Fallback metadata update failed.")
-            return False
-
-def _get_local_embedding_model_path() -> Path:
-    """
-    If you want to place embedding models locally, put them under: <project_root>/embeddings_models/<EMBEDDING_MODEL_NAME>/
-    This function returns that path.
-    """
-    return BASE_DIR.parent / "embeddings_models" / EMBEDDING_MODEL_NAME
-
-def _ensure_chroma_client(persist_directory: Optional[str] = None):
-    global _chroma_client, _collection
-    if chromadb is None:
-        raise ImportError("chromadb package is not installed. Install chromadb to use the local RAG.")
-    if _chroma_client is None:
-        persist_directory = persist_directory or str(DEFAULT_PERSIST_DIR)
-        logger.info("Initializing Chroma persistent client at %s", persist_directory)
-        # Try common init patterns to be resilient across chromadb versions
-        try:
-            # new API style
-            from chromadb.config import Settings as _Settings
-            _chroma_client = chromadb.Client(_Settings(chroma_db_impl="duckdb+parquet", persist_directory=persist_directory))
-        except Exception:
-            try:
-                # fallback older style
-                _chroma_client = chromadb.PersistentClient(path=str(persist_directory))
-            except Exception as e:
-                logger.exception("Failed to initialize chroma client: %s", e)
-                raise
-    if _collection is None:
-        try:
-            _collection = _chroma_client.get_or_create_collection(name=DEFAULT_COLLECTION_NAME)
-        except Exception:
-            # fallback: attempt without options
-            _collection = _chroma_client.get_or_create_collection(name=DEFAULT_COLLECTION_NAME)
-    return _chroma_client, _collection
 
 def _get_embedding_model_instance() -> SentenceTransformer:
     global _embedding_model
@@ -195,36 +130,27 @@ def initialize_local_rag(embedding_model_instance: Optional[Any] = None,
                          collection_name: Optional[str] = None) -> None:
     """
     Initialize resources:
-    - Chroma persistent client / collection
-    - (Optional) embedding_model_instance: if provided, will be used; else we create sentence-transformers locally
-    - (Optional) llm_instance: if provided, will be used; else you can use a LlamaCpp instance created elsewhere
-
-    After this call:
-    - collection is ready (and seeded if empty depending on your usage)
+    - ensures Chroma client & collection
+    - optionally set provided embedding and llm instances
     """
-    global _embedding_model, _llm_instance, DEFAULT_COLLECTION_NAME, _chroma_client, _collection
+    global _embedding_model, _llm_instance
 
-    if collection_name:
-        DEFAULT_COLLECTION_NAME = collection_name
-
-    # embedding model assignment
     if embedding_model_instance is not None:
         _embedding_model = embedding_model_instance
         logger.info("Using provided embedding_model_instance")
     else:
-        # lazy-load when needed via _get_embedding_model_instance()
-        logger.info("No embedding_model_instance provided; will use local SentenceTransformer on demand")
+        logger.info("No embedding_model_instance provided; will lazy-load when needed")
 
-    # LLM instance assignment
     if llm_instance is not None:
         _llm_instance = llm_instance
         logger.info("Using provided LLM instance")
     else:
-        logger.info("No LLM instance provided; you may pass one later or rely on a separate local LLM service")
+        logger.info("No LLM instance provided; local LLM may be lazy-loaded on demand")
 
-    # initialize chroma client & collection
-    _ensure_chroma_client(persist_directory=persist_directory)
-    logger.info("Local RAG initialized. Collection name: %s", DEFAULT_COLLECTION_NAME)
+    # Ensure Chroma client & collection exist
+    ensure_chroma_client(persist_directory=str(persist_directory or DEFAULT_PERSIST_DIR),
+                         collection_name=collection_name or DEFAULT_COLLECTION_NAME)
+    logger.info("Local RAG initialization completed (collection: %s)", collection_name or DEFAULT_COLLECTION_NAME)
 
 
 def add_document_to_rag_local(source_name: str,
@@ -236,19 +162,12 @@ def add_document_to_rag_local(source_name: str,
 
     Returns the list of ids added.
 
-    Behavior:
     - Splits text into chunks if chunks not provided.
     - Computes embeddings locally for each chunk.
-    - Sanitizes metadata to primitive types (strings/numbers/bools) for Chroma.
-    - Adds documents, metadatas, ids, and embeddings to Chroma.
-    - Returns the list of created chunk ids (explicit).
+    - Adds documents, metadatas, ids, and embeddings to Chroma via chroma_utils.
     """
-    if chromadb is None:
-        raise ImportError("chromadb not installed")
+    import json
 
-    _, collection = _ensure_chroma_client()
-
-    # If client provided pre-chunked content, use it; otherwise chunk the text
     if not chunks:
         chunks = _chunk_text_basic(text)
 
@@ -256,16 +175,16 @@ def add_document_to_rag_local(source_name: str,
         logger.warning("No chunks produced for document: %s", source_name)
         return []
 
-    # default metadata applied per-chunk (sanitize so Chroma accepts values)
+    # sanitize metadata and ensure source is present
     base_meta = metadata or {}
     sanitized_base = _sanitize_metadata_dict(base_meta)
     sanitized_base["source"] = source_name
-    # ensure ingested_at present if not provided
+    # add ingestion timestamp if not present
     if "ingested_at" not in sanitized_base:
         from datetime import datetime
         sanitized_base["ingested_at"] = datetime.utcnow().isoformat() + "Z"
-    metadatas = [dict(sanitized_base) for _ in chunks]
 
+    metadatas = [dict(sanitized_base) for _ in chunks]
     ids = _generate_ids(prefix=source_name, n=len(chunks))
 
     # compute embeddings locally
@@ -275,17 +194,16 @@ def add_document_to_rag_local(source_name: str,
         logger.exception("Failed to compute embeddings locally: %s", e)
         raise
 
-    # Add to chroma
+    # Add to chroma via helper
     try:
-        collection.add(documents=chunks, metadatas=metadatas, ids=ids, embeddings=embeddings)
+        client, collection = ensure_chroma_client(persist_directory=str(DEFAULT_PERSIST_DIR), collection_name=DEFAULT_COLLECTION_NAME)
+        add_documents_to_collection(collection=collection, documents=chunks, metadatas=metadatas, ids=ids, embeddings=embeddings)
         logger.info("Added %d chunks for source %s to collection %s", len(chunks), source_name, DEFAULT_COLLECTION_NAME)
     except Exception as e:
         logger.exception("Failed to add documents to Chroma collection: %s", e)
         raise
 
-    # Explicit return of ids (list of created chunk ids)
     return ids
-
 
 
 def query_local_rag(query_text: str, n_results: int = 3, requester: Optional[Dict[str, str]] = None,
@@ -293,11 +211,11 @@ def query_local_rag(query_text: str, n_results: int = 3, requester: Optional[Dic
     """
     Query the local RAG:
     - compute local embedding for the query
-    - retrieve top-k docs from Chroma
+    - retrieve top-k docs from Chroma (via chroma_utils)
     - apply RBAC filtering (visible vs filtered)
     - returns both visible results and raw (pre-filter) results so the API layer can decide UX
     """
-    _, collection = _ensure_chroma_client()
+    client, collection = ensure_chroma_client(persist_directory=str(DEFAULT_PERSIST_DIR), collection_name=DEFAULT_COLLECTION_NAME)
 
     if not query_text:
         raise ValueError("query_text must be provided")
@@ -310,11 +228,11 @@ def query_local_rag(query_text: str, n_results: int = 3, requester: Optional[Dic
         logger.exception("Failed to compute query embedding: %s", e)
         raise
 
-    # query chroma (attempt embedding query, fallback to text query)
+    # query chroma via helper (embedding preferred, text fallback)
     try:
-        result = collection.query(query_embeddings=[q_emb], n_results=n_results)
+        result = query_collection(collection=collection, query_embeddings=[q_emb], n_results=n_results)
     except Exception:
-        result = collection.query(query_texts=[query_text], n_results=n_results)
+        result = query_collection(collection=collection, query_texts=[query_text], n_results=n_results)
 
     # normalize result shape (support dict or object responses)
     if isinstance(result, dict):
@@ -334,25 +252,38 @@ def query_local_rag(query_text: str, n_results: int = 3, requester: Optional[Dic
 
     # ------- RBAC / access control filtering -------
     def _allowed_by_metadata(meta: Optional[Dict[str, Any]], requester: Optional[Dict[str, str]]) -> bool:
+        """
+        Simple RBAC rules. Expected meta keys:
+          - sensitivity: one of public_internal | department_confidential | role_confidential | highly_confidential | personal
+          - department: department string
+          - allowed_roles: optional list of roles allowed
+          - owner_id: for personal items
+        requester keys expected: role, department, user_id
+        """
         if not meta:
-            return requester is not None
+            return requester is not None  # if requester present, allow public_internal by default
         sens = meta.get("sensitivity", "public_internal")
+        # personal: only owner or HR/Legal/Executive
         if sens == "personal":
             owner = meta.get("owner_id")
             if owner == (requester.get("user_id") if requester else None):
                 return True
             return requester and requester.get("role") in ("HR", "Legal", "Executive")
+        # highly_confidential: only Legal / Executive
         if sens == "highly_confidential":
             return requester and requester.get("role") in ("Legal", "Executive")
+        # role_confidential: check allowed_roles
         if sens == "role_confidential":
             allowed = meta.get("allowed_roles") or []
             if requester and requester.get("role") in allowed:
                 return True
             return requester and requester.get("role") in ("HR", "Legal", "Executive")
+        # department_confidential: same department or HR/Legal/Executive
         if sens == "department_confidential":
             if requester and requester.get("department") == meta.get("department"):
                 return True
             return requester and requester.get("role") in ("HR", "Legal", "Executive")
+        # public_internal or unknown: allow
         return True
 
     filtered_docs = []
@@ -393,7 +324,7 @@ def query_local_rag(query_text: str, n_results: int = 3, requester: Optional[Dic
     # build context text from allowed (visible) docs
     context_text = "\n\n---\n\n".join(d for d in filtered_docs if d)
 
-    out = {
+    out: Dict[str, Any] = {
         # visible to requester after RBAC
         "documents": filtered_docs,
         "metadatas": filtered_metas,
@@ -461,14 +392,12 @@ def query_local_rag(query_text: str, n_results: int = 3, requester: Optional[Dic
     return out
 
 
-
 def seed_from_file(file_path: Optional[str] = None, source_name: Optional[str] = None) -> List[str]:
     """
     Read the given file and index it. If file_path is None, attempts to seed from
     the default project data/mission.txt.
     Returns list of ids added.
     """
-    # choose default mission path under project data/
     default_path = (BASE_DIR.parent / "data" / "mission.txt")
     path = Path(file_path) if file_path else default_path
     if not path.exists():
@@ -480,52 +409,22 @@ def seed_from_file(file_path: Optional[str] = None, source_name: Optional[str] =
     return add_document_to_rag_local(source_name=name, text=text, chunks=None, metadata={"seeded": True})
 
 
+def update_metadata(ids: List[str], metadata: Dict[str, Any]) -> bool:
+    """
+    Wrapper that updates metadata for existing ids using chroma_utils.update_metadatas.
+    """
+    client, collection = ensure_chroma_client(persist_directory=str(DEFAULT_PERSIST_DIR), collection_name=DEFAULT_COLLECTION_NAME)
+    sanitized = _sanitize_metadata_dict(metadata)
+    return update_metadatas(collection=collection, ids=ids, metadata=sanitized)
+
+
 def clear_collection() -> None:
     """
     Delete all documents from the collection. Use with caution.
     """
-    _, collection = _ensure_chroma_client()
+    client, collection = ensure_chroma_client(persist_directory=str(DEFAULT_PERSIST_DIR), collection_name=DEFAULT_COLLECTION_NAME)
     try:
-        # many chroma client APIs support delete with no args or purge
-        # We attempt a few variants to remain compatible across versions.
-        try:
-            collection.delete()  # delete everything (if supported)
-            logger.info("Cleared chroma collection using collection.delete()")
-            return
-        except Exception:
-            pass
-
-        # fallback: list ids and delete them
-        all_ids = []
-        try:
-            # attempt to get ids via collection.get()
-            coll_data = collection.get()
-            # structure may vary: coll_data.get("ids") etc.
-            if isinstance(coll_data, dict) and coll_data.get("ids"):
-                # flatten and remove
-                for ids_list in coll_data.get("ids", []):
-                    all_ids.extend(ids_list)
-        except Exception:
-            pass
-
-        # If we could not get IDs, attempt to drop & recreate collection via client (if available)
-        try:
-            client, _ = _ensure_chroma_client()
-            client.delete_collection(name=DEFAULT_COLLECTION_NAME)
-            # re-create
-            _ensure_chroma_client()
-            logger.info("Deleted and recreated collection %s via client.delete_collection()", DEFAULT_COLLECTION_NAME)
-            return
-        except Exception:
-            pass
-
-        # last resort: if we have ids, delete by ids
-        if all_ids:
-            collection.delete(ids=all_ids)
-            logger.info("Cleared chroma collection by deleting %d ids", len(all_ids))
-            return
-
-        logger.warning("Unable to clear collection using available APIs; collection may still contain documents.")
+        delete_all_documents(collection=collection, client=client, collection_name=DEFAULT_COLLECTION_NAME)
     except Exception as e:
         logger.exception("Error clearing collection: %s", e)
         raise
