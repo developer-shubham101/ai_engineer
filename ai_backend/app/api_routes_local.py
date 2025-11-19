@@ -155,7 +155,8 @@ async def add_document_json(req: AddDocRequest, requester: Dict[str, Any] = Depe
     metadata.setdefault("department", metadata.get("department", "General"))
     metadata.setdefault("sensitivity", metadata.get("sensitivity", "public_internal"))
     metadata["ingested_by"] = requester.get("user_id")
-    metadata["ingested_at"] = metadata.get("ingested_at")  # optional if caller provided
+    if "ingested_at" in metadata and metadata["ingested_at"] is None:  # optional if caller provided
+        del metadata["ingested_at"]
 
     validate_metadata(metadata)
 

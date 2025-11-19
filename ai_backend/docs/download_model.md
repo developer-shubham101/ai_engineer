@@ -1,7 +1,3 @@
-Yes — here are some **open-source GGUF format models on the Hugging Face Hub** that you can download directly (or via scripts) for local CPU use. I’ll pick ones that are reasonably small/CPU-friendly and provide their links + key details.
-
----
-
 ### ✅ Good model options
 
 1. Phi‑3‑mini‑4K‑Instruct‑GGUF (by Microsoft)
@@ -69,11 +65,3 @@ set LLM_MODEL_FILENAME=mistral-7b-instruct-v0.2.Q3_K_M.gguf
 # Start the server
 uvicorn app.main:app --reload --port 8000
 ```
-
----
-
-If you like, I can **check and list 5–10 additional open-source GGUF models**, with direct download commands and **estimated memory/CPU requirements**, and pick the *smallest possible* one that your 16 GB RAM may handle well (to optimize for CPU). Would you like me to pull that full list?
-
-[1]: https://huggingface.co/microsoft/Phi-3-mini-4k-instruct-gguf?utm_source=chatgpt.com "microsoft/Phi-3-mini-4k-instruct-gguf"
-[2]: https://huggingface.co/TheBloke/Llama-2-7B-GGUF?utm_source=chatgpt.com "TheBloke/Llama-2-7B-GGUF"
-[3]: https://huggingface.co/TheBloke/Mistral-7B-Instruct-v0.2-GGUF?utm_source=chatgpt.com "TheBloke/Mistral-7B-Instruct-v0.2-GGUF"

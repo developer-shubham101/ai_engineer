@@ -30,7 +30,7 @@ GPT4All has its own built-in downloader:
 ```python
 from gpt4all import GPT4All
 
-model = GPT4All("ggml-mistral-7b-instruct.q4_0.bin", model_path="models")
+model = GPT4All("ggml-mistral-7b-instruct.q4_0.bin", model_path="../models")
 ```
 
 This auto-downloads the file into `/models`.
@@ -165,16 +165,3 @@ from langchain.llms import GPT4All
 Which avoids all llama-cpp issues.
 
 ---
-
-# ❓ So tell me:
-
-### **Which alternative do you want to use?**
-
-1. **GPT4All** (no build tools, easiest direct Python)
-2. **Ollama** (super easy, external server)
-3. **Transformers tiny models** (pure Python, slow but no errors)
-
-Reply with:
-➡ **1, 2 or 3**
-
-Then I will update your entire RAG service automatically.

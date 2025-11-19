@@ -156,14 +156,3 @@ Examples:
 * Escalation workflow
 * Logging/Audit trail of support queries
 * Dashboard endpoints for admins
-
-You should guide me step-by-step, generating only the needed code pieces with **context lines** included.
-
----
-
-# 🧠 **Start by asking me:**
-
-> “Which support team should we design first? HR support, Finance support, IT support, Engineering helpdesk, or a generic support assistant?”
-
----
- 

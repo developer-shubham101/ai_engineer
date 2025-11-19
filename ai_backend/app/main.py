@@ -65,7 +65,6 @@ async def lifespan(app: FastAPI):
 
     print("🔴 Application shutdown...")
 
-
 # -----------------------------
 # Create FastAPI app
 # -----------------------------

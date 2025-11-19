@@ -1,11 +1,3 @@
-Great — here are **three easy ways** to download the embedding model
-👉 **`all-MiniLM-L6-v2`**
-to your **local Windows machine**, completely offline-compatible.
-
-This model is only ~22MB and works perfectly with CPU.
-
----
-
 # ✅ **Method 1 — Easiest (Python auto-download into your project folder)**
 
 This downloads the model directly into:
@@ -22,7 +14,7 @@ from sentence_transformers import SentenceTransformer
 from pathlib import Path
 
 MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
-LOCAL_DIR = Path("embeddings_models/all-MiniLM-L6-v2")
+LOCAL_DIR = Path("../embeddings_models/all-MiniLM-L6-v2")
 
 print("Downloading MiniLM embedding model...")
 
@@ -160,21 +152,3 @@ else:
 ```
 
 So your local folder ensures **offline embeddings**, fast loading, no surprises.
-
----
-
-# 🚀 Want automatic setup?
-
-I can generate a **script that:**
-
-1. Creates all required directories
-2. Downloads MiniLM
-3. Validates model
-4. Downloads your Llama model as well
-5. Sets environment variables
-6. Prepares your RAG DB folder
-7. Starts FastAPI
-
-Just say:
-
-👉 **“Give me the full model setup script”**

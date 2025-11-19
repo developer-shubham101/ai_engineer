@@ -394,19 +394,59 @@ def query_local_rag(query_text: str, n_results: int = 3, requester: Optional[Dic
 
 def seed_from_file(file_path: Optional[str] = None, source_name: Optional[str] = None) -> List[str]:
     """
-    Read the given file and index it. If file_path is None, attempts to seed from
-    the default project data/mission.txt.
-    Returns list of ids added.
+    Read the given file or directory and index it.
+
+    Behavior:
+    - If file_path is None: attempts to seed from default project data/company_overview.txt.
+    - If file_path is a file: read & ingest that single file.
+    - If file_path is a directory: iterate non-recursively through files in the directory
+      and ingest each file found (skip directories). Returns a flat list of all chunk ids added.
+
+    Returns list of ids added (may be empty).
     """
-    default_path = (BASE_DIR.parent / "data" / "mission.txt")
+    default_path = (BASE_DIR.parent / "data" / "company_overview.txt")
     path = Path(file_path) if file_path else default_path
     if not path.exists():
-        logger.warning("Seed file not found at %s", path)
+        logger.warning("Seed path not found at %s", path)
         return []
 
-    text = path.read_text(encoding="utf-8")
+    added_ids: List[str] = []
+
+    # If path is a directory, iterate files (non-recursive) and ingest each
+    if path.is_dir():
+        logger.info("Seeding directory: %s", path)
+        for child in sorted(path.iterdir()):
+            if child.is_file():
+                try:
+                    text = child.read_text(encoding="utf-8")
+                    src_name = source_name or child.name
+                    ids = add_document_to_rag_local(source_name=src_name, text=text, chunks=None, metadata={"seeded": True})
+                    if ids:
+                        added_ids.extend(ids)
+                        logger.info("Seeded file %s -> %d chunks", child.name, len(ids))
+                except Exception as e:
+                    logger.exception("Failed to seed file %s: %s", child, e)
+                    continue
+        return added_ids
+
+    # Otherwise, it's a single file; ingest it.
+    try:
+        text = path.read_text(encoding="utf-8")
+    except Exception as e:
+        logger.exception("Failed to read seed file %s: %s", path, e)
+        return []
+
     name = source_name or path.name
-    return add_document_to_rag_local(source_name=name, text=text, chunks=None, metadata={"seeded": True})
+    try:
+        ids = add_document_to_rag_local(source_name=name, text=text, chunks=None, metadata={"seeded": True})
+        if ids:
+            added_ids.extend(ids)
+            logger.info("Seeded file %s -> %d chunks", path.name, len(ids))
+    except Exception as e:
+        logger.exception("Failed to seed file %s: %s", path, e)
+
+    return added_ids
+
 
 
 def update_metadata(ids: List[str], metadata: Dict[str, Any]) -> bool:

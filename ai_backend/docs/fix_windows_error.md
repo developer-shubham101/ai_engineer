@@ -1,5 +1,3 @@
-You got this error:
-
 ```
 Failed to initialize local LlamaCpp instance:
 Could not import llama-cpp-python library.
@@ -131,17 +129,3 @@ I need to see:
 ```powershell
 pip show llama-cpp-python
 ```
-
-Once you give me that, I will fix it 100%.
-
----
-
-# 👍 Want me to write an **automatic installer script** for Windows that:
-
-* Checks Python version
-* Installs Build Tools (via winget)
-* Installs llama-cpp-python with fallback
-* Downloads a GGUF model
-* Puts it in your `/models` folder
-
-Just say: **“give me installer script”**.
