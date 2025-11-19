@@ -1,0 +1,26 @@
+[
+    {
+        "key": "name",
+        "question": "What is your name?"
+    },
+    {
+        "key": "gender",
+        "question": "What is your gender?"
+    },
+    {
+        "key": "job_role",
+        "question": "What is your job role?"
+    },
+    {
+        "key": "age",
+        "question": "What is your age?"
+    },
+    {
+        "key": "location",
+        "question": "Where are you located?"
+    },
+    {
+        "key": "department",
+        "question": "Which department are you trying to reach?"
+    }
+]

@@ -1,6 +1,6 @@
 import os
 
-IGNORE_LIST = ['.git', 'local_tree_printer.py', ".venv"]
+IGNORE_LIST = ['.git', 'local_tree_printer.py', ".venv", "embeddings_models"]
 
 def print_recursive_tree(dir_path, prefix=""):
     """

@@ -132,6 +132,15 @@ _API_KEYS = {
         "role": "CTO",
         "department": "Executive",
     },
+
+    # ============================================================
+    # ⬜ GUEST / TEMP ACCESS
+    # ============================================================
+    "key-guest-1": {
+        "user_id": "u_guest_1",
+        "role": "Guest",
+        "department": "General",
+    },
 }
 
 
