@@ -1,0 +1,4 @@
+/* styles.css - small layout tweaks */
+html, body { height: 100%; }
+body { background: #fff; }
+.card { box-shadow: 0 1px 3px rgba(0,0,0,0.04); }

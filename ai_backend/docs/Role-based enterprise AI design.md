@@ -1,7 +1,3 @@
-Perfect — I will design a **complete role-based enterprise AI system** using a fictional Indian company so you can learn the FULL real-world process from end to end.
-
-I’ll choose:
-
 # 🏢 **Company Name: “Saarthi Infotech Pvt. Ltd.”**
 
 Meaning: *Saarthi* = “guide” in Hindi.
@@ -292,31 +288,4 @@ AI prevents risky actions:
 
 * "Sorry, this violates company data policy."
 * “You cannot request this data.”
-
----
-
-# Ready to Start Designing the AI System?
-
-If you're ready, we move to:
-
-# 🔥 **Next Step: Build the Architecture**
-
-Includes:
-
-* Data ingestion pipeline
-* Role-based RAG design
-* Policy decision engine
-* Secure answering framework
-* Example prompts
-* System workflow
-
-**Before I continue**, tell me:
-
-### 👉 Should this AI system be:
-
-1. **Web-based chat application**
-2. **Integrated into internal tools like Teams/Slack**
-3. **A standalone desktop/portal application**
-4. **API-only service that other apps can use**
-
-Pick one (or multiple), and I will proceed with full architecture + data model + user flow.
+ 

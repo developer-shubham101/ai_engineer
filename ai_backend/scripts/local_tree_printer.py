@@ -38,7 +38,7 @@ if __name__ == "__main__":
 
     # --- IMPORTANT: CHANGE THIS PATH ---
     # Set this to the absolute or relative path of your local 'ai_engineer' folder.
-    LOCAL_REPO_PATH = './'
+    LOCAL_REPO_PATH = '../'
     # Example: LOCAL_REPO_PATH = '/Users/yourname/Documents/ai_engineer'
 
     # Get the base name (the folder name itself)

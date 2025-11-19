@@ -415,12 +415,3 @@ class PolicyEngine:
 If you handle regulated data (health, finance, personal data), **consult legal/compliance** before sending anything to third-party cloud LLMs. Prefer self-hosted or enterprise agreements.
 
 ---
-
-If you want, I can now:
-
-* (A) Add **PolicyEngine + NoLeakWrapper** code into your repo and wire it into `/api/local/query`.
-* (B) Add **Presidio** redaction example integrated with your `rag_local_service.py`.
-* (C) Implement **indexing of per-turn history + summary pipeline** for conversation memory.
-* (D) Provide Terraform / infra checklist for enterprise deployment (VPC, private endpoints, KMS).
-
-Which one shall I do next?
