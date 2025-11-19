@@ -2,7 +2,7 @@
 
 from typing import List, Optional, Dict, Any
 import logging
-
+import uuid
 from fastapi import APIRouter, HTTPException, UploadFile, File, Depends, Header
 from pydantic import BaseModel, Field
 
@@ -14,9 +14,18 @@ from app.services.rag_local_service import (
 )
 # simple auth map service (create app/services/auth.py if not present)
 from app.services.auth import get_user_from_api_key  # expects a small mapping
+from app.services import support_chat
+
+
+from app.services.support_chat import (
+    get_next_missing_profile_key,
+    set_profile_value,
+    get_full_profile,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/local", tags=["Local RAG"])
+support_chat.init_support_chat_db(reset_on_start=True)
 
 # ---------------------------
 # Models
@@ -33,6 +42,7 @@ class QueryRequest(BaseModel):
     top_k: int = 3
     use_llm: bool = False
     max_tokens: int = 256
+    category: Optional[str] = None
 
 class QueryResponse(BaseModel):
     answer: Optional[str] = None
@@ -47,6 +57,29 @@ class AddDocRequest(BaseModel):
 class AddResponse(BaseModel):
     message: str
     chunk_count: int = 0
+
+
+class SupportSessionStartRequest(BaseModel):
+    session_id: Optional[str] = None
+    name: Optional[str] = None
+    sex: Optional[str] = None
+    position: Optional[str] = None
+    category: Optional[str] = None
+    notes: Optional[str] = None
+
+
+class SupportSessionStartResponse(BaseModel):
+    session_id: str
+    message: str
+
+
+class SupportSessionEndRequest(BaseModel):
+    session_id: str
+
+
+class SupportSessionEndResponse(BaseModel):
+    session_id: str
+    message: str
 
 # ---------------------------
 # Helpers / Config
@@ -91,18 +124,139 @@ def get_requester(x_api_key: Optional[str] = Header(None)) -> Dict[str, Any]:
 # ---------------------------
 
 @router.post("/query", response_model=QueryResponse)
-async def query_local(req: QueryRequest, requester: Dict[str, Any] = Depends(get_requester)):
+async def query_local(
+    req: QueryRequest,
+    requester: Dict[str, Any] = Depends(get_requester),
+    x_session_id: Optional[str] = Header(None),
+):
     """
-    Query the local RAG. Role info is passed via 'requester' so the service can filter
-    retrieved docs by sensitivity/department/allowed_roles.
+    Query the local RAG. Supports session-aware onboarding and personalization.
+
+    Behavior summary:
+    - If X-Session-Id is missing -> stateless RAG query (Scenario 3).
+    - If X-Session-Id provided and onboarding incomplete -> ask onboarding questions sequentially (Scenario 1).
+      * We detect whether the user's incoming message is an answer to the last assistant onboarding question
+        by inspecting recent session history. If the last assistant message equals the onboarding question,
+        we treat the current user text as the answer and save it.
+    - If X-Session-Id provided and onboarding complete -> run RAG with personalized prefix (Scenario 2).
     """
     logger.info("Query request: role=%s user=%s question=%s", requester.get("role"), requester.get("user_id"), req.question)
 
+    llm_prefix = None
+    session_history = []
+
+    # If session header provided, validate session and assemble history/prefix
+    if x_session_id:
+        if not support_chat.session_exists(x_session_id):
+            raise HTTPException(status_code=404, detail="Session not found. Start a new session first.")
+        try:
+            support_chat.touch_session(
+                session_id=x_session_id,
+                role=requester.get("role"),
+                department=requester.get("department"),
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=404, detail=str(exc))
+
+        # fetch recent history to (a) build prompt prefix and (b) detect onboarding flow
+        session_history = support_chat.fetch_recent_messages(
+            session_id=x_session_id,
+            limit=support_chat.MAX_HISTORY_TURNS,
+        )
+
+    # ------------------------
+    # ONBOARDING / PROFILE LOGIC
+    # ------------------------
+    if x_session_id:
+        # Load current short profile and find next missing onboarding field (from config)
+        profile = get_full_profile(x_session_id)
+        next_field = get_next_missing_profile_key(x_session_id)
+
+        if next_field:
+            # Determine whether the user's current request is an answer to the previous assistant onboarding question.
+            last_assistant_msg = None
+            if session_history:
+                last_msg = session_history[-1]
+                if last_msg.get("speaker", "").lower() == "assistant":
+                    last_assistant_msg = last_msg.get("content", "")
+
+            expected_question = next_field["question"]
+            key_to_save = next_field["key"]
+
+            # CASE A: If the assistant previously asked the expected onboarding question,
+            # treat current req.question as the answer and save it.
+            if last_assistant_msg and last_assistant_msg.strip() == expected_question.strip():
+                user_reply = req.question.strip()
+
+                # Save user's reply message to history
+                try:
+                    support_chat.store_message(x_session_id, "user", req.question)
+                except Exception:
+                    logger.exception("Failed to store user onboarding reply (non-fatal)")
+
+                # Save profile key-value
+                try:
+                    set_profile_value(x_session_id, key_to_save, user_reply)
+                except Exception as exc:
+                    logger.exception("Failed to save onboarding value: %s", exc)
+                    raise HTTPException(status_code=500, detail="Failed to save onboarding data.")
+
+                # Re-evaluate next missing field after saving
+                next_field = get_next_missing_profile_key(x_session_id)
+                if next_field:
+                    # store assistant's next question before returning
+                    try:
+                        support_chat.store_message(x_session_id, "assistant", next_field["question"])
+                    except Exception:
+                        logger.exception("Failed to store assistant follow-up question (non-fatal)")
+                    return QueryResponse(answer=next_field["question"], retrieved=[], context=None)
+
+                # Onboarding completed — store assistant completion message and return
+                completion_msg = "Thank you! Your details have been saved."
+                try:
+                    support_chat.store_message(x_session_id, "assistant", completion_msg)
+                except Exception:
+                    logger.exception("Failed to store onboarding completion message (non-fatal)")
+                return QueryResponse(answer=completion_msg, retrieved=[], context=None)
+
+            # CASE B: The onboarding question has not been asked yet in this session — ask it now.
+            else:
+                # Persist the assistant question so the next user reply can be recognized as an answer
+                try:
+                    support_chat.store_message(x_session_id, "assistant", expected_question)
+                except Exception:
+                    logger.exception("Failed to store assistant onboarding question (non-fatal)")
+
+                return QueryResponse(answer=expected_question, retrieved=[], context=None)
+
+    # ------------------------
+    # BUILD PERSONALIZED PREFIX (if session/profile exists)
+    # ------------------------
+    if x_session_id:
+        profile = get_full_profile(x_session_id)
+        llm_prefix = support_chat.build_prompt_prefix(
+            requester=requester,
+            history=session_history,
+            category=req.category,
+        )
+
+        # Prepend profile details if available
+        if profile:
+            prefix_extra_lines = ["User Profile:"]
+            for k, v in profile.items():
+                prefix_extra_lines.append(f"- {k}: {v}")
+            prefix_extra = "\n".join(prefix_extra_lines) + "\n\n"
+            llm_prefix = prefix_extra + llm_prefix
+
+    # ------------------------
+    # CALL RAG SERVICE
+    # ------------------------
     try:
         res = query_local_rag(
             query_text=req.question,
             n_results=req.top_k,
             requester=requester,       # pass role info for filtering in service
+            llm_prompt_prefix=llm_prefix,
             use_llm=req.use_llm,
             max_tokens=req.max_tokens,
         )
@@ -110,14 +264,16 @@ async def query_local(req: QueryRequest, requester: Dict[str, Any] = Depends(get
         logger.exception("RAG query failed: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
+    # ------------------------
+    # NORMALIZE RETRIEVED ITEMS
+    # ------------------------
     docs = []
-    # Normalize retrieved items if present in result
     retrieved_docs = res.get("documents") or []
     metadatas = res.get("metadatas") or []
     ids = res.get("ids") or []
     distances = res.get("distances") or []
 
-    # some clients may return nested lists - try to handle gracefully
+    # handle nested lists from some Chroma responses
     if retrieved_docs and isinstance(retrieved_docs[0], list):
         retrieved_docs = retrieved_docs[0]
     if metadatas and isinstance(metadatas[0], list):
@@ -127,7 +283,6 @@ async def query_local(req: QueryRequest, requester: Dict[str, Any] = Depends(get
     if distances and isinstance(distances[0], list):
         distances = distances[0]
 
-    # build RetrievedDoc list
     for i, doc_text in enumerate(retrieved_docs):
         meta = metadatas[i] if i < len(metadatas) else None
         id_ = ids[i] if i < len(ids) else f"doc_{i}"
@@ -142,7 +297,22 @@ async def query_local(req: QueryRequest, requester: Dict[str, Any] = Depends(get
         else:
             answer = "No relevant documents found in the knowledge base."
 
+    # ------------------------
+    # STORE MESSAGES (if sessioned)
+    # ------------------------
+    if x_session_id:
+        try:
+            # store the user's question (if not already stored during onboarding branch)
+            # Note: onboarding branch already stores user message when saving answers.
+            # This will prevent duplicate storage for onboarding answers because store_message is idempotent in intent.
+            support_chat.store_message(x_session_id, "user", req.question)
+            support_chat.store_message(x_session_id, "assistant", answer)
+        except Exception as exc:
+            logger.exception("Failed to store session messages: %s", exc)
+
     return QueryResponse(answer=answer, retrieved=docs, context=res.get("context"))
+
+
 
 
 @router.post("/add", response_model=AddResponse)
@@ -238,3 +408,39 @@ def clear_store(requester: Dict[str, Any] = Depends(get_requester)):
     except Exception as e:
         logger.exception("Failed to clear collection: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/session/start", response_model=SupportSessionStartResponse)
+async def start_support_session(requester: Dict[str, Any] = Depends(get_requester)):
+    # >>> START OF SUGGESTED CODE ADDITION <<<
+    # Auto-create session (no request body required)
+    session_id = f"sess_{uuid.uuid4().hex}"
+
+    # Store new session in SQLite DB
+    try:
+        support_chat.create_session(
+            session_id=session_id,
+            role=requester.get("role"),
+            department=requester.get("department")
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+    return SupportSessionStartResponse(
+        session_id=session_id,
+        message="Session started"
+    )
+    # >>> END OF SUGGESTED CODE ADDITION <<<
+
+
+@router.post("/session/end", response_model=SupportSessionEndResponse)
+async def end_support_session(req: SupportSessionEndRequest, requester: Dict[str, Any] = Depends(get_requester)):
+    if not support_chat.session_exists(req.session_id):
+        raise HTTPException(status_code=404, detail="Session not found.")
+
+    try:
+        support_chat.end_session(req.session_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+    return SupportSessionEndResponse(session_id=req.session_id, message="Support session ended.")

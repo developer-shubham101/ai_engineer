@@ -360,7 +360,7 @@ def query_local_rag(query_text: str, n_results: int = 3, requester: Optional[Dic
                     raise RuntimeError("No LLM instance provided and no local GGUF model found under models/. Provide llm_instance when calling initialize_local_rag or set model file in models/.")
                 try:
                     logger.info("Lazy-loading LlamaCpp model from %s", model_path)
-                    _llm_instance = LlamaCpp(model_path=model_path, n_ctx=1024, n_batch=8, n_gpu_layers=0)
+                    _llm_instance = LlamaCpp(model_path=model_path, n_ctx=2048, n_batch=8, n_gpu_layers=0)
                 except Exception as e:
                     logger.exception("Failed to initialize local LlamaCpp instance: %s", e)
                     raise RuntimeError("Failed to initialize local LLM") from e
