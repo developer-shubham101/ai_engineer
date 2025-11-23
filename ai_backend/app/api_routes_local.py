@@ -5,6 +5,9 @@ import logging
 import uuid
 from fastapi import APIRouter, HTTPException, UploadFile, File, Depends, Header
 from pydantic import BaseModel, Field
+from app.services.sentiment_classifier import get_global_sentiment
+# Add this in api_routes_local.py
+from app.services.support_chat import get_sentiment_stats
 
 from app.services.rag_local_service import (
     add_document_to_rag_local,
@@ -30,6 +33,8 @@ support_chat.init_support_chat_db(reset_on_start=True)
 # ---------------------------
 # Models
 # ---------------------------
+class SentimentRequest(BaseModel):
+    text: str
 
 class RetrievedDoc(BaseModel):
     id: str
@@ -444,3 +449,15 @@ async def end_support_session(req: SupportSessionEndRequest, requester: Dict[str
         raise HTTPException(status_code=404, detail=str(exc))
 
     return SupportSessionEndResponse(session_id=req.session_id, message="Support session ended.")
+
+
+@router.post("/api/local/sentiment")
+def api_sentiment(req: SentimentRequest):
+    classifier = get_global_sentiment()
+    res = classifier.predict_single(req.text)
+    return {"ok": True, "result": res}
+
+@router.get("/api/local/sentiment/stats")
+def sentiment_stats_api():
+    # calling the function here
+    return get_sentiment_stats()   # <-- usage of get_sentiment_stats()

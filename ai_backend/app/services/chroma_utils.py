@@ -15,10 +15,11 @@ except Exception:
 
 logger = logging.getLogger(__name__)
 
-# Default location to persist chroma DB (same as rag_local_service uses)
-BASE_DIR = Path(__file__).resolve().parent.parent  # app/
-DEFAULT_PERSIST_DIR = BASE_DIR / "chroma_storage"
-DEFAULT_COLLECTION_NAME = "local_manual_rag"
+# Import centralized paths and constants
+from app.services.utility import (
+    DEFAULT_PERSIST_DIR,
+    DEFAULT_COLLECTION_NAME,
+)
 
 
 def ensure_chroma_client(persist_directory: Optional[str] = None, collection_name: Optional[str] = None) -> Tuple[Any, Any]:
@@ -224,6 +225,7 @@ def delete_all_documents(collection: Any, client: Optional[Any] = None, collecti
     # last resort: delete collection via client
     if client and collection_name:
         try:
+            from app.services.utility import DEFAULT_PERSIST_DIR
             client.delete_collection(name=collection_name)
             # recreate
             ensure_chroma_client(persist_directory=str(DEFAULT_PERSIST_DIR), collection_name=collection_name)

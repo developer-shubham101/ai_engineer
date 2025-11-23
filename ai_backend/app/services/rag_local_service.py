@@ -2,6 +2,8 @@ from __future__ import annotations
 import logging
 import uuid
 from pathlib import Path
+# new import to fetch recent messages (tone is stored there by support_chat)
+from app.services.support_chat import fetch_recent_messages
 from typing import List, Optional, Dict, Any, Tuple
 
 # Embed/LLM imports (optional at runtime)
@@ -28,27 +30,177 @@ from app.services.chroma_utils import (
     delete_collection_by_name,
 )
 
+# Import centralized utilities
+from app.services.utility import (
+    BASE_DIR,
+    DATA_DIR,
+    DEFAULT_PERSIST_DIR,
+    DEFAULT_COLLECTION_NAME,
+    EMBEDDING_MODEL_NAME,
+    get_local_embedding_model_path,
+    get_embedding_model_instance,
+    embed_texts,
+    chunk_text_basic,
+    sanitize_metadata_dict,
+    build_tone_guidance,
+    MODELS_DIR,
+    get_data_path,
+)
+
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
-# ---------- Configuration ----------
-BASE_DIR = Path(__file__).resolve().parent.parent  # app/
-DEFAULT_DATA_DIR = BASE_DIR / "data"
-DEFAULT_PERSIST_DIR = BASE_DIR / "chroma_storage"
-DEFAULT_COLLECTION_NAME = "local_manual_rag"
-EMBEDDING_MODEL_NAME = "all-MiniLM-L6-v2"  # small & CPU-friendly
+# Model selection configuration
+ENABLE_DYNAMIC_MODEL_SELECTION = False  # Set to True to enable dynamic model selection based on task
+DEFAULT_MODEL_NAME = "mistral-7b-instruct-v0.2.Q3_K_M.gguf"  # Primary model to use
 
-# Internal global handles
-_embedding_model = None
-_llm_instance = None
+# Internal global handles - model cache
+_llm_instances = {}  # Dict[str, Any] - cache for different model keys
 
 # ---------- Utilities ----------
 
 # ---------------------------
+# MODEL ROUTING / SELECTION
+# ---------------------------
+def choose_model_for_task(task: str) -> str:
+    """
+    Choose appropriate model for a given task.
+    
+    Returns:
+        "tiny" - for short chit-chat, quick responses
+        "small" - for summarization, classification, tagging, intent detection
+        "mistral" - for full RAG reasoning (default)
+    
+    Args:
+        task: Task type - "chat", "summarize", "classify", "tag", "intent", "reason", "rag", etc.
+    """
+    task_lower = task.lower()
+    
+    # Small model tasks
+    if task_lower in ["summarize", "classification", "classify", "tag", "tagging", "intent", "intent_detection"]:
+        return "small"
+    
+    # Tiny model tasks
+    if task_lower in ["chat", "chit-chat", "quick", "simple"]:
+        return "tiny"
+    
+    # Default to mistral for RAG, reasoning, and unknown tasks
+    return "mistral"
+
+
+def get_llm_instance(model_key: str = "default"):
+    """
+    Lazy-load and cache LLM instances.
+    
+    By default, uses the specific model: mistral-7b-instruct-v0.2.Q3_K_M.gguf
+    If ENABLE_DYNAMIC_MODEL_SELECTION is True and default model not found,
+    falls back to dynamic selection based on model_key patterns.
+    
+    Args:
+        model_key: Model identifier (only used if dynamic selection enabled)
+                  "mistral" - Full RAG model
+                  "small" - Smaller model for summarization/classification
+                  "tiny" - Smallest model for quick chat
+    
+    Returns:
+        LlamaCpp instance (cached)
+    """
+    global _llm_instances
+    
+    # Check cache first (use "default" as cache key for primary model)
+    cache_key = "default"
+    if model_key in _llm_instances:
+        return _llm_instances[model_key]
+    if cache_key in _llm_instances:
+        return _llm_instances[cache_key]
+    
+    if LlamaCpp is None:
+        raise RuntimeError("llama-cpp-python not installed. Install llama-cpp-python to use local LLM.")
+    
+    model_path = None
+    config = {"n_ctx": 2048, "n_batch": 8}  # Default config for mistral
+    
+    # First, try to find the specific default model
+    default_model_path = MODELS_DIR / DEFAULT_MODEL_NAME
+    if default_model_path.exists():
+        model_path = str(default_model_path)
+        logger.info("Found default model: %s", model_path)
+    else:
+        # Try with different extensions
+        for ext in [".gguf", ".ggml", ".bin"]:
+            test_path = MODELS_DIR / (DEFAULT_MODEL_NAME.rsplit(".", 1)[0] + ext)
+            if test_path.exists():
+                model_path = str(test_path)
+                logger.info("Found default model (with %s extension): %s", ext, model_path)
+                break
+    
+    # If default model not found AND dynamic selection is enabled, do dynamic search
+    if not model_path and ENABLE_DYNAMIC_MODEL_SELECTION:
+        logger.info("Default model not found. Dynamic selection enabled. Searching by model_key='%s'", model_key)
+        
+        # Model file patterns by key
+        model_patterns = {
+            "mistral": ["*mistral*.gguf", "*mistral*.ggml", "*mistral*.bin"],
+            "small": ["*small*.gguf", "*small*.ggml", "*small*.bin", "*7b*.gguf", "*7b*.ggml"],
+            "tiny": ["*tiny*.gguf", "*tiny*.ggml", "*tiny*.bin", "*1b*.gguf", "*1b*.ggml", "*3b*.gguf", "*3b*.ggml"],
+        }
+        
+        # Model configs by key (n_ctx, n_batch)
+        model_configs = {
+            "mistral": {"n_ctx": 2048, "n_batch": 8},
+            "small": {"n_ctx": 1024, "n_batch": 4},
+            "tiny": {"n_ctx": 512, "n_batch": 2},
+        }
+        
+        patterns = model_patterns.get(model_key, model_patterns["mistral"])
+        config = model_configs.get(model_key, model_configs["mistral"])
+        
+        # Search for model file using patterns
+        for pattern in patterns:
+            files = list(MODELS_DIR.glob(pattern))
+            if files:
+                model_path = str(files[0])
+                logger.info("Found model via dynamic search: %s (pattern: %s)", model_path, pattern)
+                break
+        
+        # Last resort: find any model file
+        if not model_path:
+            for ext in ("*.gguf", "*.ggml", "*.bin"):
+                files = list(MODELS_DIR.glob(ext))
+                if files:
+                    model_path = str(files[0])
+                    logger.warning("Using fallback model via dynamic search: %s", model_path)
+                    break
+    
+    if not model_path:
+        if ENABLE_DYNAMIC_MODEL_SELECTION:
+            raise RuntimeError(
+                f"No model file found in {MODELS_DIR}. "
+                f"Expected '{DEFAULT_MODEL_NAME}' or dynamic selection patterns."
+            )
+        else:
+            raise RuntimeError(
+                f"Default model '{DEFAULT_MODEL_NAME}' not found in {MODELS_DIR}. "
+                f"Set ENABLE_DYNAMIC_MODEL_SELECTION=True to enable dynamic model selection."
+            )
+    
+    logger.info("Loading LlamaCpp model: path=%s, n_ctx=%d, n_batch=%d", model_path, config["n_ctx"], config["n_batch"])
+    instance = LlamaCpp(
+        model_path=model_path,
+        n_ctx=config["n_ctx"],
+        n_batch=config["n_batch"],
+        n_gpu_layers=0  # CPU-only
+    )
+    
+    # Cache the instance (use "default" as key for primary model)
+    _llm_instances[cache_key] = instance
+    return instance
+
+
+# ---------------------------
 # CHUNK-AWARE TOKEN BUDGET HELPERS
 # ---------------------------
-import logging
-logger = logging.getLogger(__name__)
+
 
 def estimate_tokens_from_text(text: str, chars_per_token: float = 4.0) -> int:
     """
@@ -64,16 +216,17 @@ def estimate_tokens_from_text(text: str, chars_per_token: float = 4.0) -> int:
         token_est = 1
     return token_est
 
+
 def select_chunks_by_token_budget(
-    chunks: list,
-    prefix_text: str,
-    question_text: str,
-    n_ctx: int,
-    requested_max_tokens: int,
-    safety_margin: int = 32,
-    chars_per_token: float = 4.0,
-    chunk_text_key: str = "content",
-    chunk_score_key: str = "score"
+        chunks: list,
+        prefix_text: str,
+        question_text: str,
+        n_ctx: int,
+        requested_max_tokens: int,
+        safety_margin: int = 32,
+        chars_per_token: float = 4.0,
+        chunk_text_key: str = "content",
+        chunk_score_key: str = "score"
 ):
     """
     Select whole chunks (not partial) to fit inside the available token budget.
@@ -137,9 +290,10 @@ def select_chunks_by_token_budget(
         selected.append(ch)
         used_context_tokens += tkns
 
-    selected_text = "\n\n---\n\n".join([ (c.get(chunk_text_key) if isinstance(c, dict) else str(c)) for c in selected ])
+    selected_text = "\n\n---\n\n".join([(c.get(chunk_text_key) if isinstance(c, dict) else str(c)) for c in selected])
     total_used_est = prefix_tokens + used_context_tokens + question_tokens + gen_tokens
     return selected, selected_text, total_used_est, available_for_context - used_context_tokens
+
 
 def build_prompt_with_selected_chunks(prefix: str, context_text: str, question: str) -> str:
     """
@@ -156,6 +310,7 @@ def build_prompt_with_selected_chunks(prefix: str, context_text: str, question: 
     parts.append("\n\nQUESTION:\n")
     parts.append(question.rstrip())
     return "".join(parts)
+
 
 # ---------------------------
 # USAGE: integrate into query_local_rag
@@ -176,16 +331,16 @@ def build_prompt_with_selected_chunks(prefix: str, context_text: str, question: 
 # with the following block:
 #
 def _invoke_llm_with_chunk_budget(
-    llm_instance,
-    retrieved_chunks,
-    prefix_text,
-    question_text,
-    n_ctx=2048,
-    max_tokens=256,
-    safety_margin=32,
-    chunk_text_key="content",
-    chunk_score_key="score",
-    chars_per_token=4.0
+        llm_instance,
+        retrieved_chunks,
+        prefix_text,
+        question_text,
+        n_ctx=2048,
+        max_tokens=256,
+        safety_margin=32,
+        chunk_text_key="content",
+        chunk_score_key="score",
+        chars_per_token=4.0
 ):
     """
     Wrapper to select chunks based on token budget, build prompt, and call the LLM.
@@ -224,7 +379,8 @@ def _invoke_llm_with_chunk_budget(
             # determine how many to keep
             keep_count = max(1, int(len(selected_chunks) * 0.5))
             top_selected = selected_chunks[:keep_count]
-            top_selected_text = "\n\n---\n\n".join([ (c.get(chunk_text_key) if isinstance(c, dict) else str(c)) for c in top_selected ])
+            top_selected_text = "\n\n---\n\n".join(
+                [(c.get(chunk_text_key) if isinstance(c, dict) else str(c)) for c in top_selected])
             retry_prompt = build_prompt_with_selected_chunks(prefix_text, top_selected_text, question_text)
             logger.warning("Retrying LLM with fewer chunks (kept %d of %d)", keep_count, len(selected_chunks))
             return llm_instance(retry_prompt, max_tokens=max_tokens, temperature=0.0), {
@@ -243,6 +399,7 @@ def _invoke_llm_with_chunk_budget(
         "remaining_context_tokens": remaining
     }
     return output, meta
+
 
 # -------------------------------------------------------------------------
 # Example: INTEGRATION POINT in query_local_rag (pseudo-placement)
@@ -275,84 +432,32 @@ def _invoke_llm_with_chunk_budget(
 # Now use answer_text as the model's output and log/use selection_meta for diagnostics.
 
 
+# build_tone_guidance and sanitize_metadata_dict are now imported from utility.py
 
-def _get_local_embedding_model_path() -> Path:
+def inject_tone_into_prefix(prefix_text: str, tone: Optional[str]) -> str:
     """
-    If you want to place embedding models locally, put them under: <project_root>/embeddings_models/<EMBEDDING_MODEL_NAME>/
-    This function returns that path.
+    Inject a short 'Conversation Tone Guidance' block into an existing prefix.
+    Keeps the original prefix but places the guidance near the top for clarity.
     """
-    return BASE_DIR.parent / "embeddings_models" / EMBEDDING_MODEL_NAME
+    guidance = build_tone_guidance(tone)
+    # Look for a natural insertion point: after the first newline or after a 'User Profile' section.
+    # Simpler: place guidance at the beginning of the prefix so model sees it early.
+    injected = (
+        f"Conversation Tone Guidance:\n{guidance}\n\n"
+        f"{prefix_text}"
+    )
+    return injected
 
-def _sanitize_meta_value(val):
-    """
-    Ensure metadata values are primitives (str, int, float, bool) for Chroma.
-    - If val is list of primitives -> join with commas
-    - If val is dict -> json.dumps
-    - Else convert to str
-    """
-    import json
-    if val is None:
-        return None
-    if isinstance(val, (str, int, float, bool)):
-        return val
-    if isinstance(val, list):
-        # if list of primitives, join; otherwise json-dump
-        if all(isinstance(x, (str, int, float, bool)) for x in val):
-            return ",".join(str(x) for x in val)
-        return json.dumps(val, ensure_ascii=False)
-    if isinstance(val, dict):
-        return json.dumps(val, ensure_ascii=False)
-    # fallback
-    return str(val)
 
-def _sanitize_metadata_dict(meta: Optional[Dict[str, Any]]) -> Dict[str, Any]:
-    if not meta:
-        return {}
-    return {str(k): _sanitize_meta_value(v) for k, v in meta.items()}
+# get_embedding_model_instance and embed_texts are now imported from utility.py
 
-def _get_embedding_model_instance() -> SentenceTransformer:
-    global _embedding_model
-    if _embedding_model is not None:
-        return _embedding_model
-    if SentenceTransformer is None:
-        raise ImportError("sentence_transformers not installed. Install sentence-transformers to compute local embeddings.")
-    # prefer local cache first
-    local_path = _get_local_embedding_model_path()
-    if local_path.exists():
-        logger.info("Loading embedding model from local path: %s", local_path)
-        _embedding_model = SentenceTransformer(str(local_path))
-    else:
-        logger.info("Loading embedding model by name (may download if not cached): %s", EMBEDDING_MODEL_NAME)
-        _embedding_model = SentenceTransformer(EMBEDDING_MODEL_NAME)
-    return _embedding_model
 
-def _embed_texts(texts: List[str]) -> List[List[float]]:
-    model = _get_embedding_model_instance()
-    # convert_to_numpy True then .tolist() keeps persistence-friendly Python lists
-    vectors = model.encode(texts, convert_to_numpy=True).tolist()
-    return vectors
+# chunk_text_basic is now imported from utility.py
 
-def _chunk_text_basic(text: str, chunk_size: int = 512, overlap: int = 64) -> List[str]:
-    """
-    Produce overlapping chunks of the input text.
-    Fixed so we always make progress and produce expected overlaps.
-    """
-    if not text:
-        return []
-    chunks: List[str] = []
-    start = 0
-    L = len(text)
-    while start < L:
-        end = min(start + chunk_size, L)
-        chunks.append(text[start:end])
-        if end == L:
-            break
-        # advance start keeping overlap, but ensure progress by at least 1
-        start = max(end - overlap, start + 1)
-    return chunks
 
 def _generate_ids(prefix: str, n: int) -> List[str]:
     return [f"{prefix}_{uuid.uuid4().hex}" for _ in range(n)]
+
 
 # ---------- Public API ----------
 
@@ -364,20 +469,21 @@ def initialize_local_rag(embedding_model_instance: Optional[Any] = None,
     Initialize resources:
     - ensures Chroma client & collection
     - optionally set provided embedding and llm instances
+    Note: LLM instances are now managed via get_llm_instance() with model routing.
     """
-    global _embedding_model, _llm_instance
+    global _llm_instances
 
     if embedding_model_instance is not None:
-        _embedding_model = embedding_model_instance
-        logger.info("Using provided embedding_model_instance")
-    else:
-        logger.info("No embedding_model_instance provided; will lazy-load when needed")
+        # Note: The shared embedding model instance is managed in utility.py
+        # If a custom instance is provided, it would need to be set there
+        logger.warning("Custom embedding_model_instance provided but shared instance is used from utility.py")
 
     if llm_instance is not None:
-        _llm_instance = llm_instance
-        logger.info("Using provided LLM instance")
+        # Store as default "mistral" model (backward compatibility)
+        _llm_instances["mistral"] = llm_instance
+        logger.info("Using provided LLM instance (stored as 'mistral' key)")
     else:
-        logger.info("No LLM instance provided; local LLM may be lazy-loaded on demand")
+        logger.info("No LLM instance provided; local LLM will be lazy-loaded on demand via model router")
 
     # Ensure Chroma client & collection exist
     ensure_chroma_client(persist_directory=str(persist_directory or DEFAULT_PERSIST_DIR),
@@ -401,7 +507,7 @@ def add_document_to_rag_local(source_name: str,
     import json
 
     if not chunks:
-        chunks = _chunk_text_basic(text)
+        chunks = chunk_text_basic(text)
 
     if not chunks:
         logger.warning("No chunks produced for document: %s", source_name)
@@ -409,7 +515,7 @@ def add_document_to_rag_local(source_name: str,
 
     # sanitize metadata and ensure source is present
     base_meta = metadata or {}
-    sanitized_base = _sanitize_metadata_dict(base_meta)
+    sanitized_base = sanitize_metadata_dict(base_meta)
     sanitized_base["source"] = source_name
     # add ingestion timestamp if not present
     if "ingested_at" not in sanitized_base:
@@ -421,15 +527,17 @@ def add_document_to_rag_local(source_name: str,
 
     # compute embeddings locally
     try:
-        embeddings = _embed_texts(chunks)
+        embeddings = embed_texts(chunks)
     except Exception as e:
         logger.exception("Failed to compute embeddings locally: %s", e)
         raise
 
     # Add to chroma via helper
     try:
-        client, collection = ensure_chroma_client(persist_directory=str(DEFAULT_PERSIST_DIR), collection_name=DEFAULT_COLLECTION_NAME)
-        add_documents_to_collection(collection=collection, documents=chunks, metadatas=metadatas, ids=ids, embeddings=embeddings)
+        client, collection = ensure_chroma_client(persist_directory=str(DEFAULT_PERSIST_DIR),
+                                                  collection_name=DEFAULT_COLLECTION_NAME)
+        add_documents_to_collection(collection=collection, documents=chunks, metadatas=metadatas, ids=ids,
+                                    embeddings=embeddings)
         logger.info("Added %d chunks for source %s to collection %s", len(chunks), source_name, DEFAULT_COLLECTION_NAME)
     except Exception as e:
         logger.exception("Failed to add documents to Chroma collection: %s", e)
@@ -438,15 +546,13 @@ def add_document_to_rag_local(source_name: str,
     return ids
 
 
-
-
 def _call_llm_with_retry(
-    llm_instance,
-    prompt: str,
-    max_tokens: int = 256,
-    temperature: float = 0.0,
-    retry_shrink_ratio: float = 0.5,
-    min_keep_chars: int = 200
+        llm_instance,
+        prompt: str,
+        max_tokens: int = 256,
+        temperature: float = 0.0,
+        retry_shrink_ratio: float = 0.5,
+        min_keep_chars: int = 200
 ):
     """
     Try calling LLM once. If ValueError says context too large:
@@ -480,7 +586,7 @@ def _call_llm_with_retry(
                 new_ctx = ctx_text[:head_keep] + "\n...\n" + ctx_text[-tail_keep:]
 
                 new_prompt = (
-                    before + ctx_marker + new_ctx + q_marker + rest
+                        before + ctx_marker + new_ctx + q_marker + rest
                 )
 
                 logger.debug(
@@ -499,36 +605,51 @@ def _call_llm_with_retry(
         raise
 
 
-
-def query_local_rag(query_text: str, n_results: int = 3, requester: Optional[Dict[str, str]] = None,
-                    llm_prompt_prefix: Optional[str] = None, use_llm: bool = True, max_tokens: int = 256) -> Dict[str, Any]:
+def query_local_rag(
+        query_text: str,
+        n_results: int = 3,
+        requester: Optional[Dict[str, str]] = None,
+        llm_prompt_prefix: Optional[str] = None,
+        use_llm: bool = True,
+        max_tokens: int = 256,
+        session_id: Optional[str] = None
+) -> Dict[str, Any]:
     """
     Query the local RAG:
     - compute local embedding for the query
-    - retrieve top-k docs from Chroma (via chroma_utils)
-    - apply RBAC filtering (visible vs filtered)
-    - returns both visible results and raw (pre-filter) results so the API layer can decide UX
+    - retrieve top-k docs from Chroma
+    - apply RBAC filtering
+    - inject tone-aware guidance into LLM prefix
     """
-    client, collection = ensure_chroma_client(persist_directory=str(DEFAULT_PERSIST_DIR), collection_name=DEFAULT_COLLECTION_NAME)
+    # Ensure Chroma client
+    client, collection = ensure_chroma_client(
+        persist_directory=str(DEFAULT_PERSIST_DIR),
+        collection_name=DEFAULT_COLLECTION_NAME
+    )
 
     if not query_text:
         raise ValueError("query_text must be provided")
 
-    # compute query embedding
+    # -----------------------------
+    # 1. Get embedding for query
+    # -----------------------------
     try:
-        q_emb = _embed_texts([query_text])[0]
-        logger.debug("Computed query embedding (len=%d)", len(q_emb) if hasattr(q_emb, "__len__") else 0)
+        q_emb = embed_texts([query_text])[0]
+        logger.debug("Computed query embedding.")
     except Exception as e:
-        logger.exception("Failed to compute query embedding: %s", e)
+        logger.exception("Failed to embed query: %s", e)
         raise
 
-    # query chroma via helper (embedding preferred, text fallback)
+    # -----------------------------
+    # 2. Retrieve from Chroma
+    # -----------------------------
     try:
         result = query_collection(collection=collection, query_embeddings=[q_emb], n_results=n_results)
     except Exception:
+        # fallback to text search
         result = query_collection(collection=collection, query_texts=[query_text], n_results=n_results)
 
-    # normalize result shape (support dict or object responses)
+    # Normalize shapes
     if isinstance(result, dict):
         raw_docs = (result.get("documents") or [[]])[0]
         raw_metadatas = (result.get("metadatas") or [[]])[0]
@@ -541,149 +662,150 @@ def query_local_rag(query_text: str, n_results: int = 3, requester: Optional[Dic
             raw_ids = result.ids[0]
             raw_distances = result.distances[0] if hasattr(result, "distances") else []
         except Exception as e:
-            logger.exception("Unexpected Chroma result format: %s", e)
+            logger.exception("Unexpected Chroma format: %s", e)
             raw_docs, raw_metadatas, raw_ids, raw_distances = [], [], [], []
 
-    # ------- RBAC / access control filtering -------
+    # ------------------------------------------
+    # 3. RBAC filtering (visible vs filtered)
+    # ------------------------------------------
     def _allowed_by_metadata(meta: Optional[Dict[str, Any]], requester: Optional[Dict[str, str]]) -> bool:
-        """
-        Simple RBAC rules. Expected meta keys:
-          - sensitivity: one of public_internal | department_confidential | role_confidential | highly_confidential | personal
-          - department: department string
-          - allowed_roles: optional list of roles allowed
-          - owner_id: for personal items
-        requester keys expected: role, department, user_id
-        """
-        if not meta:
-            return requester is not None  # if requester present, allow public_internal by default
-        sens = meta.get("sensitivity", "public_internal")
-        # personal: only owner or HR/Legal/Executive
+        sens = meta.get("sensitivity", "public_internal") if meta else "public_internal"
+
+        # personal
         if sens == "personal":
             owner = meta.get("owner_id")
-            if owner == (requester.get("user_id") if requester else None):
+            if requester and owner == requester.get("user_id"):
                 return True
             return requester and requester.get("role") in ("HR", "Legal", "Executive")
-        # highly_confidential: only Legal / Executive
+
+        # highly_confidential
         if sens == "highly_confidential":
             return requester and requester.get("role") in ("Legal", "Executive")
-        # role_confidential: check allowed_roles
+
+        # role_confidential
         if sens == "role_confidential":
-            allowed = meta.get("allowed_roles") or []
-            if requester and requester.get("role") in allowed:
+            allowed_roles = meta.get("allowed_roles") or []
+            if requester and requester.get("role") in allowed_roles:
                 return True
             return requester and requester.get("role") in ("HR", "Legal", "Executive")
-        # department_confidential: same department or HR/Legal/Executive
+
+        # department_confidential
         if sens == "department_confidential":
             if requester and requester.get("department") == meta.get("department"):
                 return True
             return requester and requester.get("role") in ("HR", "Legal", "Executive")
-        # public_internal or unknown: allow
+
+        # public_internal
         return True
 
-    filtered_docs = []
-    filtered_metas = []
-    filtered_ids = []
-    filtered_distances = []
-
-    # additional UX/debug info collected from filtered-out docs
+    visible_docs, visible_metas, visible_ids, visible_distances = [], [], [], []
+    public_summaries, filtered_details = [], []
     filtered_out_count = 0
-    public_summaries: List[str] = []
-    filtered_details: List[Dict[str, Any]] = []
 
-    # iterate over raw (unfiltered) results and split into visible vs filtered
     for doc, meta, id_, dist in zip(raw_docs, raw_metadatas, raw_ids, raw_distances):
         try:
             if _allowed_by_metadata(meta, requester):
-                filtered_docs.append(doc)
-                filtered_metas.append(meta)
-                filtered_ids.append(id_)
-                filtered_distances.append(dist)
+                visible_docs.append(doc)
+                visible_metas.append(meta)
+                visible_ids.append(id_)
+                visible_distances.append(dist)
             else:
                 filtered_out_count += 1
-                if isinstance(meta, dict):
-                    ps = meta.get("public_summary")
-                    if ps and isinstance(ps, str) and ps.strip():
-                        public_summaries.append(ps.strip())
-                    filtered_details.append({
-                        "id": id_,
-                        "sensitivity": meta.get("sensitivity"),
-                        "department": meta.get("department"),
-                        "source": meta.get("source")
-                    })
-                logger.debug("Filtered out document id=%s due to RBAC; requester=%s meta=%s", id_, requester, meta)
+                ps = meta.get("public_summary") if isinstance(meta, dict) else None
+                if ps:
+                    public_summaries.append(ps)
+                filtered_details.append({
+                    "id": id_,
+                    "sensitivity": meta.get("sensitivity"),
+                    "department": meta.get("department"),
+                    "source": meta.get("source"),
+                })
         except Exception as e:
-            logger.exception("Error checking metadata access for id=%s: %s", id_, e)
-            continue
+            logger.exception("Metadata filtering error: %s", e)
 
-    # build context text from allowed (visible) docs
-    context_text = "\n\n---\n\n".join(d for d in filtered_docs if d)
+    # ------------------------------------------
+    # 4. Build Context
+    # ------------------------------------------
+    context_text = "\n\n---\n\n".join(visible_docs or [])
 
     out: Dict[str, Any] = {
-        # visible to requester after RBAC
-        "documents": filtered_docs,
-        "metadatas": filtered_metas,
-        "ids": filtered_ids,
-        "distances": filtered_distances,
-
-        # raw (pre-filter) results so API layer can make UX decisions
+        "documents": visible_docs,
+        "metadatas": visible_metas,
+        "ids": visible_ids,
+        "distances": visible_distances,
         "raw_documents": raw_docs,
         "raw_metadatas": raw_metadatas,
         "raw_ids": raw_ids,
         "raw_distances": raw_distances,
-
-        # UX and debug info
         "context": context_text,
         "filtered_out_count": filtered_out_count,
         "public_summaries": public_summaries,
         "filtered_details": filtered_details,
     }
 
-    # Optionally call LLM on constructed prompt (only over visible docs/context)
-    if use_llm:
-        global _llm_instance
-        if _llm_instance is None:
-            if LlamaCpp is not None:
-                models_dir = BASE_DIR.parent / "models"
-                model_path = None
-                for ext in ("*.gguf", "*.ggml", "*.bin"):
-                    files = list(models_dir.glob(ext))
-                    if files:
-                        model_path = str(files[0])
-                        break
-                if model_path is None:
-                    raise RuntimeError("No LLM instance provided and no local GGUF model found under models/. Provide llm_instance when calling initialize_local_rag or set model file in models/.")
-                try:
-                    logger.info("Lazy-loading LlamaCpp model from %s", model_path)
-                    _llm_instance = LlamaCpp(model_path=model_path, n_ctx=2048, n_batch=8, n_gpu_layers=0)
-                except Exception as e:
-                    logger.exception("Failed to initialize local LlamaCpp instance: %s", e)
-                    raise RuntimeError("Failed to initialize local LLM") from e
-            else:
-                raise RuntimeError("No LLM instance available. Pass llm_instance to initialize_local_rag or install llama-cpp-python and place a model under models/")
+    # ------------------------------------------
+    # 5. Tone-Based Prefix Injection
+    # ------------------------------------------
+    last_user_tone = None
+    if session_id:
+        try:
+            history = fetch_recent_messages(session_id, limit=10)
+            for m in reversed(history):
+                if m.get("speaker") == "user" and m.get("tone"):
+                    last_user_tone = m["tone"]
+                    break
+        except Exception as e:
+            logger.warning("Tone fetch failed: %s", e)
 
-        system_instructions = llm_prompt_prefix or (
-            "You are a helpful assistant. Use the provided context to answer the question. "
-            "If the answer is not present in the context, say you don't know."
+    tone_note = build_tone_guidance(last_user_tone)
+
+    # Build LLM prefix
+    system_prefix = llm_prompt_prefix or (
+        "You are a helpful assistant. Use the provided context to answer the question. "
+        "If the answer is not present in the context, say you don't know."
+    )
+
+    final_prefix = (
+        f"Conversation Tone Guidance:\n{tone_note}\n\n"
+        f"{system_prefix}"
+    )
+
+    # ------------------------------------------
+    # 6. LLM Call with Model Routing
+    # ------------------------------------------
+    if use_llm:
+        # Use dynamic model selection only if enabled, otherwise use default model
+        if ENABLE_DYNAMIC_MODEL_SELECTION:
+            # Choose model based on task type (default to "reason" for RAG)
+            task = "reason"  # Could be made configurable via parameter
+            model_key = choose_model_for_task(task)
+            logger.info("Model chosen=%s for task=%s (dynamic selection enabled)", model_key, task)
+        else:
+            # Use default model (mistral-7b-instruct-v0.2.Q3_K_M)
+            model_key = "default"
+            logger.info("Using default model: %s", DEFAULT_MODEL_NAME)
+        
+        try:
+            llm_instance = get_llm_instance(model_key)
+        except Exception as e:
+            logger.exception("Failed to load LLM instance: %s", e)
+            raise
+
+        prompt = (
+            f"{final_prefix}\n\n"
+            f"CONTEXT:\n{context_text}\n\n"
+            f"QUESTION:\n{query_text}\n\nAnswer concisely:"
         )
-        prompt = f"{system_instructions}\n\nCONTEXT:\n{context_text}\n\nQUESTION:\n{query_text}\n\nAnswer concisely:"
-        logger.debug("Prompt for LLM (trimmed): %s", prompt[:1000])
 
         try:
             answer = _call_llm_with_retry(
-                _llm_instance,
+                llm_instance,
                 prompt,
                 max_tokens=max_tokens,
                 temperature=0.0
             )
-        except TypeError:
-            try:
-                gen = _llm_instance.generate([prompt], max_new_tokens=max_tokens, temperature=0.0)
-                answer = str(gen)
-            except Exception as e:
-                logger.exception("Failed to generate with local LLM: %s", e)
-                raise
         except Exception as e:
-            logger.exception("LLM invocation failed: %s", e)
+            logger.exception("LLM call failed: %s", e)
             raise
 
         out["answer"] = answer
@@ -703,7 +825,7 @@ def seed_from_file(file_path: Optional[str] = None, source_name: Optional[str] =
 
     Returns list of ids added (may be empty).
     """
-    default_path = (BASE_DIR.parent / "data" / "company_overview.txt")
+    default_path = get_data_path("company_overview.txt")
     path = Path(file_path) if file_path else default_path
     if not path.exists():
         logger.warning("Seed path not found at %s", path)
@@ -719,7 +841,8 @@ def seed_from_file(file_path: Optional[str] = None, source_name: Optional[str] =
                 try:
                     text = child.read_text(encoding="utf-8")
                     src_name = source_name or child.name
-                    ids = add_document_to_rag_local(source_name=src_name, text=text, chunks=None, metadata={"seeded": True})
+                    ids = add_document_to_rag_local(source_name=src_name, text=text, chunks=None,
+                                                    metadata={"seeded": True})
                     if ids:
                         added_ids.extend(ids)
                         logger.info("Seeded file %s -> %d chunks", child.name, len(ids))
@@ -747,13 +870,13 @@ def seed_from_file(file_path: Optional[str] = None, source_name: Optional[str] =
     return added_ids
 
 
-
 def update_metadata(ids: List[str], metadata: Dict[str, Any]) -> bool:
     """
     Wrapper that updates metadata for existing ids using chroma_utils.update_metadatas.
     """
-    client, collection = ensure_chroma_client(persist_directory=str(DEFAULT_PERSIST_DIR), collection_name=DEFAULT_COLLECTION_NAME)
-    sanitized = _sanitize_metadata_dict(metadata)
+    client, collection = ensure_chroma_client(persist_directory=str(DEFAULT_PERSIST_DIR),
+                                              collection_name=DEFAULT_COLLECTION_NAME)
+    sanitized = sanitize_metadata_dict(metadata)
     return update_metadatas(collection=collection, ids=ids, metadata=sanitized)
 
 
@@ -761,7 +884,8 @@ def clear_collection() -> None:
     """
     Delete all documents from the collection. Use with caution.
     """
-    client, collection = ensure_chroma_client(persist_directory=str(DEFAULT_PERSIST_DIR), collection_name=DEFAULT_COLLECTION_NAME)
+    client, collection = ensure_chroma_client(persist_directory=str(DEFAULT_PERSIST_DIR),
+                                              collection_name=DEFAULT_COLLECTION_NAME)
     try:
         delete_all_documents(collection=collection, client=client, collection_name=DEFAULT_COLLECTION_NAME)
     except Exception as e:
