@@ -2,7 +2,7 @@ from sentence_transformers import SentenceTransformer
 from pathlib import Path
 
 MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
-LOCAL_DIR = Path("embeddings_models/all-MiniLM-L6-v2/embeddings_models/all-MiniLM-L6-v2")
+LOCAL_DIR = Path("embeddings_models/all-MiniLM-L6-v2")
 
 print("Downloading MiniLM embedding model...")
 

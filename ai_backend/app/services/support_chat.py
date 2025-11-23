@@ -8,12 +8,20 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from app.services.rag_local_service import BASE_DIR
+# Import centralized paths and utilities
+from app.services.utility import (
+    BASE_DIR,
+    DATA_DIR,
+    get_config_path,
+    build_tone_guidance,
+)
+
+# new import for sentiment classifier
+from app.services.sentiment_classifier import get_global_sentiment
 
 logger = logging.getLogger(__name__)
 
 # DB PATHS
-DATA_DIR = BASE_DIR / "data"
 DB_PATH = DATA_DIR / "support_sessions.db"
 
 MAX_HISTORY_TURNS = 5
@@ -30,6 +38,7 @@ def init_support_chat_db(reset_on_start: bool = False) -> None:
         sessions
         messages
         session_profiles
+    Note: messages table now stores sentiment metadata columns.
     """
     global _DB_INITIALIZED
     if _DB_INITIALIZED:
@@ -55,6 +64,7 @@ def init_support_chat_db(reset_on_start: bool = False) -> None:
             )
         """)
 
+        # messages now include sentiment and tone metadata
         conn.execute("""
             CREATE TABLE IF NOT EXISTS messages (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -62,6 +72,9 @@ def init_support_chat_db(reset_on_start: bool = False) -> None:
                 speaker TEXT NOT NULL,
                 content TEXT NOT NULL,
                 created_at TEXT,
+                sentiment TEXT,
+                tone TEXT,
+                sentiment_meta TEXT,
                 FOREIGN KEY(session_id) REFERENCES sessions(id) ON DELETE CASCADE
             )
         """)
@@ -152,28 +165,92 @@ def session_exists(session_id: str) -> bool:
 # ---------------------------------------------------------
 # MESSAGE STORAGE
 # ---------------------------------------------------------
-def store_message(session_id: str, speaker: str, content: str) -> None:
+def store_message(session_id: str, speaker: str, content: str) -> int:
+    """
+    Store a message and (for user messages) compute & store sentiment/tone metadata.
+    Returns the inserted message id.
+    """
     timestamp = datetime.utcnow().isoformat() + "Z"
 
     with _connect() as conn:
-        conn.execute("""
+        cur = conn.cursor()
+        cur.execute("""
             INSERT INTO messages (session_id, speaker, content, created_at)
             VALUES (?, ?, ?, ?)
         """, (session_id, speaker, content, timestamp))
+        message_id = cur.lastrowid
+
+        # If speaker is user, compute sentiment/tone and update row
+        # Always store sentiment/tone/metadata - use defaults if classifier fails
+        if speaker.lower() == "user":
+            sentiment = "unknown"
+            tone = "neutral"
+            meta_json = json.dumps({"sentiment": {"unknown": 1.0}, "tone": {"neutral": 1.0}})
+            
+            try:
+                classifier = get_global_sentiment()
+                res = classifier.predict_single(content)
+                sentiment = res.get("sentiment", "unknown")
+                tone = res.get("tone", "neutral")
+                meta_json = json.dumps(res.get("proba", {"sentiment": {"unknown": 1.0}, "tone": {"neutral": 1.0}}))
+            except Exception as e:
+                # Never fail storing a message due to classifier errors; use defaults
+                logger.warning("Sentiment classification failed for message_id=%s: %s. Using defaults.", message_id, e)
+            
+            # Always update with sentiment/tone/metadata (even if defaults)
+            try:
+                cur.execute("""
+                    UPDATE messages
+                    SET sentiment=?, tone=?, sentiment_meta=?
+                    WHERE id=?
+                """, (sentiment, tone, meta_json, message_id))
+            except Exception as e:
+                logger.warning("Failed to update sentiment metadata for message_id=%s: %s", message_id, e)
+
         conn.commit()
+        return message_id
 
 
 def fetch_recent_messages(session_id: str, limit: int = MAX_HISTORY_TURNS) -> List[Dict[str, str]]:
+    """
+    Fetch recent messages for a session.
+    Always returns sentiment and tone fields (defaults to None if not set).
+    """
     with _connect() as conn:
         rows = conn.execute("""
-            SELECT speaker, content, created_at
+            SELECT speaker, content, created_at, sentiment, tone, sentiment_meta
             FROM messages
             WHERE session_id=?
             ORDER BY id DESC
             LIMIT ?
         """, (session_id, limit)).fetchall()
 
-    return [dict(row) for row in reversed(rows)]
+    # reverse to chronological order
+    messages = [dict(row) for row in reversed(rows)]
+    
+    # Ensure all messages have sentiment, tone, and sentiment_meta fields
+    # If sentiment_meta exists as JSON string, convert to dict
+    for m in messages:
+        # Ensure fields exist (default to None if missing)
+        if "sentiment" not in m:
+            m["sentiment"] = None
+        if "tone" not in m:
+            m["tone"] = None
+        if "sentiment_meta" not in m:
+            m["sentiment_meta"] = None
+        
+        # Parse sentiment_meta JSON if present
+        if m.get("sentiment_meta"):
+            try:
+                if isinstance(m["sentiment_meta"], str):
+                    m["sentiment_meta"] = json.loads(m["sentiment_meta"])
+            except Exception:
+                # If parsing fails, set to empty dict
+                m["sentiment_meta"] = {}
+        else:
+            m["sentiment_meta"] = {}
+    
+    return messages
 
 
 # ---------------------------------------------------------
@@ -188,7 +265,10 @@ def render_history(messages: List[Dict[str, str]]) -> str:
         stamp = msg.get("created_at", "")
         speaker = msg.get("speaker", "").upper()
         content = msg.get("content", "")
-        lines.append(f"[{stamp}] {speaker}: {content}")
+        # include tone indicator for user messages if present
+        tone = msg.get("tone")
+        tone_suffix = f" [{tone}]" if tone else ""
+        lines.append(f"[{stamp}] {speaker}{tone_suffix}: {content}")
 
     return "\n".join(lines)
 
@@ -226,7 +306,7 @@ def get_full_profile(session_id: str) -> Dict[str, str]:
 
 
 def load_onboarding_fields() -> List[Dict[str, str]]:
-    config_path = BASE_DIR / "config" / "onboarding_fields.json"
+    config_path = get_config_path("onboarding_fields.json")
     with open(config_path, "r", encoding="utf-8") as f:
         return json.load(f)
 
@@ -243,6 +323,12 @@ def get_next_missing_profile_key(session_id: str) -> Optional[Dict[str, str]]:
 
 
 # ---------------------------------------------------------
+# TONE GUIDANCE HELPER
+# ---------------------------------------------------------
+# build_tone_guidance is now imported from utility.py
+
+
+# ---------------------------------------------------------
 # BUILD PROMPT PREFIX
 # ---------------------------------------------------------
 def build_prompt_prefix(requester: Dict[str, Optional[str]],
@@ -253,9 +339,60 @@ def build_prompt_prefix(requester: Dict[str, Optional[str]],
     cat = (category or "General").title()
     history_text = render_history(history)
 
+    # extract last user tone from history (if present)
+    last_user_tone = None
+    # iterate history backwards to find last user message with tone
+    for msg in reversed(history):
+        if msg.get("speaker", "").lower() == "user" and msg.get("tone"):
+            last_user_tone = msg.get("tone")
+            break
+
+    tone_guidance = build_tone_guidance(last_user_tone)
+
     return (
         f"You are a {cat} support assistant.\n"
         f"User Role: {role}\n"
         f"User Department: {dept}\n\n"
+        f"Conversation Tone Guidance:\n{tone_guidance}\n\n"
         f"Conversation History:\n{history_text}\n"
     )
+
+
+# ---------------------------------------------------------
+# SENTIMENT / TONE ANALYTICS
+# ---------------------------------------------------------
+def get_sentiment_stats() -> Dict[str, Dict]:
+    """
+    Return simple stats:
+      - tone_counts: {tone: count}
+      - sentiment_counts: {sentiment: count}
+      - tone_by_department: list of {department, tone, count}
+    """
+    with _connect() as conn:
+        q1 = conn.execute("""
+            SELECT tone, COUNT(*) as cnt FROM messages
+            WHERE speaker='user' AND tone IS NOT NULL
+            GROUP BY tone
+        """).fetchall()
+        q2 = conn.execute("""
+            SELECT sentiment, COUNT(*) as cnt FROM messages
+            WHERE speaker='user' AND sentiment IS NOT NULL
+            GROUP BY sentiment
+        """).fetchall()
+        q3 = conn.execute("""
+            SELECT s.department as department, m.tone as tone, COUNT(*) as cnt
+            FROM messages m
+            JOIN sessions s ON s.id = m.session_id
+            WHERE m.speaker='user' AND m.tone IS NOT NULL
+            GROUP BY s.department, m.tone
+        """).fetchall()
+
+    tone_counts = {row["tone"]: row["cnt"] for row in q1}
+    sentiment_counts = {row["sentiment"]: row["cnt"] for row in q2}
+    tone_by_department = [{"department": row["department"], "tone": row["tone"], "count": row["cnt"]} for row in q3]
+
+    return {
+        "tone_counts": tone_counts,
+        "sentiment_counts": sentiment_counts,
+        "tone_by_department": tone_by_department
+    }

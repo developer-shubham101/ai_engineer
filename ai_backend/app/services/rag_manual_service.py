@@ -4,11 +4,17 @@ import uuid
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-# Embedding import (optional at runtime)
-try:
-    from sentence_transformers import SentenceTransformer
-except Exception:
-    SentenceTransformer = None
+# Import centralized utilities
+from app.services.utility import (
+    BASE_DIR,
+    DEFAULT_PERSIST_DIR,
+    DEFAULT_COLLECTION_NAME,
+    get_embedding_model_instance,
+    embed_texts,
+    chunk_text_basic,
+    sanitize_metadata_dict,
+    MODELS_DIR,
+)
 
 # Optional local LLM support
 try:
@@ -30,73 +36,14 @@ from app.services.chroma_utils import (
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
-BASE_DIR = Path(__file__).resolve().parent.parent  # app/
-DEFAULT_PERSIST_DIR = BASE_DIR / "chroma_storage"
-DEFAULT_COLLECTION_NAME = "local_manual_rag"
-EMBEDDING_MODEL_NAME = "all-MiniLM-L6-v2"
 
-_embedding_model = None
 _llm_instance = None
 
 
 # -------------------
-# Utilities (small, self-contained)
+# Utilities (now imported from utility.py)
 # -------------------
-def _get_local_embedding_model_path() -> Path:
-    return BASE_DIR.parent / "embeddings_models" / EMBEDDING_MODEL_NAME
-
-def _get_embedding_model_instance():
-    global _embedding_model
-    if _embedding_model is not None:
-        return _embedding_model
-    if SentenceTransformer is None:
-        raise ImportError("sentence_transformers is required for local embeddings.")
-    local_path = _get_local_embedding_model_path()
-    if local_path.exists():
-        logger.info("Loading embedding model from local path: %s", local_path)
-        _embedding_model = SentenceTransformer(str(local_path))
-    else:
-        logger.info("Loading embedding model by name: %s", EMBEDDING_MODEL_NAME)
-        _embedding_model = SentenceTransformer(EMBEDDING_MODEL_NAME)
-    return _embedding_model
-
-def _embed_texts(texts: List[str]) -> List[List[float]]:
-    model = _get_embedding_model_instance()
-    vectors = model.encode(texts, convert_to_numpy=True).tolist()
-    return vectors
-
-def _chunk_text_basic(text: str, chunk_size: int = 512, overlap: int = 64) -> List[str]:
-    if not text:
-        return []
-    chunks: List[str] = []
-    start = 0
-    L = len(text)
-    while start < L:
-        end = min(start + chunk_size, L)
-        chunks.append(text[start:end])
-        if end == L:
-            break
-        start = max(end - overlap, start + 1)
-    return chunks
-
-def _sanitize_meta_value(val):
-    import json
-    if val is None:
-        return None
-    if isinstance(val, (str, int, float, bool)):
-        return val
-    if isinstance(val, list):
-        if all(isinstance(x, (str, int, float, bool)) for x in val):
-            return ",".join(str(x) for x in val)
-        return json.dumps(val, ensure_ascii=False)
-    if isinstance(val, dict):
-        return json.dumps(val, ensure_ascii=False)
-    return str(val)
-
-def _sanitize_metadata_dict(meta: Optional[Dict[str, Any]]) -> Dict[str, Any]:
-    if not meta:
-        return {}
-    return {str(k): _sanitize_meta_value(v) for k, v in meta.items()}
+# All utility functions are now imported from utility.py
 
 
 # -------------------
@@ -114,13 +61,13 @@ def add_document_manual(source_name: str, text: str, metadata: Optional[Dict[str
         logger.warning("add_document_manual called with empty text for %s", source_name)
         return []
 
-    chunks = _chunk_text_basic(text)
+    chunks = chunk_text_basic(text)
     if not chunks:
         logger.warning("No chunks produced for %s", source_name)
         return []
 
     base_meta = metadata or {}
-    sanitized_base = _sanitize_metadata_dict(base_meta)
+    sanitized_base = sanitize_metadata_dict(base_meta)
     sanitized_base["source"] = source_name
     if "ingested_at" not in sanitized_base:
         from datetime import datetime
@@ -130,7 +77,7 @@ def add_document_manual(source_name: str, text: str, metadata: Optional[Dict[str
     ids = [f"{source_name}_{uuid.uuid4().hex}" for _ in chunks]
 
     try:
-        embeddings = _embed_texts(chunks)
+        embeddings = embed_texts(chunks)
     except Exception as e:
         logger.exception("Failed to embed chunks for %s: %s", source_name, e)
         raise
@@ -158,7 +105,7 @@ def query_manual_rag(query_text: str,
         raise ValueError("query_text must be provided")
 
     # embed
-    q_emb = _embed_texts([query_text])[0]
+    q_emb = embed_texts([query_text])[0]
 
     # query via helper (prefers embeddings)
     try:
@@ -258,10 +205,9 @@ def query_manual_rag(query_text: str,
         global _llm_instance
         if _llm_instance is None:
             if LlamaCpp is not None:
-                models_dir = BASE_DIR.parent / "models"
                 model_path = None
                 for ext in ("*.gguf", "*.ggml", "*.bin"):
-                    files = list(models_dir.glob(ext))
+                    files = list(MODELS_DIR.glob(ext))
                     if files:
                         model_path = str(files[0])
                         break
@@ -283,7 +229,8 @@ def query_manual_rag(query_text: str,
 
 
 def seed_manual_from_file(file_path: Optional[str] = None, source_name: Optional[str] = None) -> List[str]:
-    default_path = BASE_DIR.parent / "data" / "mission.txt"
+    from app.services.utility import get_data_path
+    default_path = get_data_path("mission.txt")
     path = Path(file_path) if file_path else default_path
     if not path.exists():
         logger.warning("Seed file not found at %s", path)
@@ -294,7 +241,7 @@ def seed_manual_from_file(file_path: Optional[str] = None, source_name: Optional
 
 def update_metadata_manual(ids: List[str], metadata: Dict[str, Any]) -> bool:
     client, collection = ensure_chroma_client(persist_directory=str(DEFAULT_PERSIST_DIR), collection_name=DEFAULT_COLLECTION_NAME)
-    sanitized = _sanitize_metadata_dict(metadata)
+    sanitized = sanitize_metadata_dict(metadata)
     return update_metadatas(collection=collection, ids=ids, metadata=sanitized)
 
 
