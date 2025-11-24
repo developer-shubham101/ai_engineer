@@ -18,7 +18,6 @@ from app.services.llm_service import GenerationResponse
 # RAG services:
 # - rag_local_service: low-level local RAG, initialization, seeding, local add
 # - rag_manual_service: simpler wrappers used by CLI/scripts and the ask-document endpoint
-from app.services import rag_manual_service as rag_manual_service
 from app.services import rag_local_service as rag_local_service
 
 # Routers
@@ -36,35 +35,35 @@ async def lifespan(app: FastAPI):
     - Initializes local RAG (embeddings + chroma)
     - Optionally seeds the DB from a default file (if present)
     """
-    print("🔵 Application startup...")
+    logger.info("🔵 Application startup...")
 
     # Initialize the local RAG using rag_local_service
     try:
         if hasattr(rag_local_service, "initialize_local_rag"):
             rag_local_service.initialize_local_rag()
-            print("✔ Local RAG initialized successfully.")
+            logger.info("✔ Local RAG initialized successfully.")
         else:
-            print("⚠ initialize_local_rag() not found in rag_local_service.")
+            logger.warning("⚠ initialize_local_rag() not found in rag_local_service.")
     except Exception as e:
-        print(f"❌ Error initializing Local RAG: {e}")
+        logger.error(f"❌ Error initializing Local RAG: {e}")
 
     # Optional: Seed data at startup (uses seed_from_file in rag_local_service)
     try:
         if hasattr(rag_local_service, "seed_from_file"):
             # This calls seed_from_file(force_reseed=False) implicitly
-            seeded_ids = rag_local_service.seed_from_file()
+            seeded_ids = await rag_local_service.seed_from_file()
             if seeded_ids:
-                print(f"✔ Seeded default file. Chunks added: {len(seeded_ids)}")
+                logger.info(f"✔ Seeded default file. Chunks added: {len(seeded_ids)}")
             else:
-                print("ℹ No seed file found or collection was already populated, skipping startup seed.")
+                logger.info("ℹ No seed file found or collection was already populated, skipping startup seed.")
         else:
-            print("ℹ seed_from_file() not found in rag_local_service; skipping seeding.")
+            logger.info("ℹ seed_from_file() not found in rag_local_service; skipping seeding.")
     except Exception as e:
-        print(f"⚠ Seeding at startup skipped or failed: {e}")
+        logger.warning(f"⚠ Seeding at startup skipped or failed: {e}")
 
     yield
 
-    print("🔴 Application shutdown...")
+    logger.info("🔴 Application shutdown...")
 
 # -----------------------------
 # Create FastAPI app
@@ -179,15 +178,13 @@ def chat(request: llm_service.ChatRequest):
 @app.post("/ask-document",
           response_model=GenerationResponse,
           tags=["RAG Services"])
-def ask_document(request: llm_service.TextRequest):
+async def ask_document(request: llm_service.TextRequest):
     """
-    Ask a question against documents using the manual RAG helper.
-    Uses rag_manual_service.query_manual_rag which expects a plain text query.
+    Ask a question against documents using the local RAG service.
     """
     try:
-        # Query the manual RAG helper; it returns a dict including 'answer' when use_llm used,
-        # or visible documents and public_summaries otherwise.
-        result = rag_manual_service.query_manual_rag(query_text=request.text, n_results=3, requester=None, use_llm=False)
+        # Query the local RAG service
+        result = await rag_local_service.query_local_rag(query_text=request.text, n_results=3, requester=None, use_llm=False)
         # Prefer a generated answer if present, otherwise provide safe composed text.
         answer = result.get("answer") or result.get("context") or (result.get("public_summaries") and "\n\n".join(result.get("public_summaries"))) or "No relevant documents found."
         return GenerationResponse(generated_text=answer)
@@ -202,14 +199,13 @@ def ask_document(request: llm_service.TextRequest):
           tags=["RAG Services"])
 async def add_document(file: UploadFile = File(...)):
     """
-    Add a document using the manual helper (simpler ingestion).
-    This endpoint is for quick ad-hoc uploads not via the local RAG endpoint.
+    Add a document using the local RAG service.
     """
     try:
         content = await file.read()
         document_text = content.decode("utf-8", errors="ignore")
-        # Use manual wrapper to add doc; it returns list of chunk ids
-        ids = rag_manual_service.add_document_manual(source_name=file.filename, text=document_text, metadata=None)
+        # Use local RAG service to add doc; it returns list of chunk ids
+        ids = await rag_local_service.add_document_to_rag_local(source_name=file.filename, text=document_text, metadata=None)
         if ids:
             message = f"Successfully processed and added '{file.filename}'. {len(ids)} chunks ingested."
             return GenerationResponse(generated_text=message)
@@ -237,7 +233,7 @@ async def add_document_local(file: UploadFile = File(...)):
         if not raw:
             raise HTTPException(status_code=400, detail="Uploaded file is empty.")
         document_text = raw.decode("utf-8", errors="ignore")
-        chunk_ids = add_document_to_rag_local(source_name=file.filename, text=document_text)
+        chunk_ids = await add_document_to_rag_local(source_name=file.filename, text=document_text)
         if chunk_ids:
             msg = f"Successfully ingested '{file.filename}'. {len(chunk_ids)} chunks created and stored."
             return GenerationResponse(generated_text=msg)

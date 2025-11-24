@@ -6,6 +6,10 @@ from dotenv import load_dotenv
 from langchain.llms import HuggingFaceEndpoint # Note: Using legacy llms wrapper for stability
 from .llm_service import TextRequest, GenerationResponse
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 # Load environment variables from the .env file
 load_dotenv()
 
@@ -15,7 +19,7 @@ try:
     hf_api_token = os.environ.get("HUGGING_FACE_HUB_API_TOKEN")
 
     if not hf_api_token:
-        print("Warning: Hugging Face API token not found. HF endpoint will be unavailable.")
+        logger.warning("Hugging Face API token not found. HF endpoint will be unavailable.")
         hf_llm = None
     else:
         # Initialize the LLM object, which represents our connection.
@@ -29,7 +33,7 @@ try:
         )
 
 except Exception as e:
-    print(f"Warning: Could not initialize HuggingFaceEndpoint. Error: {e}")
+    logger.warning(f"Could not initialize HuggingFaceEndpoint. Error: {e}")
     hf_llm = None
 
 

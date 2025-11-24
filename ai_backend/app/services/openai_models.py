@@ -5,12 +5,16 @@ from openai import OpenAI
 from dotenv import load_dotenv
 from .llm_service import TextRequest, GenerationResponse
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 load_dotenv()
 
 try:
     openai_client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 except Exception as e:
-    print(f"Warning: OpenAI client could not be initialized. Error: {e}")
+    logger.warning(f"OpenAI client could not be initialized. Error: {e}")
     openai_client = None
 
 def generate_text_openai(request: TextRequest) -> GenerationResponse:

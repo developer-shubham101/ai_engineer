@@ -1,11 +1,24 @@
+# app/services/rag_local_service.py
+"""
+This module provides a local Retrieval-Augmented Generation (RAG) service.
+
+It handles:
+- Initialization of local RAG resources (ChromaDB, embedding models, LLMs).
+- Adding documents to the local RAG knowledge base.
+- Querying the local RAG with RBAC filtering and tone-aware guidance.
+- Seeding the knowledge base from default files/directories.
+- Helper functions for model routing, token budgeting, and prompt construction.
+"""
 from __future__ import annotations
+
 import logging
 import uuid
 from pathlib import Path
+from typing import List, Optional, Dict, Any
+
 # new import to fetch recent messages (tone is stored there by support_chat)
 from app.services.support_chat import fetch_recent_messages
-from typing import List, Optional, Dict, Any, Tuple
-import json
+
 # Embed/LLM imports (optional at runtime)
 try:
     from sentence_transformers import SentenceTransformer
@@ -23,36 +36,34 @@ from app.services.chroma_utils import (
     add_documents_to_collection,
     query_collection,
     get_collection_data,
-    get_documents_by_ids,
     update_metadatas,
-    delete_ids,
     delete_all_documents,
-    delete_collection_by_name,
 )
 
 # Import centralized utilities
-from app.services.utility import (
-    BASE_DIR,
-    DATA_DIR,
+from app.config import (
+    ENABLE_DYNAMIC_MODEL_SELECTION,
+    DEFAULT_MODEL_NAME,
     DEFAULT_PERSIST_DIR,
     DEFAULT_COLLECTION_NAME,
-    EMBEDDING_MODEL_NAME,
-    get_local_embedding_model_path,
-    get_embedding_model_instance,
+)
+from app.services.utility import (
     embed_texts,
     chunk_text_basic,
     sanitize_metadata_dict,
-    build_tone_guidance,
-    MODELS_DIR,
-    get_data_path, is_empty, is_collection_empty,
+    get_data_path, is_collection_empty,
 )
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
-# Model selection configuration
-ENABLE_DYNAMIC_MODEL_SELECTION = False  # Set to True to enable dynamic model selection based on task
-DEFAULT_MODEL_NAME = "mistral-7b-instruct-v0.2.Q3_K_M.gguf"  # Primary model to use
+from app.services.model_manager import choose_model_for_task, get_llm_instance
+from app.services.prompt_builder import (
+    estimate_tokens_from_text,
+    build_prompt_with_selected_chunks,
+    _call_llm_with_retry,
+    build_tone_guidance,
+)
 
 # Internal global handles - model cache
 _llm_instances = {}  # Dict[str, Any] - cache for different model keys
@@ -60,405 +71,8 @@ _llm_instances = {}  # Dict[str, Any] - cache for different model keys
 
 # ---------- Utilities ----------
 
-# ---------------------------
-# MODEL ROUTING / SELECTION
-# ---------------------------
-def choose_model_for_task(task: str) -> str:
-    """
-    Choose appropriate model for a given task.
-
-    Returns:
-        "tiny" - for short chit-chat, quick responses
-        "small" - for summarization, classification, tagging, intent detection
-        "mistral" - for full RAG reasoning (default)
-
-    Args:
-        task: Task type - "chat", "summarize", "classify", "tag", "intent", "reason", "rag", etc.
-    """
-    task_lower = task.lower()
-
-    # Small model tasks
-    if task_lower in ["summarize", "classification", "classify", "tag", "tagging", "intent", "intent_detection"]:
-        return "small"
-
-    # Tiny model tasks
-    if task_lower in ["chat", "chit-chat", "quick", "simple"]:
-        return "tiny"
-
-    # Default to mistral for RAG, reasoning, and unknown tasks
-    return "mistral"
-
-
-def get_llm_instance(model_key: str = "default"):
-    """
-    Lazy-load and cache LLM instances.
-
-    By default, uses the specific model: mistral-7b-instruct-v0.2.Q3_K_M.gguf
-    If ENABLE_DYNAMIC_MODEL_SELECTION is True and default model not found,
-    falls back to dynamic selection based on model_key patterns.
-
-    Args:
-        model_key: Model identifier (only used if dynamic selection enabled)
-                  "mistral" - Full RAG model
-                  "small" - Smaller model for summarization/classification
-                  "tiny" - Smallest model for quick chat
-
-    Returns:
-        LlamaCpp instance (cached)
-    """
-    global _llm_instances
-
-    # Check cache first (use "default" as cache key for primary model)
-    cache_key = "default"
-    if model_key in _llm_instances:
-        logger.debug("Returning cached LLM instance for key=%s", model_key)
-        return _llm_instances[model_key]
-    if cache_key in _llm_instances:
-        logger.debug("Returning cached LLM instance for cache_key=%s", cache_key)
-        return _llm_instances[cache_key]
-
-    if LlamaCpp is None:
-        raise RuntimeError("llama-cpp-python not installed. Install llama-cpp-python to use local LLM.")
-
-    model_path = None
-    config = {"n_ctx": 2048, "n_batch": 8}  # Default config for mistral
-
-    # First, try to find the specific default model
-    default_model_path = MODELS_DIR / DEFAULT_MODEL_NAME
-    if default_model_path.exists():
-        model_path = str(default_model_path)
-        logger.info("Found default model: %s", model_path)
-    else:
-        # Try with different extensions
-        for ext in [".gguf", ".ggml", ".bin"]:
-            test_path = MODELS_DIR / (DEFAULT_MODEL_NAME.rsplit(".", 1)[0] + ext)
-            if test_path.exists():
-                model_path = str(test_path)
-                logger.info("Found default model (with %s extension): %s", ext, model_path)
-                break
-
-    # If default model not found AND dynamic selection is enabled, do dynamic search
-    if not model_path and ENABLE_DYNAMIC_MODEL_SELECTION:
-        logger.info("Default model not found. Dynamic selection enabled. Searching by model_key='%s'", model_key)
-
-        # Model file patterns by key
-        model_patterns = {
-            "mistral": ["*mistral*.gguf", "*mistral*.ggml", "*mistral*.bin"],
-            "small": ["*small*.gguf", "*small*.ggml", "*small*.bin", "*7b*.gguf", "*7b*.ggml"],
-            "tiny": ["*tiny*.gguf", "*tiny*.ggml", "*tiny*.bin", "*1b*.gguf", "*1b*.ggml", "*3b*.gguf", "*3b*.ggml"],
-        }
-
-        # Model configs by key (n_ctx, n_batch)
-        model_configs = {
-            "mistral": {"n_ctx": 2048, "n_batch": 8},
-            "small": {"n_ctx": 1024, "n_batch": 4},
-            "tiny": {"n_ctx": 512, "n_batch": 2},
-        }
-
-        patterns = model_patterns.get(model_key, model_patterns["mistral"])
-        config = model_configs.get(model_key, model_configs["mistral"])
-
-        # Search for model file using patterns
-        for pattern in patterns:
-            files = list(MODELS_DIR.glob(pattern))
-            if files:
-                model_path = str(files[0])
-                logger.info("Found model via dynamic search: %s (pattern: %s)", model_path, pattern)
-                break
-
-        # Last resort: find any model file
-        if not model_path:
-            for ext in ("*.gguf", "*.ggml", "*.bin"):
-                files = list(MODELS_DIR.glob(ext))
-                if files:
-                    model_path = str(files[0])
-                    logger.warning("Using fallback model via dynamic search: %s", model_path)
-                    break
-
-    if not model_path:
-        if ENABLE_DYNAMIC_MODEL_SELECTION:
-            raise RuntimeError(
-                f"No model file found in {MODELS_DIR}. "
-                f"Expected '{DEFAULT_MODEL_NAME}' or dynamic selection patterns."
-            )
-        else:
-            raise RuntimeError(
-                f"Default model '{DEFAULT_MODEL_NAME}' not found in {MODELS_DIR}. "
-                f"Set ENABLE_DYNAMIC_MODEL_SELECTION=True to enable dynamic model selection."
-            )
-
-    logger.info("Loading LlamaCpp model: path=%s, n_ctx=%d, n_batch=%d", model_path, config["n_ctx"], config["n_batch"])
-    instance = LlamaCpp(
-        model_path=model_path,
-        n_ctx=config["n_ctx"],
-        n_batch=config["n_batch"],
-        n_gpu_layers=0  # CPU-only
-    )
-
-    # Cache the instance (use "default" as key for primary model)
-    _llm_instances[cache_key] = instance
-    return instance
-
-
-# ---------------------------
-# CHUNK-AWARE TOKEN BUDGET HELPERS
-# ---------------------------
-
-
-def estimate_tokens_from_text(text: str, chars_per_token: float = 4.0) -> int:
-    """
-    Heuristic: approximate tokens from characters.
-    chars_per_token default 4.0 (typical for English).
-    Always return at least 1 token for non-empty text.
-    """
-    if not text:
-        return 0
-    # integer math (safe, precise)
-    token_est = int(len(text) / chars_per_token)
-    if token_est < 1:
-        token_est = 1
-    return token_est
-
-
-def select_chunks_by_token_budget(
-        chunks: list,
-        prefix_text: str,
-        question_text: str,
-        n_ctx: int,
-        requested_max_tokens: int,
-        safety_margin: int = 32,
-        chars_per_token: float = 4.0,
-        chunk_text_key: str = "content",
-        chunk_score_key: str = "score"
-):
-    """
-    Select whole chunks (not partial) to fit inside the available token budget.
-
-    Parameters
-    - chunks: list of chunk dicts (expected to have text in chunk_text_key and optionally score in chunk_score_key)
-              e.g. [{"content": ".....", "score": 0.92}, ...]
-    - prefix_text: the prompt prefix (system + profile + history) that will appear before CONTEXT
-    - question_text: the user's question text that will appear after CONTEXT
-    - n_ctx: model context window (e.g., 2048)
-    - requested_max_tokens: tokens you will ask the model to generate (e.g., 256)
-    - safety_margin: reserve a few tokens to avoid edge cases
-    - chars_per_token: heuristic chars per token
-    - chunk_text_key: dict key that holds chunk text
-    - chunk_score_key: dict key that holds retrieval score (higher = more relevant); if missing, original order used
-
-    Returns:
-    - selected_chunks: list of chunk dicts chosen (in descending score order)
-    - selected_text: concatenated text of selected chunks
-    - used_tokens_est: total estimated tokens for prefix + selected chunks + question
-    - available_budget_tokens: token budget that was used/left
-    """
-    # estimate prefix + question token usage
-    prefix_tokens = estimate_tokens_from_text(prefix_text, chars_per_token)
-    question_tokens = estimate_tokens_from_text(question_text, chars_per_token)
-    gen_tokens = int(requested_max_tokens)
-    # compute available tokens for CONTEXT
-    available_for_context = n_ctx - (prefix_tokens + question_tokens + gen_tokens + safety_margin)
-    if available_for_context <= 0:
-        # nothing can be added: context budget exhausted (prefix+question+gen too large).
-        logger.warning(
-            "Token budget for context <= 0 (available_for_context=%s). "
-            "prefix_tokens=%s question_tokens=%s gen_tokens=%s safety_margin=%s n_ctx=%s",
-            available_for_context, prefix_tokens, question_tokens, gen_tokens, safety_margin, n_ctx
-        )
-        return [], "", prefix_tokens + question_tokens + gen_tokens, available_for_context
-
-    # sort chunks by score if available, else keep provided order
-    try:
-        sorted_chunks = sorted(
-            chunks,
-            key=lambda c: c.get(chunk_score_key, 0.0),
-            reverse=True
-        )
-    except Exception:
-        sorted_chunks = list(chunks)
-
-    selected = []
-    used_context_tokens = 0
-
-    for ch in sorted_chunks:
-        text = ch.get(chunk_text_key) if isinstance(ch, dict) else str(ch)
-        if not text:
-            continue
-        tkns = estimate_tokens_from_text(text, chars_per_token)
-        # if adding this chunk exceeds budget, skip it
-        if used_context_tokens + tkns > available_for_context:
-            logger.debug("Skipping a chunk: would exceed context budget (used=%s + chunk=%s > avail=%s)",
-                         used_context_tokens, tkns, available_for_context)
-            continue
-        selected.append(ch)
-        used_context_tokens += tkns
-
-    selected_text = "\n\n---\n\n".join([(c.get(chunk_text_key) if isinstance(c, dict) else str(c)) for c in selected])
-    total_used_est = prefix_tokens + used_context_tokens + question_tokens + gen_tokens
-    return selected, selected_text, total_used_est, available_for_context - used_context_tokens
-
-
-def build_prompt_with_selected_chunks(prefix: str, context_text: str, question: str) -> str:
-    """
-    Build a consistent prompt using markers that downstream retry/trim helpers can detect.
-    """
-    parts = []
-    if prefix:
-        parts.append(prefix.rstrip())
-    parts.append("\n\nCONTEXT:\n")
-    if context_text:
-        parts.append(context_text.rstrip())
-    else:
-        parts.append("[NO_CONTEXT_AVAILABLE]")
-    parts.append("\n\nQUESTION:\n")
-    parts.append(question.rstrip())
-    return "".join(parts)
-
-
-# ---------------------------
-# USAGE: integrate into query_local_rag
-# ---------------------------
-# Example snippet to replace the old prompt-building + direct llm call inside query_local_rag:
-#
-# (1) you must have:
-#   - `retrieved_chunks` : list of retrieved chunk dicts (each with 'content' and optional 'score')
-#   - `_llm_instance` : your initialized LlamaCpp/langchain wrapper
-#   - `n_ctx` : the context window used when instantiating the model (e.g., 2048)
-#   - `max_tokens` : requested generation tokens (e.g., 256)
-#   - `prefix_text` : system prefix + profile + history
-#   - `question_text` : the incoming user question
-#
-# (2) Replace the direct call:
-#     answer = _llm_instance(prompt, max_tokens=max_tokens, temperature=0.0)
-#
-# with the following block:
-#
-def _invoke_llm_with_chunk_budget(
-        llm_instance,
-        retrieved_chunks,
-        prefix_text,
-        question_text,
-        n_ctx=2048,
-        max_tokens=256,
-        safety_margin=32,
-        chunk_text_key="content",
-        chunk_score_key="score",
-        chars_per_token=4.0
-):
-    """
-    Wrapper to select chunks based on token budget, build prompt, and call the LLM.
-    Returns the raw model output (string) and metadata about selection.
-    """
-    # 1) select chunks that fit in the budget
-    selected_chunks, selected_text, used_est, remaining = select_chunks_by_token_budget(
-        chunks=retrieved_chunks,
-        prefix_text=prefix_text,
-        question_text=question_text,
-        n_ctx=n_ctx,
-        requested_max_tokens=max_tokens,
-        safety_margin=safety_margin,
-        chars_per_token=chars_per_token,
-        chunk_text_key=chunk_text_key,
-        chunk_score_key=chunk_score_key
-    )
-
-    # 2) build prompt
-    prompt = build_prompt_with_selected_chunks(prefix_text, selected_text, question_text)
-
-    # 3) attempt LLM call (direct; you can substitute your retry wrapper here if you have one)
-    try:
-        logger.debug("Calling LLM with estimated total tokens=%s (remaining budget=%s). Selected chunks=%d",
-                     used_est, remaining, len(selected_chunks))
-        output = llm_instance(prompt, max_tokens=max_tokens, temperature=0.0)
-    except ValueError as ve:
-        # If the model still complains, attempt a fallback: shrink selected chunks count (drop lowest-scored half) and retry once.
-        msg = str(ve)
-        logger.warning("LLM raised ValueError on call: %s", msg)
-        if ("exceed context window" in msg) or ("Requested tokens" in msg) or ("context window" in msg):
-            # conservative retry: keep only top 50% of selected chunks
-            if len(selected_chunks) <= 1:
-                # nothing to drop; re-raise
-                raise
-            # determine how many to keep
-            keep_count = max(1, int(len(selected_chunks) * 0.5))
-            top_selected = selected_chunks[:keep_count]
-            top_selected_text = "\n\n---\n\n".join(
-                [(c.get(chunk_text_key) if isinstance(c, dict) else str(c)) for c in top_selected])
-            retry_prompt = build_prompt_with_selected_chunks(prefix_text, top_selected_text, question_text)
-            logger.warning("Retrying LLM with fewer chunks (kept %d of %d)", keep_count, len(selected_chunks))
-            return llm_instance(retry_prompt, max_tokens=max_tokens, temperature=0.0), {
-                "selected_count": keep_count,
-                "original_selected": len(selected_chunks),
-                "retry": "dropped_low_half"
-            }
-        # else unknown ValueError -> re-raise
-        raise
-
-    # 4) return output + metadata
-    meta = {
-        "selected_count": len(selected_chunks),
-        "original_selected": len(retrieved_chunks),
-        "estimated_tokens_used": used_est,
-        "remaining_context_tokens": remaining
-    }
-    return output, meta
-
-
-# -------------------------------------------------------------------------
-# Example: INTEGRATION POINT in query_local_rag (pseudo-placement)
-# -------------------------------------------------------------------------
-# Replace your old logic (where you build 'prompt' using all chunks and call _llm_instance)
-# with code like this:
-
-# prefix_text = build_prefix(...)  # whatever you already build: system + profile + history
-# question_text = incoming_user_question
-# retrieved_chunks = results_from_chroma  # ensure each chunk has 'content' and optionally 'score'
-
-# Set these to your actual values:
-# n_ctx should match what you used when instantiating LlamaCpp; e.g., 2048
-# max_tokens is requested generation tokens from the API or default
-#
-# Example call:
-# answer_text, selection_meta = _invoke_llm_with_chunk_budget(
-#     _llm_instance,
-#     retrieved_chunks,
-#     prefix_text,
-#     question_text,
-#     n_ctx=2048,
-#     max_tokens=max_tokens,
-#     safety_margin=32,
-#     chunk_text_key="content",
-#     chunk_score_key="score",
-#     chars_per_token=4.0
-# )
-#
-# Now use answer_text as the model's output and log/use selection_meta for diagnostics.
-
-
-# build_tone_guidance and sanitize_metadata_dict are now imported from utility.py
-
-def inject_tone_into_prefix(prefix_text: str, tone: Optional[str]) -> str:
-    """
-    Inject a short 'Conversation Tone Guidance' block into an existing prefix.
-    Keeps the original prefix but places the guidance near the top for clarity.
-    """
-    guidance = build_tone_guidance(tone)
-    # Look for a natural insertion point: after the first newline or after a 'User Profile' section.
-    # Simpler: place guidance at the beginning of the prefix so model sees it early.
-    injected = (
-        f"Conversation Tone Guidance:\n{guidance}\n\n"
-        f"{prefix_text}"
-    )
-    return injected
-
-
-# get_embedding_model_instance and embed_texts are now imported from utility.py
-
-
-# chunk_text_basic is now imported from utility.py
-
-
 def _generate_ids(prefix: str, n: int) -> List[str]:
+    """Generate a list of unique IDs with a given prefix."""
     return [f"{prefix}_{uuid.uuid4().hex}" for _ in range(n)]
 
 
@@ -469,10 +83,17 @@ def initialize_local_rag(embedding_model_instance: Optional[Any] = None,
                          persist_directory: Optional[str] = None,
                          collection_name: Optional[str] = None) -> None:
     """
-    Initialize resources:
-    - ensures Chroma client & collection
-    - optionally set provided embedding and llm instances
-    Note: LLM instances are now managed via get_llm_instance() with model routing.
+    Initialize resources for the local RAG service.
+
+    This function ensures that the ChromaDB client and collection are ready,
+    and it can optionally accept pre-initialized embedding and LLM instances.
+    LLM instances are now managed via get_llm_instance() with model routing.
+
+    Args:
+        embedding_model_instance: An optional pre-initialized embedding model instance.
+        llm_instance: An optional pre-initialized LLM instance.
+        persist_directory: The directory to persist ChromaDB data.
+        collection_name: The name of the ChromaDB collection to use.
     """
     global _llm_instances
 
@@ -494,12 +115,16 @@ def initialize_local_rag(embedding_model_instance: Optional[Any] = None,
     logger.info("Local RAG initialization completed (collection: %s)", collection_name or DEFAULT_COLLECTION_NAME)
 
 
-def add_document_to_rag_local(source_name: str,
-                              text: str,
-                              chunks: Optional[List[str]] = None,
-                              metadata: Optional[Dict[str, Any]] = None) -> List[str]:
+async def add_document_to_rag_local(source_name: str,
+                                    text: str,
+                                    chunks: Optional[List[str]] = None,
+                                    metadata: Optional[Dict[str, Any]] = None) -> List[str]:
     """
     Add a document (or precomputed chunks) to the local chroma collection.
+
+    This function takes a document, splits it into chunks (if not already chunked),
+    computes embeddings for each chunk, and then adds the chunks, metadatas,
+    and embeddings to the ChromaDB collection.
 
     Returns the list of ids added.
 
@@ -532,7 +157,7 @@ def add_document_to_rag_local(source_name: str,
 
     # compute embeddings locally
     try:
-        embeddings = embed_texts(chunks)
+        embeddings = await embed_texts(chunks)
     except Exception as e:
         logger.exception("Failed to compute embeddings locally: %s", e)
         raise
@@ -551,66 +176,7 @@ def add_document_to_rag_local(source_name: str,
     return ids
 
 
-def _call_llm_with_retry(
-        llm_instance,
-        prompt: str,
-        max_tokens: int = 256,
-        temperature: float = 0.0,
-        retry_shrink_ratio: float = 0.5,
-        min_keep_chars: int = 200
-):
-    """
-    Try calling LLM once. If ValueError says context too large:
-    - Trim CONTEXT block to 50%
-    - Retry once safely
-    """
-
-    try:
-        # First attempt
-        return llm_instance(prompt, max_tokens=max_tokens, temperature=temperature)
-
-    except ValueError as ve:
-        msg = str(ve)
-        if ("exceed context window" in msg) or ("Requested tokens" in msg):
-            logger.warning("Context window error. Retrying with trimmed context: %s", msg)
-
-            # detect structure: <prefix> CONTEXT <ctx> QUESTION <rest>
-            ctx_marker = "\n\nCONTEXT:\n"
-            q_marker = "\n\nQUESTION:\n"
-
-            try:
-                # split into prefix, ctx, rest
-                before, after = prompt.split(ctx_marker, 1)
-                ctx_text, rest = after.split(q_marker, 1)
-
-                # trim context size
-                keep_len = max(min_keep_chars, int(len(ctx_text) * retry_shrink_ratio))
-                head_keep = int(keep_len * 0.6)
-                tail_keep = keep_len - head_keep
-
-                new_ctx = ctx_text[:head_keep] + "\n...\n" + ctx_text[-tail_keep:]
-
-                new_prompt = (
-                        before + ctx_marker + new_ctx + q_marker + rest
-                )
-
-                logger.debug(
-                    "Retrying LLM: Original ctx=%d, trimmed=%d",
-                    len(ctx_text), len(new_ctx)
-                )
-
-                # Retry now
-                return llm_instance(new_prompt, max_tokens=max_tokens, temperature=temperature)
-
-            except Exception as e:
-                logger.exception("Failed during trim retry: %s", e)
-                raise ve  # give original ValueError
-
-        # Not a token error → re-raise
-        raise
-
-
-def query_local_rag(
+async def query_local_rag(
         query_text: str,
         n_results: int = 3,
         requester: Optional[Dict[str, str]] = None,
@@ -620,11 +186,27 @@ def query_local_rag(
         session_id: Optional[str] = None
 ) -> Dict[str, Any]:
     """
-    Query the local RAG:
-    - compute local embedding for the query
-    - retrieve top-k docs from Chroma
-    - apply RBAC filtering
-    - inject tone-aware guidance into LLM prefix
+    Query the local RAG service.
+
+    This is the main function for querying the RAG. It performs the following steps:
+    1. Computes an embedding for the user's query.
+    2. Retrieves the top-k most relevant documents from ChromaDB.
+    3. Applies Role-Based Access Control (RBAC) to filter the retrieved documents.
+    4. Injects tone-aware guidance into the LLM prompt prefix.
+    5. If `use_llm` is True, it calls the LLM with the constructed prompt to generate an answer.
+    6. Returns a dictionary containing the answer, retrieved documents, and other metadata.
+
+    Args:
+        query_text: The user's query.
+        n_results: The number of documents to retrieve.
+        requester: A dictionary containing information about the user making the request (for RBAC).
+        llm_prompt_prefix: A prefix to add to the LLM prompt.
+        use_llm: Whether to use the LLM to generate an answer.
+        max_tokens: The maximum number of tokens for the LLM to generate.
+        session_id: The ID of the user's session (for fetching conversation history and tone).
+
+    Returns:
+        A dictionary containing the RAG output.
     """
     # Ensure Chroma client
     client, collection = ensure_chroma_client(
@@ -643,7 +225,7 @@ def query_local_rag(
     # 1. Get embedding for query
     # -----------------------------
     try:
-        q_emb = embed_texts([query_text])[0]
+        q_emb = (await embed_texts([query_text]))[0]
         logger.debug("Computed query embedding.")
     except Exception as e:
         logger.exception("Failed to embed query: %s", e)
@@ -684,6 +266,7 @@ def query_local_rag(
     # 3. RBAC filtering (visible vs filtered)
     # ------------------------------------------
     def _allowed_by_metadata(meta: Optional[Dict[str, Any]], requester: Optional[Dict[str, str]]) -> bool:
+        """Check if a document is accessible based on its metadata and the requester's role/department."""
         sens = meta.get("sensitivity", "public_internal") if meta else "public_internal"
 
         # personal
@@ -819,14 +402,10 @@ def query_local_rag(
             logger.exception("Failed to load LLM instance: %s", e)
             raise
 
-        prompt = (
-            f"{final_prefix}\n\n"
-            f"CONTEXT:\n{context_text}\n\n"
-            f"QUESTION:\n{query_text}\n\nAnswer concisely:"
-        )
+        prompt = build_prompt_with_selected_chunks(final_prefix, context_text, query_text)
 
         try:
-            answer = _call_llm_with_retry(
+            answer = await _call_llm_with_retry(
                 llm_instance,
                 prompt,
                 max_tokens=max_tokens,
@@ -847,9 +426,13 @@ def query_local_rag(
     return out
 
 
-def seed_from_file(file_path: Optional[str] = None, source_name: Optional[str] = None, force_reseed: bool = False) -> List[str]:
+async def seed_from_file(file_path: Optional[str] = None, source_name: Optional[str] = None, force_reseed: bool = False) -> \
+List[str]:
     """
     Read the given file or directory and index it.
+
+    This function seeds the ChromaDB collection with documents from a file or directory.
+    It has a "load once" logic to avoid re-seeding on every application startup.
 
     Behavior:
     - If file_path is None: attempts to seed from default project data/companyData directory.
@@ -882,7 +465,7 @@ def seed_from_file(file_path: Optional[str] = None, source_name: Optional[str] =
     except Exception as e:
         logger.warning("Could not check collection size: %s. Assuming zero.", e)
         has_data = False
-        data = {"ids":[]}
+        data = {"ids": []}
 
     logger.info("has_data %s", has_data)
     if has_data and not force_reseed:
@@ -909,7 +492,7 @@ def seed_from_file(file_path: Optional[str] = None, source_name: Optional[str] =
                     text = child.read_text(encoding="utf-8")
                     # Use relative path + name for source_name for better uniqueness
                     src_name = str(child.relative_to(path.parent))
-                    ids = add_document_to_rag_local(source_name=src_name, text=text, chunks=None,
+                    ids = await add_document_to_rag_local(source_name=src_name, text=text, chunks=None,
                                                     metadata={"seeded": True})
                     if ids:
                         added_ids.extend(ids)
@@ -928,7 +511,7 @@ def seed_from_file(file_path: Optional[str] = None, source_name: Optional[str] =
 
     name = source_name or path.name
     try:
-        ids = add_document_to_rag_local(source_name=name, text=text, chunks=None, metadata={"seeded": True})
+        ids = await add_document_to_rag_local(source_name=name, text=text, chunks=None, metadata={"seeded": True})
         if ids:
             added_ids.extend(ids)
             logger.info("Seeded file %s -> %d chunks", path.name, len(ids))

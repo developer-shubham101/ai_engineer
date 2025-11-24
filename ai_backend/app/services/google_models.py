@@ -22,6 +22,10 @@ class ChatResponse(BaseModel):
     ai_response: str
 
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 try:
     google_llm = ChatGoogleGenerativeAI(
         model="gemini-2.0-flash-lite", #"gemini-2.5-flash-lite",
@@ -44,7 +48,7 @@ try:
     idea_chain = LLMChain(llm=google_llm, prompt=prompt)
 
 except Exception as e:
-    print(f"Warning: Could not initialize Google legacy chain. Error: {e}")
+    logger.warning(f"Could not initialize Google legacy chain. Error: {e}")
     idea_chain = None
 
 
@@ -74,7 +78,7 @@ try:
     )
 
 except Exception as e:
-    print(f"Warning: Could not initialize Google conversation chain. Error: {e}")
+    logger.warning(f"Could not initialize Google conversation chain. Error: {e}")
     conversation_chain = None
 
 

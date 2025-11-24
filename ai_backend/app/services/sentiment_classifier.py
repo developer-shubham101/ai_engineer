@@ -26,13 +26,14 @@ from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import LabelEncoder
 from sklearn.exceptions import NotFittedError
 import joblib
+
+from app.services.prompt_builder import normalize_tone_label
 from app.services.utility import (
     get_local_embedding_model_path,
     EMBEDDING_MODEL_NAME,
     BASE_DIR,
     SENTIMENT_ARTIFACTS_DIR,
     get_sentiment_artifact_path,
-    normalize_tone_label,
 )
 
 

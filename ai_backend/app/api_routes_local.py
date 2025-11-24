@@ -257,7 +257,7 @@ async def query_local(
     # CALL RAG SERVICE
     # ------------------------
     try:
-        res = query_local_rag(
+        res = await query_local_rag(
             query_text=req.question,
             n_results=req.top_k,
             requester=requester,       # pass role info for filtering in service
@@ -336,7 +336,7 @@ async def add_document_json(req: AddDocRequest, requester: Dict[str, Any] = Depe
     validate_metadata(metadata)
 
     try:
-        ids = add_document_to_rag_local(source_name=req.source_name, text=req.text, metadata=metadata)
+        ids = await add_document_to_rag_local(source_name=req.source_name, text=req.text, metadata=metadata)
     except Exception as e:
         logger.exception("Failed to add document: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
@@ -374,7 +374,7 @@ async def add_document_file(
     validate_metadata(metadata)
 
     try:
-        ids = add_document_to_rag_local(source_name=file.filename, text=text, metadata=metadata)
+        ids = await add_document_to_rag_local(source_name=file.filename, text=text, metadata=metadata)
     except Exception as e:
         logger.exception("Failed to add file: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
@@ -384,7 +384,7 @@ async def add_document_file(
 
 
 @router.post("/seed", response_model=AddResponse)
-def seed_defaults(
+async def seed_defaults(
     requester: Dict[str, Any] = Depends(get_requester),
     reseed: bool = False # NEW: Optional query parameter
 ):
@@ -395,7 +395,7 @@ def seed_defaults(
     """
     try:
         # Pass the reseed flag to force re-seeding logic
-        ids = seed_from_file(force_reseed=reseed)
+        ids = await seed_from_file(force_reseed=reseed)
         if ids:
             return AddResponse(message=f"Seeded default docs from companyData. Chunks added: {len(ids)}.", chunk_count=len(ids))
         else:

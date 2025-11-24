@@ -22,7 +22,7 @@ BASE_DIR = PROJECT_ROOT / "app/"
 # ============================================================================
 # MODEL CONSTANTS
 # ============================================================================
-EMBEDDING_MODEL_NAME = "all-MiniLM-L6-v2"
+from app.config import EMBEDDING_MODEL_NAME
 
 # ============================================================================
 # DIRECTORY PATHS
@@ -34,14 +34,12 @@ TRAINING_DATA_DIR = PROJECT_ROOT / "data"
 CONFIG_DIR = BASE_DIR / "config"
 MODELS_DIR = PROJECT_ROOT / "models"
 EMBEDDINGS_MODELS_DIR = PROJECT_ROOT / "embeddings_models"
-CHROMA_STORAGE_DIR = BASE_DIR / "chroma_storage"
 SENTIMENT_ARTIFACTS_DIR = PROJECT_ROOT / "sentiment"
 
 # ============================================================================
 # CHROMA DEFAULTS
 # ============================================================================
-DEFAULT_PERSIST_DIR = CHROMA_STORAGE_DIR
-DEFAULT_COLLECTION_NAME = "local_manual_rag"
+from app.config import DEFAULT_PERSIST_DIR, DEFAULT_COLLECTION_NAME
 
 # ============================================================================
 # FILE PATHS
@@ -104,11 +102,13 @@ def get_embedding_model_instance():
     return _embedding_model_instance
 
 
-def embed_texts(texts: List[str]) -> List[List[float]]:
+from fastapi.concurrency import run_in_threadpool
+
+async def embed_texts(texts: List[str]) -> List[List[float]]:
     """Embed a list of texts using the shared embedding model."""
     model = get_embedding_model_instance()
-    vectors = model.encode(texts, convert_to_numpy=True).tolist()
-    return vectors
+    vectors = await run_in_threadpool(model.encode, texts, convert_to_numpy=True)
+    return vectors.tolist()
 
 
 # ============================================================================
@@ -167,96 +167,10 @@ def sanitize_metadata_dict(meta: Optional[Dict[str, Any]]) -> Dict[str, Any]:
     return {str(k): sanitize_meta_value(v) for k, v in meta.items()}
 
 
-# ============================================================================
-# TONE NORMALIZATION
-# ============================================================================
-# Canonical tone labels: angry, confused, happy, frustrated, polite, urgent, neutral
-CANONICAL_TONES = {"angry", "confused", "happy", "frustrated", "polite", "urgent", "neutral"}
 
 
-def normalize_tone_label(raw_tone: Optional[str]) -> str:
-    """
-    Map raw model output tone labels to canonical tones.
-    Returns one of: angry, confused, happy, frustrated, polite, urgent, neutral
-    Defaults to 'neutral' if tone is None or unrecognized.
-    """
-    if not raw_tone:
-        return "neutral"
-
-    tone_lower = raw_tone.lower().strip()
-
-    # Direct match
-    if tone_lower in CANONICAL_TONES:
-        return tone_lower
-
-    # Mapping rules for common variations
-    tone_mapping = {
-        # Angry variants
-        "furious": "angry",
-        "annoyed": "angry",
-        "irritated": "angry",
-        "mad": "angry",
-        # Happy variants
-        "appreciative": "happy",
-        "pleased": "happy",
-        "satisfied": "happy",
-        "grateful": "happy",
-        # Frustrated variants
-        "upset": "frustrated",
-        "disappointed": "frustrated",
-        "stressed": "frustrated",
-        # Polite variants
-        "curious": "polite",
-        "respectful": "polite",
-        "courteous": "polite",
-        # Urgent variants
-        "emergency": "urgent",
-        "critical": "urgent",
-        "asap": "urgent",
-        # Confused variants
-        "uncertain": "confused",
-        "unclear": "confused",
-        "lost": "confused",
-    }
-
-    # Check mapping
-    if tone_lower in tone_mapping:
-        return tone_mapping[tone_lower]
-
-    # Partial matching for compound tones
-    for key, canonical in tone_mapping.items():
-        if key in tone_lower or tone_lower in key:
-            return canonical
-
-    # Default fallback
-    logger.debug("Unrecognized tone label '%s', defaulting to 'neutral'", raw_tone)
-    return "neutral"
 
 
-# ============================================================================
-# TONE GUIDANCE
-# ============================================================================
-def build_tone_guidance(tone: Optional[str]) -> str:
-    """
-    Map a tone label into a short LLM instruction for tone-sensitive replies.
-    Keep these instructions concise (20-60 tokens) — they are injected into the model prompt.
-    Uses normalized canonical tones.
-    """
-    # Normalize tone to canonical form
-    normalized = normalize_tone_label(tone)
-
-    # Short, token-efficient guidance for each canonical tone
-    guidance_map = {
-        "angry": "User is angry. Respond calmly, acknowledge frustration, focus on fast resolution.",
-        "frustrated": "User is frustrated. Be patient, provide step-by-step guidance.",
-        "confused": "User is confused. Simplify explanation, use examples.",
-        "urgent": "User indicates urgency. Prioritize actionable steps, be direct.",
-        "happy": "User is positive. Respond warmly and helpfully.",
-        "polite": "User is polite. Respond normally with clear information.",
-        "neutral": "Respond normally in a helpful and friendly manner.",
-    }
-
-    return guidance_map.get(normalized, guidance_map["neutral"])
 
 
 # ============================================================================

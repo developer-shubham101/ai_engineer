@@ -1,23 +1,20 @@
 from __future__ import annotations
 
+import json
 import logging
 import sqlite3
 import uuid
-import json
 from datetime import datetime
-from pathlib import Path
 from typing import Dict, List, Optional
 
-# Import centralized paths and utilities
-from app.services.utility import (
-    BASE_DIR,
-    DATA_DIR,
-    get_config_path,
-    build_tone_guidance,
-)
-
+from app.services.prompt_builder import build_tone_guidance
 # new import for sentiment classifier
 from app.services.sentiment_classifier import get_global_sentiment
+# Import centralized paths and utilities
+from app.services.utility import (
+    DATA_DIR,
+    get_config_path,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -186,7 +183,7 @@ def store_message(session_id: str, speaker: str, content: str) -> int:
             sentiment = "unknown"
             tone = "neutral"
             meta_json = json.dumps({"sentiment": {"unknown": 1.0}, "tone": {"neutral": 1.0}})
-            
+
             try:
                 classifier = get_global_sentiment()
                 res = classifier.predict_single(content)
@@ -196,7 +193,7 @@ def store_message(session_id: str, speaker: str, content: str) -> int:
             except Exception as e:
                 # Never fail storing a message due to classifier errors; use defaults
                 logger.warning("Sentiment classification failed for message_id=%s: %s. Using defaults.", message_id, e)
-            
+
             # Always update with sentiment/tone/metadata (even if defaults)
             try:
                 cur.execute("""
@@ -227,7 +224,7 @@ def fetch_recent_messages(session_id: str, limit: int = MAX_HISTORY_TURNS) -> Li
 
     # reverse to chronological order
     messages = [dict(row) for row in reversed(rows)]
-    
+
     # Ensure all messages have sentiment, tone, and sentiment_meta fields
     # If sentiment_meta exists as JSON string, convert to dict
     for m in messages:
@@ -238,7 +235,7 @@ def fetch_recent_messages(session_id: str, limit: int = MAX_HISTORY_TURNS) -> Li
             m["tone"] = None
         if "sentiment_meta" not in m:
             m["sentiment_meta"] = None
-        
+
         # Parse sentiment_meta JSON if present
         if m.get("sentiment_meta"):
             try:
@@ -249,7 +246,7 @@ def fetch_recent_messages(session_id: str, limit: int = MAX_HISTORY_TURNS) -> Li
                 m["sentiment_meta"] = {}
         else:
             m["sentiment_meta"] = {}
-    
+
     return messages
 
 
