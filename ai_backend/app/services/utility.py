@@ -5,14 +5,19 @@ This module prevents code duplication and circular import issues.
 from pathlib import Path
 from typing import Optional, Dict, Any, List
 import logging
+import os
 
 logger = logging.getLogger(__name__)
 
 # ============================================================================
 # BASE PATHS
 # ============================================================================
-BASE_DIR = Path(__file__).resolve().parent.parent  # app/
-PROJECT_ROOT = BASE_DIR.parent  # project root
+
+PROJECT_ROOT = Path(os.getcwd()).resolve()
+
+BASE_DIR = PROJECT_ROOT / "app/"
+# PROJECT_ROOT is the directory above 'app/'
+
 
 # ============================================================================
 # MODEL CONSTANTS
@@ -22,7 +27,10 @@ EMBEDDING_MODEL_NAME = "all-MiniLM-L6-v2"
 # ============================================================================
 # DIRECTORY PATHS
 # ============================================================================
+# DATA_DIR (relative to app/) is app/data
 DATA_DIR = BASE_DIR / "data"
+# TRAINING_DATA_DIR (relative to project root) is project_root/data
+TRAINING_DATA_DIR = PROJECT_ROOT / "data"
 CONFIG_DIR = BASE_DIR / "config"
 MODELS_DIR = PROJECT_ROOT / "models"
 EMBEDDINGS_MODELS_DIR = PROJECT_ROOT / "embeddings_models"
@@ -49,8 +57,8 @@ def get_config_path(filename: str) -> Path:
 
 
 def get_data_path(filename: str) -> Path:
-    """Get path to a data file."""
-    return DATA_DIR / filename
+    """Get path to a data file. This resolves to PROJECT_ROOT/data/filename."""
+    return TRAINING_DATA_DIR / filename
 
 
 def get_sentiment_artifact_path(filename: str) -> Path:
@@ -70,10 +78,10 @@ def get_embedding_model_instance():
     This prevents loading the same model multiple times.
     """
     global _embedding_model_instance
-    
+
     if _embedding_model_instance is not None:
         return _embedding_model_instance
-    
+
     try:
         from sentence_transformers import SentenceTransformer
     except ImportError:
@@ -81,7 +89,7 @@ def get_embedding_model_instance():
             "sentence_transformers not installed. "
             "Install sentence-transformers to compute local embeddings."
         )
-    
+
     local_path = get_local_embedding_model_path()
     if local_path.exists():
         logger.info("Loading embedding model from local path: %s", local_path)
@@ -92,7 +100,7 @@ def get_embedding_model_instance():
             EMBEDDING_MODEL_NAME
         )
         _embedding_model_instance = SentenceTransformer(EMBEDDING_MODEL_NAME)
-    
+
     return _embedding_model_instance
 
 
@@ -174,13 +182,13 @@ def normalize_tone_label(raw_tone: Optional[str]) -> str:
     """
     if not raw_tone:
         return "neutral"
-    
+
     tone_lower = raw_tone.lower().strip()
-    
+
     # Direct match
     if tone_lower in CANONICAL_TONES:
         return tone_lower
-    
+
     # Mapping rules for common variations
     tone_mapping = {
         # Angry variants
@@ -210,16 +218,16 @@ def normalize_tone_label(raw_tone: Optional[str]) -> str:
         "unclear": "confused",
         "lost": "confused",
     }
-    
+
     # Check mapping
     if tone_lower in tone_mapping:
         return tone_mapping[tone_lower]
-    
+
     # Partial matching for compound tones
     for key, canonical in tone_mapping.items():
         if key in tone_lower or tone_lower in key:
             return canonical
-    
+
     # Default fallback
     logger.debug("Unrecognized tone label '%s', defaulting to 'neutral'", raw_tone)
     return "neutral"
@@ -236,7 +244,7 @@ def build_tone_guidance(tone: Optional[str]) -> str:
     """
     # Normalize tone to canonical form
     normalized = normalize_tone_label(tone)
-    
+
     # Short, token-efficient guidance for each canonical tone
     guidance_map = {
         "angry": "User is angry. Respond calmly, acknowledge frustration, focus on fast resolution.",
@@ -247,7 +255,7 @@ def build_tone_guidance(tone: Optional[str]) -> str:
         "polite": "User is polite. Respond normally with clear information.",
         "neutral": "Respond normally in a helpful and friendly manner.",
     }
-    
+
     return guidance_map.get(normalized, guidance_map["neutral"])
 
 
@@ -258,3 +266,53 @@ def build_tone_guidance(tone: Optional[str]) -> str:
 def _get_local_embedding_model_path() -> Path:
     """Backward compatibility alias."""
     return get_local_embedding_model_path()
+
+
+def is_empty(data):
+    # Case 1: None
+    if data is None:
+        return True
+
+    # Case 2: Iterable types (list, dict, tuple, set, string)
+    if isinstance(data, (list, dict, tuple, set, str)):
+        return len(data) == 0
+
+    # Case 3: Has length
+    if hasattr(data, "__len__"):
+        return len(data) == 0
+
+    return True
+
+
+def is_collection_empty(data):
+    """Return True if Chroma/Vector DB response represents an empty collection."""
+    if data is None:
+        return True
+
+    # If dictionary structure
+    if isinstance(data, dict):
+        # Chroma empty pattern: ids == [] and documents == []
+        ids = data.get("ids", [])
+        docs = data.get("documents", [])
+        metas = data.get("metadatas", [])
+
+        # "Empty" means: all primary fields contain no usable data
+        if len(ids) == 0 and len(docs) == 0 and len(metas) == 0:
+            return True
+
+        return False  # some data exists
+
+    # If some vector store object
+    if hasattr(data, "ids"):
+        ids = getattr(data, "ids", [])
+        return len(ids) == 0
+
+    if hasattr(data, "documents"):
+        docs = getattr(data, "documents", [])
+        return len(docs) == 0
+
+    # Generic fallback
+    try:
+        return len(data) == 0
+    except Exception:
+        return not bool(data)

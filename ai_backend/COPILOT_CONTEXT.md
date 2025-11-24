@@ -31,7 +31,7 @@ User Request → FastAPI → RAG Pipeline → RBAC Filter → Local LLM → Resp
   - `rag_service.py` - Legacy Google-based RAG (optional)
 - **Vector DB**: ChromaDB (persistent storage in `app/chroma_storage/`)
 - **Embeddings**: SentenceTransformers (all-MiniLM-L6-v2) - loaded from `embeddings_models/`
-- **Local LLM**: Mistral-7B-Instruct-v0.2.Q3_K_M.gguf via llama-cpp-python (auto-detected from `models/`)
+- **Local LLM**: Mistral-7B-Instruct-v0.2.Q3_K_M.gguf via llama-cpp-python (default model, with optional dynamic selection)
 - **Support Chat**: SQLite-based session management (`app/data/support_sessions.db`)
 - **Sentiment Analysis**: Local classifier using scikit-learn + sentence-transformers
 - **Auth**: Simple API key mapping (`app/services/auth.py`)
@@ -75,6 +75,8 @@ User Request → FastAPI → RAG Pipeline → RBAC Filter → Local LLM → Resp
 - `query_local_rag(query_text, n_results, requester, llm_prompt_prefix, use_llm, max_tokens, session_id)` - Query with RBAC
 - `seed_from_file(file_path, source_name)` - Seed from file or directory
 - `clear_collection()` - Delete all documents
+- `get_llm_instance(model_key)` - Lazy-load and cache LLM instances (default: mistral-7b-instruct-v0.2.Q3_K_M.gguf)
+- `choose_model_for_task(task)` - Select model based on task type (only if `ENABLE_DYNAMIC_MODEL_SELECTION=True`)
 
 **Support Chat** (`support_chat.py`):
 - `create_session(session_id, role, department)` - Create new session
@@ -90,7 +92,8 @@ User Request → FastAPI → RAG Pipeline → RBAC Filter → Local LLM → Resp
 - `embed_texts(texts)` - Embed list of texts
 - `chunk_text_basic(text, chunk_size, overlap)` - Text chunking
 - `sanitize_metadata_dict(meta)` - Sanitize metadata for Chroma
-- `build_tone_guidance(tone)` - Generate tone-aware LLM instructions
+- `build_tone_guidance(tone)` - Generate tone-aware LLM instructions (20-60 tokens, uses normalized canonical tones)
+- `normalize_tone_label(raw_tone)` - Map raw tone labels to canonical forms (angry, confused, happy, frustrated, polite, urgent, neutral)
 - `get_local_embedding_model_path()` - Get embedding model path
 - `get_data_path(filename)`, `get_config_path(filename)` - Path helpers
 
@@ -221,14 +224,23 @@ User Request → FastAPI → RAG Pipeline → RBAC Filter → Local LLM → Resp
 ```python
 {
   "text": str,
-  "sentiment": str,  # positive, negative, neutral
-  "tone": str,  # angry, frustrated, polite, urgent, etc.
+  "sentiment": str,  # positive, negative, neutral, unknown (on error)
+  "tone": str,  # Canonical tones: angry, confused, happy, frustrated, polite, urgent, neutral
   "proba": {
     "sentiment": Dict[str, float],
     "tone": Dict[str, float]
   }
 }
 ```
+
+**Model Selection Configuration** (`rag_local_service.py`):
+- `ENABLE_DYNAMIC_MODEL_SELECTION = False` - Flag to enable dynamic model selection based on task
+- `DEFAULT_MODEL_NAME = "mistral-7b-instruct-v0.2.Q3_K_M.gguf"` - Primary model to use
+- By default, system uses only the default model
+- If `ENABLE_DYNAMIC_MODEL_SELECTION=True` and default model not found, falls back to task-based selection:
+  - `"small"` for summarization, classification, tagging, intent detection
+  - `"tiny"` for short chit-chat
+  - `"mistral"` for full RAG reasoning (default)
 
 ### RBAC Sensitivity Levels
 
@@ -285,6 +297,8 @@ uvicorn app.main:app --host 0.0.0.0 --port 5444
 ### Key Behaviors
 
 - **Lazy Loading**: Embedding model and LLM are loaded on first use (singleton pattern)
+- **Model Selection**: By default, uses only `mistral-7b-instruct-v0.2.Q3_K_M.gguf`. Dynamic selection only if `ENABLE_DYNAMIC_MODEL_SELECTION=True` and default model not found
+- **Sentiment/Tone Detection**: Always returns canonical tone labels (angry, confused, happy, frustrated, polite, urgent, neutral). Never fails - defaults to "unknown"/"neutral" on error
 - **Auto-Seeding**: On startup, attempts to seed `data/company_overview.txt` if present
 - **Session Reset**: `support_chat.init_support_chat_db(reset_on_start=True)` resets DB on app start (change for production)
 - **CORS**: Currently allows all origins (`allow_origins=["*"]`) - restrict in production
@@ -294,7 +308,8 @@ uvicorn app.main:app --host 0.0.0.0 --port 5444
 
 - `app/chroma_storage/` - Created automatically by ChromaDB
 - `app/data/` - Created automatically for SQLite DBs
-- `models/` - Must exist with at least one `*.gguf`, `*.ggml`, or `*.bin` file for LLM
+- `models/` - Must contain `mistral-7b-instruct-v0.2.Q3_K_M.gguf` (or `.ggml`/`.bin` variant) for default operation
+  - If `ENABLE_DYNAMIC_MODEL_SELECTION=True`, can contain multiple models for task-based selection
 - `embeddings_models/all-MiniLM-L6-v2/` - Embedding model (auto-downloaded if missing)
 - `sentiment/` - Created automatically for sentiment artifacts
 
@@ -314,6 +329,9 @@ uvicorn app.main:app --host 0.0.0.0 --port 5444
 8. **Maintain singleton patterns** - Use `get_embedding_model_instance()` from `utility.py` for embeddings
 9. **Avoid circular imports** - Import shared constants from `utility.py`, not from other service modules
 10. **Keep it local-first** - Prefer local solutions; cloud APIs are optional
+11. **Model selection** - By default, use only `mistral-7b-instruct-v0.2.Q3_K_M.gguf`. Dynamic selection only if flag enabled
+12. **Tone normalization** - Always use `normalize_tone_label()` to ensure canonical tone labels (angry, confused, happy, frustrated, polite, urgent, neutral)
+13. **Error handling for sentiment** - Never fail sentiment detection; always return defaults (sentiment="unknown", tone="neutral") on error
 
 **When modifying existing code:**
 
@@ -324,5 +342,10 @@ uvicorn app.main:app --host 0.0.0.0 --port 5444
 
 ---
 
-**Last Updated**: 2025-01-XX (Update this when making significant changes)
+**Last Updated**: 2025-01-XX
+
+**Recent Updates**:
+- Model selection: Default to single model (`mistral-7b-instruct-v0.2.Q3_K_M.gguf`) with optional dynamic selection via flag
+- Sentiment/tone: Added canonical tone normalization, improved error handling with defaults
+- Tone guidance: Shortened to 20-60 tokens for token efficiency
 

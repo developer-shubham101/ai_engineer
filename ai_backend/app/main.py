@@ -51,11 +51,12 @@ async def lifespan(app: FastAPI):
     # Optional: Seed data at startup (uses seed_from_file in rag_local_service)
     try:
         if hasattr(rag_local_service, "seed_from_file"):
+            # This calls seed_from_file(force_reseed=False) implicitly
             seeded_ids = rag_local_service.seed_from_file()
             if seeded_ids:
                 print(f"✔ Seeded default file. Chunks added: {len(seeded_ids)}")
             else:
-                print("ℹ No seed file found, skipping startup seed.")
+                print("ℹ No seed file found or collection was already populated, skipping startup seed.")
         else:
             print("ℹ seed_from_file() not found in rag_local_service; skipping seeding.")
     except Exception as e:
