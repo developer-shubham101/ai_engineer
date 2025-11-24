@@ -384,14 +384,24 @@ async def add_document_file(
 
 
 @router.post("/seed", response_model=AddResponse)
-def seed_defaults(requester: Dict[str, Any] = Depends(get_requester)):
+def seed_defaults(
+    requester: Dict[str, Any] = Depends(get_requester),
+    reseed: bool = False # NEW: Optional query parameter
+):
     """
-    Seed default file (if present). Uses rag_local_service.seed_from_file().
-    This function will attempt to read the default path configured in the service.
+    Seed default file/directory. Uses rag_local_service.seed_from_file().
+    This function will attempt to read the default path configured in the service (now data/companyData/).
+    Set reseed=true to force a re-ingestion of all default files, potentially creating duplicates.
     """
     try:
-        ids = seed_from_file()
-        return AddResponse(message="Seeded default docs (if any).", chunk_count=len(ids))
+        # Pass the reseed flag to force re-seeding logic
+        ids = seed_from_file(force_reseed=reseed)
+        if ids:
+            return AddResponse(message=f"Seeded default docs from companyData. Chunks added: {len(ids)}.", chunk_count=len(ids))
+        else:
+            msg = "Seed operation skipped: collection not empty (use ?reseed=true to force) or no files found."
+            return AddResponse(message=msg, chunk_count=0)
+
     except Exception as e:
         logger.exception("Seeding failed: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
@@ -451,13 +461,13 @@ async def end_support_session(req: SupportSessionEndRequest, requester: Dict[str
     return SupportSessionEndResponse(session_id=req.session_id, message="Support session ended.")
 
 
-@router.post("/api/local/sentiment")
+@router.post("/sentiment")
 def api_sentiment(req: SentimentRequest):
     classifier = get_global_sentiment()
     res = classifier.predict_single(req.text)
     return {"ok": True, "result": res}
 
-@router.get("/api/local/sentiment/stats")
+@router.get("/sentiment/stats")
 def sentiment_stats_api():
     # calling the function here
     return get_sentiment_stats()   # <-- usage of get_sentiment_stats()

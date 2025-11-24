@@ -3,16 +3,10 @@
 ├── 📄 .env
 ├── 📄 .env.example
 ├── 📄 .gitignore
-├── 📁 .idea/
-│   ├── 📄 .gitignore
-│   ├── 📄 ai_backend.iml
-│   ├── 📁 inspectionProfiles/
-│   │   └── 📄 profiles_settings.xml
-│   ├── 📄 misc.xml
-│   ├── 📄 modules.xml
-│   ├── 📄 vcs.xml
-│   └── 📄 workspace.xml
+├── 📄 COPILOT_CONTEXT.md
 ├── 📄 Dockerfile
+├── 📄 LORA_WORKFLOW.md
+├── 📄 api_test.md
 ├── 📁 app/
 │   ├── 📄 __init__.py
 │   ├── 📁 __pycache__/
@@ -28,13 +22,12 @@
 │   │   │   ├── 📄 length.bin
 │   │   │   └── 📄 link_lists.bin
 │   │   └── 📄 chroma.sqlite3
+│   ├── 📁 config/
+│   │   └── 📄 onboarding_fields.json
 │   ├── 📁 data/
-│   │   ├── 📁 sessions/
 │   │   └── 📄 support_sessions.db
-│   ├── 📄 download_model.py
 │   ├── 📄 logging_config.py
 │   ├── 📄 main.py
-│   ├── 📄 quick_test.py
 │   └── 📁 services/
 │       ├── 📄 __init__.py
 │       ├── 📁 __pycache__/
@@ -49,7 +42,9 @@
 │       │   ├── 📄 rag_local_service.cpython-310.pyc
 │       │   ├── 📄 rag_manual_service.cpython-310.pyc
 │       │   ├── 📄 rag_service.cpython-310.pyc
-│       │   └── 📄 support_chat.cpython-310.pyc
+│       │   ├── 📄 sentiment_classifier.cpython-310.pyc
+│       │   ├── 📄 support_chat.cpython-310.pyc
+│       │   └── 📄 utility.cpython-310.pyc
 │       ├── 📄 auth.py
 │       ├── 📄 chroma_utils.py
 │       ├── 📄 google_models.py
@@ -60,8 +55,29 @@
 │       ├── 📄 rag_local_service.py
 │       ├── 📄 rag_manual_service.py
 │       ├── 📄 rag_service.py
-│       └── 📄 support_chat.py
+│       ├── 📄 sentiment_classifier.py
+│       ├── 📄 support_chat.py
+│       └── 📄 utility.py
 ├── 📁 data/
+│   ├── 📁 companyData/
+│   │   ├── 📄 CEO_memo_strategic_vision.md
+│   │   ├── 📄 CSR_annual_report.md
+│   │   ├── 📄 HR_policies_handbook.md
+│   │   ├── 📄 IT_legacy_retirement_memo.md
+│   │   ├── 📄 IT_security_policy.md
+│   │   ├── 📄 brand_identity_guidelines.md
+│   │   ├── 📄 crisis_response_plan.md
+│   │   ├── 📄 executive_bio_kenji_sato.md
+│   │   ├── 📄 expense_reimbursement_policy.md
+│   │   ├── 📄 financial_summary_q3_2023.md
+│   │   ├── 📄 job_description_senior_data_scientist.md
+│   │   ├── 📄 meeting_minutes_board.md
+│   │   ├── 📄 onboarding_guide_new_hire.md
+│   │   ├── 📄 product_spec_vajrascope.md
+│   │   ├── 📄 project_case_study_surya.md
+│   │   ├── 📄 project_proposal_green_sky.md
+│   │   ├── 📄 technical_incident_postmortem_INC-402.md
+│   │   └── 📄 vendor_agreement_ocean_freight.md
 │   ├── 📄 company_overview.md
 │   ├── 📄 company_overview.txt
 │   ├── 📁 examples/
@@ -191,7 +207,8 @@
 │   ├── 📄 real_world_projects.md
 │   ├── 📄 requirment.md
 │   └── 📄 task_for_ai.md
-├── 📄 instruction.txt
+├── 📄 folder_and _files.txt
+├── 📄 instruction.md
 ├── 📁 logs/
 │   └── 📄 rag_app.log
 ├── 📁 models/
@@ -201,9 +218,39 @@
 │   │       └── 📁 download/
 │   │           └── 📄 mistral-7b-instruct-v0.2.Q3_K_M.gguf.metadata
 │   └── 📄 mistral-7b-instruct-v0.2.Q3_K_M.gguf
+├── 📄 more-optmization-roadmap.md
+├── 📄 more-optmization.md
 ├── 📄 readme.md
 ├── 📄 requirements.txt
 ├── 📁 scripts/
+│   ├── 📁 companyData/
+│   │   ├── 📄 CEO_memo_strategic_vision.md
+│   │   ├── 📄 CSR_annual_report.md
+│   │   ├── 📄 HR_policies_handbook.md
+│   │   ├── 📄 IT_legacy_retirement_memo.md
+│   │   ├── 📄 IT_security_policy.md
+│   │   ├── 📄 brand_identity_guidelines.md
+│   │   ├── 📄 crisis_response_plan.md
+│   │   ├── 📄 executive_bio_kenji_sato.md
+│   │   ├── 📄 expense_reimbursement_policy.md
+│   │   ├── 📄 financial_summary_q3_2023.md
+│   │   ├── 📄 job_description_senior_data_scientist.md
+│   │   ├── 📄 meeting_minutes_board.md
+│   │   ├── 📄 onboarding_guide_new_hire.md
+│   │   ├── 📄 product_spec_vajrascope.md
+│   │   ├── 📄 project_case_study_surya.md
+│   │   ├── 📄 project_proposal_green_sky.md
+│   │   ├── 📄 technical_incident_postmortem_INC-402.md
+│   │   └── 📄 vendor_agreement_ocean_freight.md
 │   ├── 📄 download_embeddings_models.py
-│   └── 📄 seed_examples.py
+│   ├── 📄 download_model.py
+│   ├── 📄 prepare_training_data.py
+│   ├── 📄 quick_test.py
+│   ├── 📄 seed_examples.py
+│   ├── 📄 test_sentiment.py
+│   ├── 📄 train_sentiment.py
+│   └── 📄 training_data.jsonl
+├── 📁 sentiment/
+│   ├── 📄 label_encoder.json
+│   └── 📄 sentiment_pipeline.joblib
 └── 📄 symbols.md

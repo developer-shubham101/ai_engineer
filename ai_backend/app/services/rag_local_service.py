@@ -5,7 +5,7 @@ from pathlib import Path
 # new import to fetch recent messages (tone is stored there by support_chat)
 from app.services.support_chat import fetch_recent_messages
 from typing import List, Optional, Dict, Any, Tuple
-
+import json
 # Embed/LLM imports (optional at runtime)
 try:
     from sentence_transformers import SentenceTransformer
@@ -44,7 +44,7 @@ from app.services.utility import (
     sanitize_metadata_dict,
     build_tone_guidance,
     MODELS_DIR,
-    get_data_path,
+    get_data_path, is_empty, is_collection_empty,
 )
 
 logger = logging.getLogger(__name__)
@@ -57,6 +57,7 @@ DEFAULT_MODEL_NAME = "mistral-7b-instruct-v0.2.Q3_K_M.gguf"  # Primary model to 
 # Internal global handles - model cache
 _llm_instances = {}  # Dict[str, Any] - cache for different model keys
 
+
 # ---------- Utilities ----------
 
 # ---------------------------
@@ -65,25 +66,25 @@ _llm_instances = {}  # Dict[str, Any] - cache for different model keys
 def choose_model_for_task(task: str) -> str:
     """
     Choose appropriate model for a given task.
-    
+
     Returns:
         "tiny" - for short chit-chat, quick responses
         "small" - for summarization, classification, tagging, intent detection
         "mistral" - for full RAG reasoning (default)
-    
+
     Args:
         task: Task type - "chat", "summarize", "classify", "tag", "intent", "reason", "rag", etc.
     """
     task_lower = task.lower()
-    
+
     # Small model tasks
     if task_lower in ["summarize", "classification", "classify", "tag", "tagging", "intent", "intent_detection"]:
         return "small"
-    
+
     # Tiny model tasks
     if task_lower in ["chat", "chit-chat", "quick", "simple"]:
         return "tiny"
-    
+
     # Default to mistral for RAG, reasoning, and unknown tasks
     return "mistral"
 
@@ -91,35 +92,37 @@ def choose_model_for_task(task: str) -> str:
 def get_llm_instance(model_key: str = "default"):
     """
     Lazy-load and cache LLM instances.
-    
+
     By default, uses the specific model: mistral-7b-instruct-v0.2.Q3_K_M.gguf
     If ENABLE_DYNAMIC_MODEL_SELECTION is True and default model not found,
     falls back to dynamic selection based on model_key patterns.
-    
+
     Args:
         model_key: Model identifier (only used if dynamic selection enabled)
                   "mistral" - Full RAG model
                   "small" - Smaller model for summarization/classification
                   "tiny" - Smallest model for quick chat
-    
+
     Returns:
         LlamaCpp instance (cached)
     """
     global _llm_instances
-    
+
     # Check cache first (use "default" as cache key for primary model)
     cache_key = "default"
     if model_key in _llm_instances:
+        logger.debug("Returning cached LLM instance for key=%s", model_key)
         return _llm_instances[model_key]
     if cache_key in _llm_instances:
+        logger.debug("Returning cached LLM instance for cache_key=%s", cache_key)
         return _llm_instances[cache_key]
-    
+
     if LlamaCpp is None:
         raise RuntimeError("llama-cpp-python not installed. Install llama-cpp-python to use local LLM.")
-    
+
     model_path = None
     config = {"n_ctx": 2048, "n_batch": 8}  # Default config for mistral
-    
+
     # First, try to find the specific default model
     default_model_path = MODELS_DIR / DEFAULT_MODEL_NAME
     if default_model_path.exists():
@@ -133,28 +136,28 @@ def get_llm_instance(model_key: str = "default"):
                 model_path = str(test_path)
                 logger.info("Found default model (with %s extension): %s", ext, model_path)
                 break
-    
+
     # If default model not found AND dynamic selection is enabled, do dynamic search
     if not model_path and ENABLE_DYNAMIC_MODEL_SELECTION:
         logger.info("Default model not found. Dynamic selection enabled. Searching by model_key='%s'", model_key)
-        
+
         # Model file patterns by key
         model_patterns = {
             "mistral": ["*mistral*.gguf", "*mistral*.ggml", "*mistral*.bin"],
             "small": ["*small*.gguf", "*small*.ggml", "*small*.bin", "*7b*.gguf", "*7b*.ggml"],
             "tiny": ["*tiny*.gguf", "*tiny*.ggml", "*tiny*.bin", "*1b*.gguf", "*1b*.ggml", "*3b*.gguf", "*3b*.ggml"],
         }
-        
+
         # Model configs by key (n_ctx, n_batch)
         model_configs = {
             "mistral": {"n_ctx": 2048, "n_batch": 8},
             "small": {"n_ctx": 1024, "n_batch": 4},
             "tiny": {"n_ctx": 512, "n_batch": 2},
         }
-        
+
         patterns = model_patterns.get(model_key, model_patterns["mistral"])
         config = model_configs.get(model_key, model_configs["mistral"])
-        
+
         # Search for model file using patterns
         for pattern in patterns:
             files = list(MODELS_DIR.glob(pattern))
@@ -162,7 +165,7 @@ def get_llm_instance(model_key: str = "default"):
                 model_path = str(files[0])
                 logger.info("Found model via dynamic search: %s (pattern: %s)", model_path, pattern)
                 break
-        
+
         # Last resort: find any model file
         if not model_path:
             for ext in ("*.gguf", "*.ggml", "*.bin"):
@@ -171,7 +174,7 @@ def get_llm_instance(model_key: str = "default"):
                     model_path = str(files[0])
                     logger.warning("Using fallback model via dynamic search: %s", model_path)
                     break
-    
+
     if not model_path:
         if ENABLE_DYNAMIC_MODEL_SELECTION:
             raise RuntimeError(
@@ -183,7 +186,7 @@ def get_llm_instance(model_key: str = "default"):
                 f"Default model '{DEFAULT_MODEL_NAME}' not found in {MODELS_DIR}. "
                 f"Set ENABLE_DYNAMIC_MODEL_SELECTION=True to enable dynamic model selection."
             )
-    
+
     logger.info("Loading LlamaCpp model: path=%s, n_ctx=%d, n_batch=%d", model_path, config["n_ctx"], config["n_batch"])
     instance = LlamaCpp(
         model_path=model_path,
@@ -191,7 +194,7 @@ def get_llm_instance(model_key: str = "default"):
         n_batch=config["n_batch"],
         n_gpu_layers=0  # CPU-only
     )
-    
+
     # Cache the instance (use "default" as key for primary model)
     _llm_instances[cache_key] = instance
     return instance
@@ -504,7 +507,6 @@ def add_document_to_rag_local(source_name: str,
     - Computes embeddings locally for each chunk.
     - Adds documents, metadatas, ids, and embeddings to Chroma via chroma_utils.
     """
-    import json
 
     if not chunks:
         chunks = chunk_text_basic(text)
@@ -517,6 +519,7 @@ def add_document_to_rag_local(source_name: str,
     base_meta = metadata or {}
     sanitized_base = sanitize_metadata_dict(base_meta)
     sanitized_base["source"] = source_name
+    logger.debug("Ingest metadata keys (sample): %s", list(sanitized_base.keys())[:8])
     # add ingestion timestamp if not present
     if "ingested_at" not in sanitized_base:
         from datetime import datetime
@@ -524,6 +527,8 @@ def add_document_to_rag_local(source_name: str,
 
     metadatas = [dict(sanitized_base) for _ in chunks]
     ids = _generate_ids(prefix=source_name, n=len(chunks))
+    logger.info("Preparing to add document to RAG: source=%s chunks=%d ids_sample=%s", source_name, len(chunks),
+                ids[:3])
 
     # compute embeddings locally
     try:
@@ -627,6 +632,10 @@ def query_local_rag(
         collection_name=DEFAULT_COLLECTION_NAME
     )
 
+    logger.debug(
+        "query_local_rag called: query_text_len=%d n_results=%d use_llm=%s max_tokens=%d session_id=%s requester=%s",
+        len(query_text or ""), n_results, use_llm, max_tokens, session_id, (requester or {}).get("user_id"))
+
     if not query_text:
         raise ValueError("query_text must be provided")
 
@@ -664,6 +673,12 @@ def query_local_rag(
         except Exception as e:
             logger.exception("Unexpected Chroma format: %s", e)
             raw_docs, raw_metadatas, raw_ids, raw_distances = [], [], [], []
+
+    try:
+        logger.debug("Raw retrieval counts: docs=%d metadatas=%d ids=%d distances=%d",
+                     len(raw_docs), len(raw_metadatas), len(raw_ids), len(raw_distances))
+    except Exception:
+        logger.debug("Raw retrieval: unable to compute counts (unexpected shape)")
 
     # ------------------------------------------
     # 3. RBAC filtering (visible vs filtered)
@@ -728,6 +743,8 @@ def query_local_rag(
     # ------------------------------------------
     context_text = "\n\n---\n\n".join(visible_docs or [])
 
+    logger.info("Post-filtering: visible_docs=%d filtered_out=%d", len(visible_docs), filtered_out_count)
+
     out: Dict[str, Any] = {
         "documents": visible_docs,
         "metadatas": visible_metas,
@@ -757,6 +774,8 @@ def query_local_rag(
         except Exception as e:
             logger.warning("Tone fetch failed: %s", e)
 
+    logger.debug("Last user tone detected: %s", last_user_tone)
+
     tone_note = build_tone_guidance(last_user_tone)
 
     # Build LLM prefix
@@ -769,6 +788,15 @@ def query_local_rag(
         f"Conversation Tone Guidance:\n{tone_note}\n\n"
         f"{system_prefix}"
     )
+
+    # Log approx sizes for debugging
+    try:
+        approx_prefix_tokens = estimate_tokens_from_text(final_prefix)
+        approx_context_tokens = estimate_tokens_from_text(context_text)
+        logger.debug("Prompt sizes: prefix_chars=%d context_chars=%d est_prefix_tokens=%d est_context_tokens=%d",
+                     len(final_prefix), len(context_text), approx_prefix_tokens, approx_context_tokens)
+    except Exception:
+        logger.debug("Failed to estimate prompt sizes")
 
     # ------------------------------------------
     # 6. LLM Call with Model Routing
@@ -784,7 +812,7 @@ def query_local_rag(
             # Use default model (mistral-7b-instruct-v0.2.Q3_K_M)
             model_key = "default"
             logger.info("Using default model: %s", DEFAULT_MODEL_NAME)
-        
+
         try:
             llm_instance = get_llm_instance(model_key)
         except Exception as e:
@@ -808,39 +836,79 @@ def query_local_rag(
             logger.exception("LLM call failed: %s", e)
             raise
 
+        try:
+            answer_len = len(str(answer)) if answer is not None else 0
+        except Exception:
+            answer_len = 0
+        logger.info("LLM returned answer (approx length=%d) for query session=%s", answer_len, session_id)
+
         out["answer"] = answer
 
     return out
 
 
-def seed_from_file(file_path: Optional[str] = None, source_name: Optional[str] = None) -> List[str]:
+def seed_from_file(file_path: Optional[str] = None, source_name: Optional[str] = None, force_reseed: bool = False) -> List[str]:
     """
     Read the given file or directory and index it.
 
     Behavior:
-    - If file_path is None: attempts to seed from default project data/company_overview.txt.
+    - If file_path is None: attempts to seed from default project data/companyData directory.
+    - If collection is NOT empty AND force_reseed is False, it skips seeding.
     - If file_path is a file: read & ingest that single file.
     - If file_path is a directory: iterate non-recursively through files in the directory
       and ingest each file found (skip directories). Returns a flat list of all chunk ids added.
 
     Returns list of ids added (may be empty).
     """
-    default_path = get_data_path("company_overview.txt")
+
+    # NEW DEFAULT PATH: data/companyData
+    default_path = get_data_path("companyData")
     path = Path(file_path) if file_path else default_path
+    logger.info("looking for path for data %s", path)
     if not path.exists():
         logger.warning("Seed path not found at %s", path)
+        return []
+
+    # Check collection size for "load once" logic on startup
+    client, collection = ensure_chroma_client(persist_directory=str(DEFAULT_PERSIST_DIR),
+                                              collection_name=DEFAULT_COLLECTION_NAME)
+    try:
+        data = get_collection_data(collection)
+        SHOW_DATA = True
+        if SHOW_DATA:
+            from rich import print as rprint
+            rprint(data.get("ids"))
+        has_data = not is_collection_empty(data)
+    except Exception as e:
+        logger.warning("Could not check collection size: %s. Assuming zero.", e)
+        has_data = False
+        data = {"ids":[]}
+
+    logger.info("has_data %s", has_data)
+    if has_data and not force_reseed:
+        logger.info(
+            "Collection already contains %d documents. Skipping seed on startup (use /seed?reseed=true to force).",
+            len(data.get("ids")))
         return []
 
     added_ids: List[str] = []
 
     # If path is a directory, iterate files (non-recursive) and ingest each
     if path.is_dir():
+        # NOTE: If force_reseed is True, we are re-adding chunks which may result in duplicates
+        # unless IDs are managed carefully. For a learning environment, this is often acceptable
+        # for a "refresh" or requires a full collection clear, which is a separate endpoint.
+        # We will log a warning if reseed is forced.
+        if force_reseed:
+            logger.warning("Force re-seeding entire directory: %s. This may create duplicate chunks.", path)
+
         logger.info("Seeding directory: %s", path)
         for child in sorted(path.iterdir()):
             if child.is_file():
                 try:
                     text = child.read_text(encoding="utf-8")
-                    src_name = source_name or child.name
+                    # Use relative path + name for source_name for better uniqueness
+                    src_name = str(child.relative_to(path.parent))
                     ids = add_document_to_rag_local(source_name=src_name, text=text, chunks=None,
                                                     metadata={"seeded": True})
                     if ids:
@@ -851,7 +919,7 @@ def seed_from_file(file_path: Optional[str] = None, source_name: Optional[str] =
                     continue
         return added_ids
 
-    # Otherwise, it's a single file; ingest it.
+    # Otherwise, it's a single file; ingest it. (Old behavior, primarily for backward compatibility)
     try:
         text = path.read_text(encoding="utf-8")
     except Exception as e:
