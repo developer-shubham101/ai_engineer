@@ -343,7 +343,7 @@ async def add_document_file(
 
 
 @router.post("/seed", response_model=AddResponse)
-def seed_defaults(
+async def seed_defaults(
     requester: Dict[str, Any] = Depends(get_requester),
     reseed: bool = False
 ):

@@ -1,11 +1,13 @@
 from __future__ import annotations
+
 import logging
 import uuid
 from pathlib import Path
+from typing import List, Optional, Dict, Any
+
 # new import to fetch recent messages (tone is stored there by support_chat)
 from app.services.support_chat import fetch_recent_messages
-from typing import List, Optional, Dict, Any, Tuple
-import json
+
 # Embed/LLM imports (optional at runtime)
 try:
     from sentence_transformers import SentenceTransformer
@@ -23,28 +25,20 @@ from app.services.chroma_utils import (
     add_documents_to_collection,
     query_collection,
     get_collection_data,
-    get_documents_by_ids,
     update_metadatas,
-    delete_ids,
     delete_all_documents,
-    delete_collection_by_name,
 )
 
 # Import centralized utilities
 from app.services.utility import (
-    BASE_DIR,
-    DATA_DIR,
     DEFAULT_PERSIST_DIR,
     DEFAULT_COLLECTION_NAME,
-    EMBEDDING_MODEL_NAME,
-    get_local_embedding_model_path,
-    get_embedding_model_instance,
     embed_texts,
     chunk_text_basic,
     sanitize_metadata_dict,
     build_tone_guidance,
     MODELS_DIR,
-    get_data_path, is_empty, is_collection_empty,
+    get_data_path, is_collection_empty,
 )
 
 logger = logging.getLogger(__name__)
@@ -847,7 +841,8 @@ def query_local_rag(
     return out
 
 
-def seed_from_file(file_path: Optional[str] = None, source_name: Optional[str] = None, force_reseed: bool = False) -> List[str]:
+async def seed_from_file(file_path: Optional[str] = None, source_name: Optional[str] = None,
+                         force_reseed: bool = False) -> List[str]:
     """
     Read the given file or directory and index it.
 
@@ -882,7 +877,7 @@ def seed_from_file(file_path: Optional[str] = None, source_name: Optional[str] =
     except Exception as e:
         logger.warning("Could not check collection size: %s. Assuming zero.", e)
         has_data = False
-        data = {"ids":[]}
+        data = {"ids": []}
 
     logger.info("has_data %s", has_data)
     if has_data and not force_reseed:

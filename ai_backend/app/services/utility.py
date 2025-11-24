@@ -105,7 +105,7 @@ def get_embedding_model_instance():
     return _embedding_model_instance
 
 
-def embed_texts(texts: List[str]) -> List[List[float]]:
+async def embed_texts(texts: List[str]) -> List[List[float]]:
     """Embed a list of texts using the shared embedding model."""
     model = get_embedding_model_instance()
     vectors = model.encode(texts, convert_to_numpy=True).tolist()
