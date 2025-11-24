@@ -22,7 +22,7 @@ from app.services import rag_manual_service as rag_manual_service
 from app.services import rag_local_service as rag_local_service
 
 # Routers
-from app.api_routes_local import router as local_router
+from app.api_routes_rag import router as rag_router
 
 logger = setup_logging()
 
@@ -56,11 +56,11 @@ async def lifespan(app: FastAPI):
             if seeded_ids:
                 print(f"✔ Seeded default file. Chunks added: {len(seeded_ids)}")
             else:
-                print("ℹ No seed file found or collection was already populated, skipping startup seed.")
+                logger.info("No seed file found or collection was already populated, skipping startup seed.")
         else:
-            print("ℹ seed_from_file() not found in rag_local_service; skipping seeding.")
+            logger.info("seed_from_file() not found in rag_local_service; skipping seeding.")
     except Exception as e:
-        print(f"⚠ Seeding at startup skipped or failed: {e}")
+        logger.warning(f"Seeding at startup skipped or failed: {e}")
 
     yield
 
@@ -77,7 +77,7 @@ app = FastAPI(
 )
 
 # Register routers
-app.include_router(local_router)
+app.include_router(rag_router)
 
 # CORS (for development only)
 app.add_middleware(
@@ -220,32 +220,3 @@ async def add_document(file: UploadFile = File(...)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to process document: {e}")
 
-
-# Local ingestion endpoint (uses the local rag service which is optimized for persistent storage)
-from app.services.rag_local_service import add_document_to_rag_local
-
-@app.post("/add-document-local",
-          response_model=GenerationResponse,
-          tags=["Local RAG"])
-async def add_document_local(file: UploadFile = File(...)):
-    """
-    Add a new text document to the local RAG knowledge base (persistent).
-    Uses local embeddings + chroma storage.
-    """
-    try:
-        raw = await file.read()
-        if not raw:
-            raise HTTPException(status_code=400, detail="Uploaded file is empty.")
-        document_text = raw.decode("utf-8", errors="ignore")
-        chunk_ids = add_document_to_rag_local(source_name=file.filename, text=document_text)
-        if chunk_ids:
-            msg = f"Successfully ingested '{file.filename}'. {len(chunk_ids)} chunks created and stored."
-            return GenerationResponse(generated_text=msg)
-        else:
-            raise HTTPException(status_code=400, detail="Failed to process file or file was empty.")
-    except HTTPException:
-        raise
-    except ConnectionError as ce:
-        raise HTTPException(status_code=503, detail=str(ce))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to process document: {e}")
