@@ -2,10 +2,10 @@
 Centralized utility module for common paths, constants, and shared functions.
 This module prevents code duplication and circular import issues.
 """
-from pathlib import Path
-from typing import Optional, Dict, Any, List
 import logging
 import os
+from pathlib import Path
+from typing import Optional, Dict, Any, List
 
 logger = logging.getLogger(__name__)
 
@@ -42,6 +42,7 @@ SENTIMENT_ARTIFACTS_DIR = PROJECT_ROOT / "sentiment"
 # ============================================================================
 DEFAULT_PERSIST_DIR = CHROMA_STORAGE_DIR
 DEFAULT_COLLECTION_NAME = "local_manual_rag"
+
 
 # ============================================================================
 # FILE PATHS

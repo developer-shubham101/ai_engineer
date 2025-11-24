@@ -1,15 +1,18 @@
 # app/services/google_models.py
 
 import os
+
 from dotenv import load_dotenv
-from langchain.prompts import PromptTemplate
 from langchain.chains import LLMChain, ConversationChain
 from langchain.memory import ConversationBufferMemory
+from langchain.prompts import PromptTemplate
 from langchain_google_genai import ChatGoogleGenerativeAI
-from .llm_service import IdeaRequest, IdeaResponse
-
 # We need a new Pydantic model for our chat endpoint
 from pydantic import BaseModel, Field
+
+from .chroma_utils import ensure_chroma_client, query_collection
+from .llm_service import IdeaRequest, IdeaResponse
+from .rag_local_service import estimate_tokens_from_text, build_prompt_with_selected_chunks
 
 load_dotenv()
 
@@ -23,14 +26,10 @@ class ChatResponse(BaseModel):
 
 
 import logging
-from typing import List, Optional, Dict, Any
+from typing import Optional, Dict, Any
 
-from app.config import DEFAULT_PERSIST_DIR, DEFAULT_COLLECTION_NAME
-from app.services.chroma_utils import ensure_chroma_client, query_collection
-from app.services.prompt_builder import build_prompt_with_selected_chunks, build_tone_guidance, \
-    estimate_tokens_from_text
 from app.services.support_chat import fetch_recent_messages
-from app.services.utility import embed_texts
+from app.services.utility import embed_texts, DEFAULT_PERSIST_DIR, DEFAULT_COLLECTION_NAME, build_tone_guidance
 
 logger = logging.getLogger(__name__)
 

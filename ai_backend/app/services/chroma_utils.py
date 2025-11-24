@@ -4,7 +4,6 @@
 # Use these helpers from other service modules to keep DB logic centralized.
 
 import logging
-from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 try:
@@ -22,7 +21,8 @@ from app.services.utility import (
 )
 
 
-def ensure_chroma_client(persist_directory: Optional[str] = None, collection_name: Optional[str] = None) -> Tuple[Any, Any]:
+def ensure_chroma_client(persist_directory: Optional[str] = None, collection_name: Optional[str] = None) -> Tuple[
+    Any, Any]:
     """
     Initialize (or return cached) chroma client and collection.
     Returns (client, collection).
@@ -64,7 +64,7 @@ def add_documents_to_collection(collection: Any,
     Add documents to an existing collection. Handles different chroma method signatures.
     """
     logger.warning("Mark:- add_documents_to_collection called where documents=%s, metadatas=%s, ids=%s, embeddings=%s",
-                 documents, metadatas, ids, "provided" if embeddings else "not provided")
+                   documents, metadatas, ids, "provided" if embeddings else "not provided")
 
     try:
         if embeddings is not None:
