@@ -109,10 +109,18 @@ export default function Login({ onLoginSuccess }) {
                 </button>
               </form>
 
-              <div className="mt-4 text-center">
-                <small className="text-muted">
-                  Default credentials: admin / admin123
-                </small>
+              <div className="mt-3">
+                <button
+                  type="button"
+                  className="btn btn-outline-secondary w-100"
+                  onClick={() => {
+                    setUsername('guest');
+                    setPassword('guest123');
+                  }}
+                  disabled={loading}
+                >
+                  Login with Guest
+                </button>
               </div>
             </div>
           </div>
