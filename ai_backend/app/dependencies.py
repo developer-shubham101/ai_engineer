@@ -2,18 +2,18 @@
 """
 Dependency injection providers for FastAPI.
 """
-from typing import Optional, List
-from fastapi import Depends, HTTPException, status, Header
+from typing import Optional, List, Dict, Any
+from fastapi import Depends, HTTPException, status, Security
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import logging
 
 from app.services import rag_local_service
-from app.services.auth import verify_token, get_user_from_api_key
+from app.services.auth import verify_token
 
 logger = logging.getLogger(__name__)
 
 # Security scheme for Bearer token
-security = HTTPBearer(auto_error=False)
+security = HTTPBearer(auto_error=False, scheme_name="Bearer", description="Enter your JWT token")
 
 
 def get_rag_service():
@@ -25,81 +25,54 @@ def get_rag_service():
 
 
 def get_current_user(
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
-    x_api_key: Optional[str] = Header(None)
-) -> dict:
+    credentials: Optional[HTTPAuthorizationCredentials] = Security(security)
+) -> Dict[str, Any]:
     """
-    Get the current authenticated user from Bearer token or API key.
+    Dependency to get the current authenticated user from Bearer token.
+    Raises 401 if no valid token is provided.
     
-    Priority:
-    1. Bearer token (Authorization header)
-    2. X-API-Key header (legacy support)
-    3. Raise 401 if neither provided
+    Authentication:
+    1. Authorization: Bearer <token> (JWT token)
     
     Returns:
-        User dict with user_id, role, department
+        User dict with user_id, username, role, department
     """
-    # Try Bearer token first
-    if credentials and credentials.credentials:
-        token_data = verify_token(credentials.credentials)
-        if token_data:
-            return {
-                "user_id": token_data.get("user_id"),
-                "username": token_data.get("username"),
-                "role": token_data.get("role"),
-                "department": token_data.get("department")
-            }
-        else:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid or expired token",
-                headers={"WWW-Authenticate": "Bearer"},
-            )
-    
-    # Try legacy API key
-    if x_api_key:
-        user = get_user_from_api_key(x_api_key)
+    # Try Bearer token
+    if credentials:
+        token = credentials.credentials
+        user = verify_token(token)
         if user:
             return user
     
-    # No authentication provided
+    # No valid authentication found
     raise HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Not authenticated",
+        detail="Could not validate credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
 
 
 def get_current_user_optional(
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
-    x_api_key: Optional[str] = Header(None)
-) -> Optional[dict]:
+    credentials: Optional[HTTPAuthorizationCredentials] = Security(security)
+) -> Optional[Dict[str, Any]]:
     """
-    Get the current user if authenticated, otherwise return None (Guest).
-    Used for endpoints that allow both authenticated and unauthenticated access.
+    Dependency to optionally get the current authenticated user from Bearer token.
+    Returns None if no valid token is provided (treats as Guest user).
+    
+    Authentication:
+    1. Authorization: Bearer <token> (JWT token)
     
     Returns:
-        User dict if authenticated
-        None if not authenticated (Guest user)
+        User dict with user_id, username, role, department, or None for Guest
     """
     # Try Bearer token
-    if credentials and credentials.credentials:
-        token_data = verify_token(credentials.credentials)
-        if token_data:
-            return {
-                "user_id": token_data.get("user_id"),
-                "username": token_data.get("username"),
-                "role": token_data.get("role"),
-                "department": token_data.get("department")
-            }
-    
-    # Try legacy API key
-    if x_api_key:
-        user = get_user_from_api_key(x_api_key)
+    if credentials:
+        token = credentials.credentials
+        user = verify_token(token)
         if user:
             return user
     
-    # Return None for Guest users
+    # No authentication provided - treat as Guest
     return None
 
 
@@ -116,7 +89,7 @@ def require_roles(allowed_roles: List[str]):
     Returns:
         Dependency function that checks if user has required role
     """
-    def check_role(current_user: dict = Depends(get_current_user)):
+    def check_role(current_user: Dict[str, Any] = Depends(get_current_user)):
         user_role = current_user.get("role")
         
         if user_role not in allowed_roles:

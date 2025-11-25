@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Optional, Any, Dict
 
-from fastapi import FastAPI, HTTPException, File, UploadFile
+from fastapi import FastAPI, HTTPException, File, UploadFile, Depends
 from fastapi.middleware.cors import CORSMiddleware
 
 # Logging setup
@@ -23,6 +23,10 @@ from app.services import rag_local_service as rag_local_service
 # Routers
 from app.api_routes_rag import router as rag_router
 from app.api_routes_auth import router as auth_router
+
+# Dependencies
+from app.dependencies import get_current_user_optional
+from app.services.user_service import get_all_user_meta
 
 logger = setup_logging()
 
@@ -108,8 +112,18 @@ def read_root():
 @app.post("/summarize",
           response_model=llm_service.SummarizationResponse,
           tags=["LLM Services"])
-def summarize(request: llm_service.TextRequest):
+def summarize(request: llm_service.TextRequest, user: Optional[Dict[str, Any]] = Depends(get_current_user_optional)):
+    """
+    Summarize text. Optionally provide Bearer token for personalized responses.
+    """
     try:
+        # Add user profile to request if authenticated
+        if user:
+            profile = get_all_user_meta(user["user_id"])
+            if profile:
+                # Prepend profile context to text
+                profile_text = "User Profile: " + ", ".join([f"{k}: {v}" for k, v in profile.items()])
+                request.text = f"{profile_text}\n\n{request.text}"
         return llm_service.summarize_text(request)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -118,8 +132,18 @@ def summarize(request: llm_service.TextRequest):
 @app.post("/generate",
           response_model=llm_service.GenerationResponse,
           tags=["LLM Services"])
-def generate(request: llm_service.TextRequest):
+def generate(request: llm_service.TextRequest, user: Optional[Dict[str, Any]] = Depends(get_current_user_optional)):
+    """
+    Generate text. Optionally provide Bearer token for personalized responses.
+    """
     try:
+        # Add user profile to request if authenticated
+        if user:
+            profile = get_all_user_meta(user["user_id"])
+            if profile:
+                # Prepend profile context to text
+                profile_text = "User Profile: " + ", ".join([f"{k}: {v}" for k, v in profile.items()])
+                request.text = f"{profile_text}\n\n{request.text}"
         return llm_service.generate_text(request)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

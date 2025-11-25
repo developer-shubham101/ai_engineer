@@ -13,7 +13,6 @@ from app.dependencies import get_rag_service, get_current_user, get_current_user
 from app.services.user_service import get_all_user_meta, set_user_meta
 
 from app.services.google_models import query_google_rag
-from app.services.auth import get_user_from_api_key
 from app.services import support_chat
 
 from app.services.support_chat import (
