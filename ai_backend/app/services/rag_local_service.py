@@ -174,54 +174,15 @@ async def add_document_to_rag_local(source_name: str,
     return ids
 
 
-async def query_local_rag(
-        query_text: str,
-        n_results: int = 3,
-        requester: Optional[Dict[str, str]] = None,
-        llm_prompt_prefix: Optional[str] = None,
-        use_llm: bool = True,
-        max_tokens: int = 256,
-        session_id: Optional[str] = None
-) -> Dict[str, Any]:
+async def retrieve_documents(query_text: str, n_results: int) -> Dict[str, Any]:
     """
-    Query the local RAG service.
-
-    This is the main function for querying the RAG. It performs the following steps:
-    1. Computes an embedding for the user's query.
-    2. Retrieves the top-k most relevant documents from ChromaDB.
-    3. Applies Role-Based Access Control (RBAC) to filter the retrieved documents.
-    4. Injects tone-aware guidance into the LLM prompt prefix.
-    5. If `use_llm` is True, it calls the LLM with the constructed prompt to generate an answer.
-    6. Returns a dictionary containing the answer, retrieved documents, and other metadata.
-
-    Args:
-        query_text: The user's query.
-        n_results: The number of documents to retrieve.
-        requester: A dictionary containing information about the user making the request (for RBAC).
-        llm_prompt_prefix: A prefix to add to the LLM prompt.
-        use_llm: Whether to use the LLM to generate an answer.
-        max_tokens: The maximum number of tokens for the LLM to generate.
-        session_id: The ID of the user's session (for fetching conversation history and tone).
-
-    Returns:
-        A dictionary containing the RAG output.
+    Retrieve documents from ChromaDB based on query embedding.
     """
-    # Ensure Chroma client
     client, collection = ensure_chroma_client(
         persist_directory=str(DEFAULT_PERSIST_DIR),
         collection_name=DEFAULT_COLLECTION_NAME
     )
 
-    logger.debug(
-        "query_local_rag called: query_text_len=%d n_results=%d use_llm=%s max_tokens=%d session_id=%s requester=%s",
-        len(query_text or ""), n_results, use_llm, max_tokens, session_id, (requester or {}).get("user_id"))
-
-    if not query_text:
-        raise ValueError("query_text must be provided")
-
-    # -----------------------------
-    # 1. Get embedding for query
-    # -----------------------------
     try:
         q_emb = (await embed_texts([query_text]))[0]
         logger.debug("Computed query embedding.")
@@ -229,16 +190,18 @@ async def query_local_rag(
         logger.exception("Failed to embed query: %s", e)
         raise
 
-    # -----------------------------
-    # 2. Retrieve from Chroma
-    # -----------------------------
     try:
         result = query_collection(collection=collection, query_embeddings=[q_emb], n_results=n_results)
     except Exception:
-        # fallback to text search
         result = query_collection(collection=collection, query_texts=[query_text], n_results=n_results)
 
-    # Normalize shapes
+    return result
+
+
+def normalize_chroma_result(result: Any) -> tuple:
+    """
+    Normalize ChromaDB result into standard lists.
+    """
     if isinstance(result, dict):
         raw_docs = (result.get("documents") or [[]])[0]
         raw_metadatas = (result.get("metadatas") or [[]])[0]
@@ -253,47 +216,51 @@ async def query_local_rag(
         except Exception as e:
             logger.exception("Unexpected Chroma format: %s", e)
             raw_docs, raw_metadatas, raw_ids, raw_distances = [], [], [], []
+    return raw_docs, raw_metadatas, raw_ids, raw_distances
 
-    try:
-        logger.debug("Raw retrieval counts: docs=%d metadatas=%d ids=%d distances=%d",
-                     len(raw_docs), len(raw_metadatas), len(raw_ids), len(raw_distances))
-    except Exception:
-        logger.debug("Raw retrieval: unable to compute counts (unexpected shape)")
 
-    # ------------------------------------------
-    # 3. RBAC filtering (visible vs filtered)
-    # ------------------------------------------
-    def _allowed_by_metadata(meta: Optional[Dict[str, Any]], requester: Optional[Dict[str, str]]) -> bool:
-        """Check if a document is accessible based on its metadata and the requester's role/department."""
-        sens = meta.get("sensitivity", "public_internal") if meta else "public_internal"
+def _allowed_by_metadata(meta: Optional[Dict[str, Any]], requester: Optional[Dict[str, str]]) -> bool:
+    """Check if a document is accessible based on its metadata and the requester's role/department."""
+    sens = meta.get("sensitivity", "public_internal") if meta else "public_internal"
 
-        # personal
-        if sens == "personal":
-            owner = meta.get("owner_id")
-            if requester and owner == requester.get("user_id"):
-                return True
-            return requester and requester.get("role") in ("HR", "Legal", "Executive")
+    # personal
+    if sens == "personal":
+        owner = meta.get("owner_id")
+        if requester and owner == requester.get("user_id"):
+            return True
+        return requester and requester.get("role") in ("HR", "Legal", "Executive")
 
-        # highly_confidential
-        if sens == "highly_confidential":
-            return requester and requester.get("role") in ("Legal", "Executive")
+    # highly_confidential
+    if sens == "highly_confidential":
+        return requester and requester.get("role") in ("Legal", "Executive")
 
-        # role_confidential
-        if sens == "role_confidential":
-            allowed_roles = meta.get("allowed_roles") or []
-            if requester and requester.get("role") in allowed_roles:
-                return True
-            return requester and requester.get("role") in ("HR", "Legal", "Executive")
+    # role_confidential
+    if sens == "role_confidential":
+        allowed_roles = meta.get("allowed_roles") or []
+        if requester and requester.get("role") in allowed_roles:
+            return True
+        return requester and requester.get("role") in ("HR", "Legal", "Executive")
 
-        # department_confidential
-        if sens == "department_confidential":
-            if requester and requester.get("department") == meta.get("department"):
-                return True
-            return requester and requester.get("role") in ("HR", "Legal", "Executive")
+    # department_confidential
+    if sens == "department_confidential":
+        if requester and requester.get("department") == meta.get("department"):
+            return True
+        return requester and requester.get("role") in ("HR", "Legal", "Executive")
 
-        # public_internal
-        return True
+    # public_internal
+    return True
 
+
+def filter_documents_by_rbac(
+    raw_docs: List[str],
+    raw_metadatas: List[Dict],
+    raw_ids: List[str],
+    raw_distances: List[float],
+    requester: Optional[Dict[str, str]]
+) -> Dict[str, Any]:
+    """
+    Filter documents based on RBAC rules.
+    """
     visible_docs, visible_metas, visible_ids, visible_distances = [], [], [], []
     public_summaries, filtered_details = [], []
     filtered_out_count = 0
@@ -319,31 +286,21 @@ async def query_local_rag(
         except Exception as e:
             logger.exception("Metadata filtering error: %s", e)
 
-    # ------------------------------------------
-    # 4. Build Context
-    # ------------------------------------------
-    context_text = "\n\n---\n\n".join(visible_docs or [])
-
-    logger.info("Post-filtering: visible_docs=%d filtered_out=%d", len(visible_docs), filtered_out_count)
-
-    out: Dict[str, Any] = {
+    return {
         "documents": visible_docs,
         "metadatas": visible_metas,
         "ids": visible_ids,
         "distances": visible_distances,
-        "raw_documents": raw_docs,
-        "raw_metadatas": raw_metadatas,
-        "raw_ids": raw_ids,
-        "raw_distances": raw_distances,
-        "context": context_text,
         "filtered_out_count": filtered_out_count,
         "public_summaries": public_summaries,
-        "filtered_details": filtered_details,
+        "filtered_details": filtered_details
     }
 
-    # ------------------------------------------
-    # 5. Tone-Based Prefix Injection
-    # ------------------------------------------
+
+def inject_tone_guidance(session_id: Optional[str], llm_prompt_prefix: Optional[str]) -> str:
+    """
+    Inject tone guidance into the LLM prompt prefix based on session history.
+    """
     last_user_tone = None
     if session_id:
         try:
@@ -356,72 +313,112 @@ async def query_local_rag(
             logger.warning("Tone fetch failed: %s", e)
 
     logger.debug("Last user tone detected: %s", last_user_tone)
-
     tone_note = build_tone_guidance(last_user_tone)
 
-    # Build LLM prefix
     system_prefix = llm_prompt_prefix or (
         "You are a helpful assistant. Use the provided context to answer the question. "
         "If the answer is not present in the context, say you don't know."
     )
 
-    final_prefix = (
-        f"Conversation Tone Guidance:\n{tone_note}\n\n"
-        f"{system_prefix}"
+    return f"Conversation Tone Guidance:\n{tone_note}\n\n{system_prefix}"
+
+
+async def generate_rag_response(
+    query_text: str,
+    context_text: str,
+    final_prefix: str,
+    use_llm: bool,
+    max_tokens: int,
+    session_id: Optional[str]
+) -> Optional[str]:
+    """
+    Generate a response using the LLM if requested.
+    """
+    if not use_llm:
+        return None
+
+    if ENABLE_DYNAMIC_MODEL_SELECTION:
+        task = "reason"
+        model_key = choose_model_for_task(task)
+        logger.info("Model chosen=%s for task=%s (dynamic selection enabled)", model_key, task)
+    else:
+        model_key = "default"
+        logger.info("Using default model: %s", DEFAULT_MODEL_NAME)
+
+    try:
+        llm_instance = get_llm_instance(model_key)
+    except Exception as e:
+        logger.exception("Failed to load LLM instance: %s", e)
+        raise
+
+    prompt = build_prompt_with_selected_chunks(final_prefix, context_text, query_text)
+
+    try:
+        answer = await _call_llm_with_retry(
+            llm_instance,
+            prompt,
+            max_tokens=max_tokens,
+            temperature=0.0
+        )
+    except Exception as e:
+        logger.exception("LLM call failed: %s", e)
+        raise
+
+    return answer
+
+
+async def query_local_rag(
+        query_text: str,
+        n_results: int = 3,
+        requester: Optional[Dict[str, str]] = None,
+        llm_prompt_prefix: Optional[str] = None,
+        use_llm: bool = True,
+        max_tokens: int = 256,
+        session_id: Optional[str] = None
+) -> Dict[str, Any]:
+    """
+    Query the local RAG service.
+    """
+    logger.debug(
+        "query_local_rag called: query_text_len=%d n_results=%d use_llm=%s max_tokens=%d session_id=%s requester=%s",
+        len(query_text or ""), n_results, use_llm, max_tokens, session_id, (requester or {}).get("user_id"))
+
+    if not query_text:
+        raise ValueError("query_text must be provided")
+
+    # 1. Retrieve
+    raw_result = await retrieve_documents(query_text, n_results)
+    raw_docs, raw_metadatas, raw_ids, raw_distances = normalize_chroma_result(raw_result)
+
+    # 2. Filter (RBAC)
+    filtered_result = filter_documents_by_rbac(raw_docs, raw_metadatas, raw_ids, raw_distances, requester)
+    
+    visible_docs = filtered_result["documents"]
+    context_text = "\n\n---\n\n".join(visible_docs or [])
+
+    # 3. Tone Guidance
+    final_prefix = inject_tone_guidance(session_id, llm_prompt_prefix)
+
+    # 4. Generate
+    answer = await generate_rag_response(
+        query_text, context_text, final_prefix, use_llm, max_tokens, session_id
     )
 
-    # Log approx sizes for debugging
-    try:
-        approx_prefix_tokens = estimate_tokens_from_text(final_prefix)
-        approx_context_tokens = estimate_tokens_from_text(context_text)
-        logger.debug("Prompt sizes: prefix_chars=%d context_chars=%d est_prefix_tokens=%d est_context_tokens=%d",
-                     len(final_prefix), len(context_text), approx_prefix_tokens, approx_context_tokens)
-    except Exception:
-        logger.debug("Failed to estimate prompt sizes")
-
-    # ------------------------------------------
-    # 6. LLM Call with Model Routing
-    # ------------------------------------------
-    if use_llm:
-        # Use dynamic model selection only if enabled, otherwise use default model
-        if ENABLE_DYNAMIC_MODEL_SELECTION:
-            # Choose model based on task type (default to "reason" for RAG)
-            task = "reason"  # Could be made configurable via parameter
-            model_key = choose_model_for_task(task)
-            logger.info("Model chosen=%s for task=%s (dynamic selection enabled)", model_key, task)
-        else:
-            # Use default model (mistral-7b-instruct-v0.2.Q3_K_M)
-            model_key = "default"
-            logger.info("Using default model: %s", DEFAULT_MODEL_NAME)
-
-        try:
-            llm_instance = get_llm_instance(model_key)
-        except Exception as e:
-            logger.exception("Failed to load LLM instance: %s", e)
-            raise
-
-        prompt = build_prompt_with_selected_chunks(final_prefix, context_text, query_text)
-
-        try:
-            answer = await _call_llm_with_retry(
-                llm_instance,
-                prompt,
-                max_tokens=max_tokens,
-                temperature=0.0
-            )
-        except Exception as e:
-            logger.exception("LLM call failed: %s", e)
-            raise
-
-        try:
-            answer_len = len(str(answer)) if answer is not None else 0
-        except Exception:
-            answer_len = 0
-        logger.info("LLM returned answer (approx length=%d) for query session=%s", answer_len, session_id)
-
-        out["answer"] = answer
-
-    return out
+    return {
+        "documents": visible_docs,
+        "metadatas": filtered_result["metadatas"],
+        "ids": filtered_result["ids"],
+        "distances": filtered_result["distances"],
+        "raw_documents": raw_docs,
+        "raw_metadatas": raw_metadatas,
+        "raw_ids": raw_ids,
+        "raw_distances": raw_distances,
+        "context": context_text,
+        "filtered_out_count": filtered_result["filtered_out_count"],
+        "public_summaries": filtered_result["public_summaries"],
+        "filtered_details": filtered_result["filtered_details"],
+        "answer": answer
+    }
 
 
 async def seed_from_file(file_path: Optional[str] = None, source_name: Optional[str] = None,

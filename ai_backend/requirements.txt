@@ -40,3 +40,7 @@ rich
 # --- Text Parsing ---
 markdown==3.5.2
 beautifulsoup4==4.12.3
+
+# --- Authentication & Security ---
+pyjwt==2.8.0
+passlib[bcrypt]==1.7.4

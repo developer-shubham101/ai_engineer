@@ -30,3 +30,11 @@ EMBEDDING_MODEL_NAME = "all-MiniLM-L6-v2"
 # ============================================================================
 DEFAULT_PERSIST_DIR = str(CHROMA_STORAGE_DIR)
 DEFAULT_COLLECTION_NAME = "local_manual_rag"
+
+# ============================================================================
+# AUTHENTICATION & SECURITY
+# ============================================================================
+# JWT Configuration
+JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "your-secret-key-change-in-production-please-use-env-file")
+JWT_ALGORITHM = "HS256"
+JWT_EXPIRATION_DAYS = int(os.getenv("JWT_EXPIRATION_DAYS", "1"))  # Token expires in 1 day by default

@@ -22,28 +22,40 @@ User Request → FastAPI → RAG Pipeline → RBAC Filter → LLM (Local or Goog
 
 ### Main Components
 
-- **Backend**: FastAPI application (`app/main.py`, `app/api_routes_rag.py`)
-- **Configuration**: Centralized settings in `app/config.py`
+- **Backend**: FastAPI application (`app/main.py`, `app/api_routes_rag.py`, `app/api_routes_auth.py`)
+- **Configuration**: Centralized settings in `app/config.py` (includes JWT configuration)
+- **Dependency Injection**: `app/dependencies.py` - Provides service dependencies and authentication for testability
+- **Authentication & Authorization**:
+  - `user_service.py` - User management with SQLite database, password hashing (bcrypt), **user profile storage (user_meta table)**
+  - `auth.py` - JWT token generation and verification
+  - `api_routes_auth.py` - Authentication endpoints (`/api/auth/token`)
+  - Bearer token authentication via `Authorization` header
+  - Role-based access control (RBAC) for endpoints
+  - **Auto-session creation on login using user_id**
 - **RAG Services**: 
-  - `rag_local_service.py` - Core RAG with RBAC and data indexing logic for local models.
+  - `rag_local_service.py` - Core RAG with RBAC and data indexing logic for local models (modular architecture).
   - `google_models.py` - RAG logic for Google's generative models.
   - `model_manager.py` - Handles loading and caching of local LLM instances.
   - `prompt_builder.py` - Constructs prompts and manages token budgets.
 - **Vector DB**: ChromaDB (persistent storage in `app/chroma_storage/`)
 - **Embeddings**: SentenceTransformers (all-MiniLM-L6-v2) - loaded from `embeddings_models/`
 - **Local LLM**: Mistral-7B-Instruct-v0.2.Q3_K_M.gguf via llama-cpp-python (default model, with optional dynamic selection)
-- **Support Chat**: SQLite-based session management (`app/data/support_sessions.db`)
+- **Support Chat**: SQLite-based session management (`app/data/support_sessions.db`) - **sessions auto-created on login using user_id**
 - **Sentiment Analysis**: Local classifier using scikit-learn + sentence-transformers
-- **Auth**: Simple API key mapping (`app/services/auth.py`) via `X-API-Key` header.
 - **Utilities**: Centralized paths, constants, shared functions (`app/services/utility.py`)
 
 ### Key Directories
 
 - `app/` - Main application code
-  - `services/` - Business logic modules
+  - `services/` - Business logic modules (modular, testable functions)
+    - `user_service.py` - User management with SQLite, **user_meta table for profiles**
+    - `auth.py` - JWT token handling
+  - `utils/` - Utility modules (e.g., `doc_parser.py`)
   - `config/` - Configuration files (e.g., `onboarding_fields.json`, `config.py`)
-  - `data/` - SQLite databases, seed data
+  - `data/` - SQLite databases (**users.db with user_meta table**, support_sessions.db), seed data
   - `chroma_storage/` - ChromaDB persistence
+  - `dependencies.py` - Dependency injection providers (auth, RBAC, services)
+  - `api_routes_auth.py` - Authentication API routes
 - `data/` - Document examples, company overview, seed files
 - `models/` - Local LLM model files (*.gguf, *.ggml, *.bin)
 - `embeddings_models/` - Local embedding model cache
@@ -55,26 +67,53 @@ User Request → FastAPI → RAG Pipeline → RBAC Filter → LLM (Local or Goog
 
 ## 3. Key APIs / Functions
 
-### Main API Endpoints (`/api/rag/*`)
+### Main API Endpoints
 
-- `POST /api/rag/{model_provider}/query` - RAG query with RBAC filtering, optional LLM generation, session-aware. `model_provider` can be `local` or `google`.
-- `POST /api/rag/add` - Add document via JSON (text + metadata).
-- `POST /api/rag/add-file` - Upload text file (≤5MB) for ingestion.
-- `POST /api/rag/seed` - Seed default `data/companyData`.
-- `POST /api/rag/clear` - Clear Chroma collection (Executive/Legal only).
-- `POST /api/rag/session/start` - Create support chat session.
-- `POST /api/rag/session/end` - End support chat session.
-- `POST /api/rag/sentiment` - Analyze sentiment/tone of text.
-- `GET /api/rag/sentiment/stats` - Get sentiment statistics.
+**Authentication** (`/api/auth/*`):
+- `POST /api/auth/token` - Login with username/password, returns JWT token. **Auto-creates session using user_id. Returns user profile from user_meta table.**
+  - Request: `{"username": "string", "password": "string"}`
+  - Response: `{"access_token": "jwt_token", "token_type": "bearer", "user": {..., "profile": {...}}}`
+
+**RAG Services** (`/api/rag/*`):
+- `POST /api/rag/{model_provider}/query` - RAG query with RBAC filtering, optional LLM generation, session-aware. **Public endpoint** (no auth required, Guest users see public docs only). **Uses user_id from JWT token as session identifier (no X-Session-Id header needed)**. `model_provider` can be `local` or `google`.
+- `POST /api/rag/add` - Add document via JSON (text + metadata). **Requires**: SuperAdmin, HR, Manager, or Employee role.
+- `POST /api/rag/add-file` - Upload text file (≤5MB) for ingestion. **Requires**: SuperAdmin, HR, Manager, or Employee role.
+- `POST /api/rag/seed` - Seed default `data/companyData`. **Requires**: SuperAdmin role only.
+- `POST /api/rag/clear` - Clear Chroma collection. **Requires**: SuperAdmin role only.
+- `POST /api/rag/sentiment` - Analyze sentiment/tone of text. **Requires**: SuperAdmin role only.
+- `GET /api/rag/sentiment/stats` - Get sentiment statistics. **Requires**: SuperAdmin role only.
 
 ### Core Service Functions
 
 **RAG Services** (`rag_local_service.py`):
 - `initialize_local_rag()` - Initialize Chroma client and collection.
 - `add_document_to_rag_local(source_name, text, metadata)` - Asynchronously chunk, embed, store document.
-- `query_local_rag(query_text, n_results, requester, llm_prompt_prefix, use_llm, max_tokens)` - Asynchronously query with RBAC for local models.
+- `query_local_rag(query_text, n_results, requester, llm_prompt_prefix, use_llm, max_tokens, session_id)` - Main orchestrator for RAG queries (calls modular sub-functions).
+- `retrieve_documents(query_text, n_results)` - Handle embedding and ChromaDB retrieval.
+- `normalize_chroma_result(result)` - Normalize ChromaDB response format.
+- `filter_documents_by_rbac(raw_docs, raw_metadatas, raw_ids, raw_distances, requester)` - Apply RBAC filtering.
+- `inject_tone_guidance(session_id, llm_prompt_prefix)` - Build tone-aware prompt prefix.
+- `generate_rag_response(query_text, context_text, final_prefix, use_llm, max_tokens, session_id)` - Generate LLM response.
 - `seed_from_file(force_reseed)` - Seed from file or directory.
 - `clear_collection()` - Delete all documents.
+
+**Authentication & User Management** (`user_service.py`, `auth.py`):
+- `init_user_db(reset_on_start)` - Initialize user database, **create user_meta table**, and seed dummy users with profiles.
+- `authenticate_user(username, password)` - Authenticate user with credentials.
+- `get_password_hash(password)` - Hash password using bcrypt.
+- `verify_password(plain_password, hashed_password)` - Verify password.
+- `create_access_token(user_data)` - Generate JWT token with user info.
+- `verify_token(token)` - Verify and decode JWT token.
+- **`get_user_meta(user_id, key)`** - Get single user profile field.
+- **`get_all_user_meta(user_id)`** - Get all user profile fields as dict.
+- **`set_user_meta(user_id, key, value)`** - Set/update user profile field.
+- **`delete_user_meta(user_id, key)`** - Delete user profile field.
+
+**Dependency Injection** (`dependencies.py`):
+- `get_rag_service()` - Returns RAG service module for dependency injection in API routes.
+- `get_current_user(credentials)` - Extract authenticated user from Bearer token (required auth).
+- `get_current_user_optional(credentials)` - Optional authentication (returns None for Guest users).
+- `require_roles(allowed_roles)` - Factory for role-based access control dependencies.
 
 **Google RAG Service** (`google_models.py`):
 - `query_google_rag(...)` - Asynchronously query using Google's generative models.
@@ -197,13 +236,42 @@ User Request → FastAPI → RAG Pipeline → RBAC Filter → LLM (Local or Goog
 }
 ```
 
-**Requester (from auth header)**:
-The user's identity is determined from the `X-API-Key` header, not the request body.
+**TokenRequest** (Login):
+```python
+{
+  "username": str,
+  "password": str
+}
+```
+
+**TokenResponse** (Login):
+```python
+{
+  "access_token": str,  # JWT token
+  "token_type": str,    # "bearer"
+  "user": {
+    "user_id": str,
+    "username": str,
+    "role": str,
+    "department": str,
+    "profile": {  # User profile from user_meta table
+      "name": str,
+      "gender": str,
+      "location": str,
+      # ... other dynamic fields
+    }
+  }
+}
+```
+
+**Requester (from Bearer token or API key)**:
+The user's identity is determined from the `Authorization: Bearer <token>` header or legacy `X-API-Key` header.
 ```python
 {
   "user_id": str,
-  "role": str,  # Employee, Manager, HR, Legal, Executive, etc.
-  "department": str  # Engineering, Finance, HR, Legal, IT, etc.
+  "username": Optional[str],
+  "role": str,  # SuperAdmin, HR, Manager, Employee, Guest
+  "department": str  # Engineering, Finance, HR, Legal, IT, Executive, etc.
 }
 ```
 
@@ -361,6 +429,11 @@ uvicorn app.main:app --host 0.0.0.0 --port 5444
 11. **Model selection** - The endpoint path determines the model provider (`/api/rag/{model_provider}/query`).
 12. **Tone normalization** - Always use `normalize_tone_label()` to ensure canonical tone labels (angry, confused, happy, frustrated, polite, urgent, neutral).
 13. **Error handling for sentiment** - Never fail sentiment detection; always return defaults (sentiment="unknown", tone="neutral") on error.
+14. **Dependency Injection** - Use `Depends(get_rag_service)` in API routes to inject the RAG service for better testability.
+15. **Modular Functions** - When adding new RAG functionality, create focused, single-purpose functions that can be composed together.
+16. **Authentication** - Use `Depends(get_current_user)` for protected endpoints, `Depends(get_current_user_optional)` for public endpoints with optional auth.
+17. **Role-Based Access Control** - Use `dependencies=[Depends(require_roles(["SuperAdmin", "HR"]))]` to restrict endpoints by role.
+18. **Bearer Tokens** - Authenticate with `Authorization: Bearer <jwt_token>` header (legacy `X-API-Key` still supported).
 
 **When modifying existing code:**
 
@@ -371,9 +444,31 @@ uvicorn app.main:app --host 0.0.0.0 --port 5444
 
 ---
 
-**Last Updated**: 2025-01-XX
+**Last Updated**: 2025-11-25
 
 **Recent Updates**:
+- **Session Management Refactoring (2025-11-25)**:
+  - Removed `/api/rag/session/start` and `/api/rag/session/end` endpoints.
+  - Sessions now auto-created on login using `user_id` as session identifier.
+  - Added `user_meta` table for dynamic user profile storage (key-value pairs).
+  - Query endpoint uses `user_id` from JWT token instead of `X-Session-Id` header.
+  - Onboarding responses saved to `user_meta` table.
+  - Profile-based onboarding: skips questions if user already has complete profile.
+  - Login response now includes user profile from `user_meta` table.
+- **JWT Authentication System (2025-11-25)**:
+  - Implemented JWT-based authentication with Bearer token support (`Authorization: Bearer <token>`).
+  - Created user management system with SQLite database (`app/data/users.db`).
+  - Added `/api/auth/token` endpoint for login (username/password → JWT token).
+  - Password hashing with bcrypt for secure storage.
+  - Role-based access control (RBAC) on all endpoints with `require_roles()` dependency.
+  - Added `SuperAdmin` role with full permissions.
+  - Public query endpoint (no auth required, Guest users see only public documents).
+  - Configurable token expiration (default: 1 day via `JWT_EXPIRATION_DAYS`).
+  - Dummy users seeded: admin, hr_manager, manager, employee.
+- **Code Quality Refactoring (2025-11-25)**: 
+  - Decomposed `query_local_rag` into modular functions (`retrieve_documents`, `filter_documents_by_rbac`, `inject_tone_guidance`, `generate_rag_response`) for improved testability and maintainability.
+  - Introduced dependency injection pattern via `app/dependencies.py` for better separation of concerns and easier testing.
+  - Updated verification scripts to support new DI architecture.
 - **Refactoring**: Broke down `rag_local_service.py` into `model_manager.py` and `prompt_builder.py`.
 - **Configuration**: Centralized configuration into `app/config.py`.
 - **Consolidation**: Removed legacy `rag_service.py` and `rag_manual_service.py`.

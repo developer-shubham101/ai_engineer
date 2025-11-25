@@ -22,6 +22,7 @@ from app.services import rag_local_service as rag_local_service
 
 # Routers
 from app.api_routes_rag import router as rag_router
+from app.api_routes_auth import router as auth_router
 
 logger = setup_logging()
 
@@ -46,6 +47,14 @@ async def lifespan(app: FastAPI):
             logger.warning("initialize_local_rag() not found in rag_local_service.")
     except Exception as e:
         logger.error(f"Error initializing Local RAG: {e}")
+
+    # Initialize user database
+    try:
+        from app.services.user_service import init_user_db
+        init_user_db(reset_on_start=False)  # Set to True for development to reset users
+        logger.info("User database initialized successfully.")
+    except Exception as e:
+        logger.error(f"Error initializing user database: {e}")
 
     # Optional: Seed data at startup (uses seed_from_file in rag_local_service)
     try:
@@ -76,6 +85,7 @@ app = FastAPI(
 )
 
 # Register routers
+app.include_router(auth_router)
 app.include_router(rag_router)
 
 # CORS (for development only)

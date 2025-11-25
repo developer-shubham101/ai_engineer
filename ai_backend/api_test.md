@@ -1,190 +1,162 @@
-Here are **ready-to-run cURL examples** so you can quickly test:
+# API Testing Guide
 
-* sentiment & tone detection
-* tone-aware support chat
-* tone-guided RAG
-* sentiment analytics
-* model routing behaviors
+Here are **ready-to-run cURL examples** for testing the AI Engineering API.
 
-All using your existing APIs.
+## Table of Contents
+1. [Support Chat & Onboarding](#1-support-chat--onboarding)
+2. [RAG Services](#2-rag-services)
+3. [LLM Services](#3-llm-services)
+4. [Sentiment Analysis](#4-sentiment-analysis)
 
 ---
 
-# ✅ 1. Test Sentiment / Tone Detection Directly
+## 1. Support Chat & Onboarding
 
-(works if you added `/api/local/sentiment` endpoint)
-
-### Angry
-
+### Start a Session
 ```bash
-curl -X POST http://localhost:8000/api/local/sentiment \
-  -H "Content-Type: application/json" \
-  -d '{"text":"I am extremely angry! Why is this broken again?"}'
+curl -X POST http://localhost:8000/api/rag/session/start
 ```
+*Returns `session_id`. Use this in headers for subsequent requests.*
 
-### Confused
-
+### End a Session
 ```bash
-curl -X POST http://localhost:8000/api/local/sentiment \
+curl -X POST http://localhost:8000/api/rag/session/end \
   -H "Content-Type: application/json" \
-  -d '{"text":"I don’t understand step 3, can you explain?"}'
-```
-
-### Happy
-
-```bash
-curl -X POST http://localhost:8000/api/local/sentiment \
-  -H "Content-Type: application/json" \
-  -d '{"text":"Wow, thank you! This helped a lot!"}'
+  -d '{"session_id": "sess_xxxxx"}'
 ```
 
 ---
 
-# ✅ 2. Test Support Chat + Tone Storage
+## 2. RAG Services
 
-(Saves tone into `support_messages` table)
-
-### Start a session
-
-```bash
-curl -X POST http://localhost:8000/api/local/session/start
-```
-
-This returns:
-
-```json
-{
-  "session_id": "sess_xxxxx",
-  "message": "Session started"
-}
-```
-
-Copy `session_id`.
-
----
-
-### User sends an angry message (tone should be “angry”)
+### Query (Local Model)
+*Supports RBAC and session context.*
 
 ```bash
-curl -X POST http://localhost:8000/api/local/query \
+curl -X POST http://localhost:8000/api/rag/local/query \
+  -H "Content-Type: application/json" \
+  -H "X-Session-Id: sess_xxxxx" \
+  -H "X-API-Key: employee_key" \
+  -d '{
+        "question": "What are the company leave policies?",
+        "top_k": 3,
+        "use_llm": true
+      }'
+```
+
+### Query (Google Model)
+```bash
+curl -X POST http://localhost:8000/api/rag/google/query \
   -H "Content-Type: application/json" \
   -H "X-Session-Id: sess_xxxxx" \
   -d '{
-        "query_text": "This is ridiculous, it keeps failing again!",
-        "requester": {"role":"Employee", "department":"IT"}
+        "question": "Explain the project roadmap.",
+        "use_llm": true
       }'
 ```
 
-Tone stored in DB:
-
-* `"tone": "angry"`
-
----
-
-### Check stored messages
-
-(assumes you added `/api/local/messages/:sessionId` or you query SQLite)
-
+### Add Document (JSON)
 ```bash
-curl http://localhost:8000/api/local/messages/sess_xxxxx
-```
-
----
-
-# ✅ 3. Test Tone-Aware RAG Response
-
-(Triggers “empathetic/softened” prefix injection)
-
-```bash
-curl -X POST http://localhost:8000/api/local/query \
+curl -X POST http://localhost:8000/api/rag/add \
   -H "Content-Type: application/json" \
-  -H "X-Session-Id: sess_xxxxx" \
+  -H "X-API-Key: manager_key" \
   -d '{
-        "query_text": "My laptop still won’t start after I tried everything.",
-        "requester": {"role":"Employee", "department":"IT"}
+        "source_name": "policy_update.txt",
+        "text": "New policy: Fridays are half-days.",
+        "metadata": {"department": "HR", "sensitivity": "public_internal"}
       }'
 ```
 
-Expected assistant behavior:
+### Add Document (File Upload)
+*Supports .md, .html, .json, .txt. Automatically parses content.*
 
-* Calmer tone
-* Apology
-* Step-by-step guidance
+```bash
+curl -X POST http://localhost:8000/api/rag/add-file \
+  -H "X-API-Key: manager_key" \
+  -F "file=@/path/to/document.md" \
+  -F "department=Engineering"
+```
+
+### Seed Default Data
+```bash
+curl -X POST http://localhost:8000/api/rag/seed?reseed=true
+```
+
+### Clear Collection (Exec/Legal only)
+```bash
+curl -X POST http://localhost:8000/api/rag/clear \
+  -H "X-API-Key: executive_key"
+```
 
 ---
 
-# ✅ 4. Test Neutral Tone RAG Request
+## 3. LLM Services
 
-(should not add empathy guidance)
-
+### Chat (Conversational)
 ```bash
-curl -X POST http://localhost:8000/api/local/query \
+curl -X POST http://localhost:8000/chat \
   -H "Content-Type: application/json" \
-  -d '{
-        "query_text": "What are the company leave policies?",
-        "requester": {"role":"Employee", "department":"HR"}
-      }'
+  -d '{"user_input": "Hello, who are you?"}'
 ```
 
----
-
-# ✅ 5. Test Sentiment / Tone Analytics
-
-(after several user messages)
-
+### Generate Content Ideas
 ```bash
-curl http://localhost:8000/api/local/sentiment/stats
-```
-
-Expected JSON:
-
-```json
-{
-  "tone_counts": {
-     "angry": 3,
-     "confused": 2,
-     "happy": 1
-  },
-  "sentiment_counts": {
-     "negative": 5,
-     "neutral": 2,
-     "positive": 1
-  },
-  "tone_by_department": [
-     {"department":"IT","tone":"angry","count":2},
-     {"department":"HR","tone":"confused","count":1}
-  ]
-}
-```
-
----
-#Need to implement it later on if required
-# ✅ 6. Test Model Auto-Routing (if router endpoint added)
-
-If you added something like `/api/local/debug/model-route`:
-
-```bash
-curl -X POST http://localhost:8000/api/local/debug/model-route \
+curl -X POST http://localhost:8000/generate/ideas \
   -H "Content-Type: application/json" \
-  -d '{"task":"summarize"}'
+  -d '{"topic": "Future of AI in Healthcare"}'
 ```
 
-Expected:
-
-```json
-{"model":"small"}
-```
-
+### Simple Text Generation
 ```bash
-curl -X POST http://localhost:8000/api/local/debug/model-route \
+curl -X POST http://localhost:8000/generate \
   -H "Content-Type: application/json" \
-  -d '{"task":"reason"}'
+  -d '{"text": "Write a haiku about coding."}'
 ```
 
-Expected:
-
-```json
-{"model":"mistral"}
+### Summarization
+```bash
+curl -X POST http://localhost:8000/summarize \
+  -H "Content-Type: application/json" \
+  -d '{"text": "Long text content here..."}'
 ```
 
 ---
+
+## 4. Sentiment Analysis
+
+### Analyze Text
+```bash
+curl -X POST http://localhost:8000/api/rag/sentiment \
+  -H "Content-Type: application/json" \
+  -d '{"text": "I am frustrated with this error!"}'
+```
+
+### Get Stats
+```bash
+curl http://localhost:8000/api/rag/sentiment/stats
+```
+
+---
+
+## RAG Conversation Flow Diagram
+
+```mermaid
+flowchart TD
+  Start([Start]) --> StartSession["POST /api/rag/session/start\n(x-api-key)"]
+  StartSession -->|200: {session_id, message}| SessionCreated["Session Created\nstore session_id"]
+
+  subgraph User Conversation Loop
+    direction TB
+    UserQuery["POST /api/rag/local/query\n(x-session-id, x-api-key)\n{question, top_k, use_llm, max_tokens, category}"]
+    RAGResponse["RAG Response\n{answer, retrieved, context}"]
+    UserQuery --> RAGResponse
+    RAGResponse --> CheckIfFinal{Is answer ==\n'Thank you! Your details have been saved.'?}
+    CheckIfFinal -->|No| UserProvidesAnswer["User replies (next query)\nrepeat loop"]
+    CheckIfFinal -->|Yes| Finalized["Persist collected details\nreturn final ack"]
+    UserProvidesAnswer --> UserQuery
+  end
+
+  SessionCreated --> UserQuery
+  Finalized --> LLMFollowup["POST /api/rag/local/query\n(use_llm: true)\n{AI-generated followup question}"]
+  LLMFollowup --> End([End / Next: Chat App Integration])
+```
