@@ -152,7 +152,8 @@ User Request → FastAPI → RAG Pipeline → RBAC Filter → LLM (Local or Goog
 - `delete_all_documents(collection, client, collection_name)` - Clear collection.
 
 **Auth** (`auth.py`):
-- `get_user_from_api_key(key)` - Map API key to user dict `{user_id, role, department}`.
+- `create_access_token(user_data, session_id)` - Generate JWT token with user info and optional session ID.
+- `verify_token(token)` - Verify and decode JWT token.
 
 **Sentiment** (`sentiment_classifier.py`):
 - `get_global_sentiment()` - Get singleton classifier.
@@ -264,8 +265,8 @@ User Request → FastAPI → RAG Pipeline → RBAC Filter → LLM (Local or Goog
 }
 ```
 
-**Requester (from Bearer token or API key)**:
-The user's identity is determined from the `Authorization: Bearer <token>` header or legacy `X-API-Key` header.
+**Requester (from Bearer token)**:
+The user's identity is determined from the `Authorization: Bearer <token>` header.
 ```python
 {
   "user_id": str,
@@ -433,20 +434,24 @@ uvicorn app.main:app --host 0.0.0.0 --port 5444
 15. **Modular Functions** - When adding new RAG functionality, create focused, single-purpose functions that can be composed together.
 16. **Authentication** - Use `Depends(get_current_user)` for protected endpoints, `Depends(get_current_user_optional)` for public endpoints with optional auth.
 17. **Role-Based Access Control** - Use `dependencies=[Depends(require_roles(["SuperAdmin", "HR"]))]` to restrict endpoints by role.
-18. **Bearer Tokens** - Authenticate with `Authorization: Bearer <jwt_token>` header (legacy `X-API-Key` still supported).
+18. **Bearer Tokens** - Authenticate with `Authorization: Bearer <jwt_token>` header.
 
 **When modifying existing code:**
 
 - Check `utility.py` and `config.py` first for existing utilities and configurations before creating new ones.
 - Update `APP_CONTEXT.md` if adding new major features or changing architecture.
 - Maintain backward compatibility with existing API endpoints.
-- Follow existing patterns for error handling and logging.
 
 ---
 
 **Last Updated**: 2025-11-25
 
 **Recent Updates**:
+- **Removed Legacy API Key Authentication (2025-11-25)**:
+  - Removed unused `_API_KEYS` dictionary and `get_user_from_api_key()` function from `auth.py`.
+  - System now exclusively uses JWT-based Bearer token authentication.
+  - Updated documentation to reflect JWT-only authentication.
+
 - **Session Management Refactoring (2025-11-25)**:
   - Removed `/api/rag/session/start` and `/api/rag/session/end` endpoints.
   - Sessions now auto-created on login using `user_id` as session identifier.

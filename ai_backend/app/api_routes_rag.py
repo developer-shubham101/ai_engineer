@@ -115,77 +115,79 @@ async def query(
     model_provider: str,
     req: QueryRequest,
     requester: Optional[Dict[str, Any]] = Depends(get_current_user_optional),
-    x_session_id: Optional[str] = Header(None, alias="X-Session-Id"),
     rag_service=Depends(get_rag_service),
 ):
     """
-    RAG query endpoint.
-    - Authenticated users: Profile fetched from DB (user_meta), onboarding skipped.
-    - Guest users: Onboarding questions asked if X-Session-Id provided.
+    RAG query endpoint with three flows:
+    1. Authenticated Company User (non-Guest role): Fetch profile from user_meta, no onboarding
+    2. Authenticated Guest User (Guest role): Ask onboarding questions, use session_id from token
+    3. Unauthenticated User: Basic RAG without onboarding or session tracking
     """
     
-    # Determine session context
+    # Determine user context
     user_id = requester.get("user_id") if requester else None
+    user_role = requester.get("role") if requester else None
+    session_id = requester.get("session_id") if requester else None
     
-    # 1. AUTHENTICATED USER FLOW
-    if user_id:
+    # CASE 1: AUTHENTICATED COMPANY USER (non-Guest role)
+    if user_id and user_role and user_role != "Guest":
         # Fetch profile from user_meta using user_id (persistent profile)
         profile = get_all_user_meta(user_id)
         
-        # Use session_id from token if available, otherwise fallback to user_id
-        session_id = requester.get("session_id") or user_id
-        
         # Ensure session exists in support_sessions.db for history
-        if not support_chat.session_exists(session_id):
+        if session_id and not support_chat.session_exists(session_id):
             try:
                 support_chat.create_session(
                     session_id=session_id,
-                    role=requester.get("role"),
+                    role=user_role,
                     department=requester.get("department")
                 )
             except Exception:
-                pass # Session might exist
+                pass # Session might already exist
         
-        # Touch session
-        try:
-            support_chat.touch_session(
-                session_id=session_id,
-                role=requester.get("role"),
-                department=requester.get("department"),
-            )
-        except ValueError:
-            pass
+        # Touch session to update timestamp
+        if session_id:
+            try:
+                support_chat.touch_session(
+                    session_id=session_id,
+                    role=user_role,
+                    department=requester.get("department"),
+                )
+            except ValueError:
+                pass
 
-        # Fetch history for this specific session
+        # Fetch conversation history
         session_history = support_chat.fetch_recent_messages(
             session_id=session_id,
             limit=support_chat.MAX_HISTORY_TURNS,
-        )
+        ) if session_id else []
         
-        # NO ONBOARDING for authenticated users (as per requirement)
+        # NO ONBOARDING for company users
 
-    # 2. GUEST USER FLOW
-    else:
-        session_id = x_session_id
-        profile = {}
+    # CASE 2: AUTHENTICATED GUEST USER (Guest role with token)
+    elif user_id and user_role == "Guest":
         session_history = []
+        profile = {}
         
+        # Ensure guest session exists using session_id from token
         if session_id:
-            # Ensure guest session exists
             if not support_chat.session_exists(session_id):
                 try:
-                    support_chat.create_session(session_id=session_id, role="Guest", department="General")
+                    support_chat.create_session(
+                        session_id=session_id,
+                        role="Guest",
+                        department="General"
+                    )
                 except Exception:
                     pass
 
-            # Fetch history
+            # Fetch conversation history
             session_history = support_chat.fetch_recent_messages(
                 session_id=session_id,
                 limit=support_chat.MAX_HISTORY_TURNS,
             )
             
-            # Handle Onboarding for Guests
-            # Use support_chat functions which use session_profiles table
+            # Handle Onboarding for Guest users
             next_field = support_chat.get_next_missing_profile_key(session_id)
             
             if next_field:
@@ -207,7 +209,7 @@ async def query(
                     except Exception:
                         logger.exception("Failed to store user onboarding reply (non-fatal)")
 
-                    # Save to session_profiles (for guests)
+                    # Save to session_profiles
                     try:
                         support_chat.set_profile_value(session_id, key_to_save, user_reply)
                     except Exception as exc:
@@ -241,6 +243,13 @@ async def query(
 
             # Get full profile for context
             profile = support_chat.get_full_profile(session_id)
+
+    # CASE 3: UNAUTHENTICATED USER (no token)
+    else:
+        # Basic RAG without onboarding or session tracking
+        session_id = None
+        profile = {}
+        session_history = []
 
 
     # Build LLM prefix with profile if available

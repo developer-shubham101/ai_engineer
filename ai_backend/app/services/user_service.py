@@ -46,6 +46,13 @@ DUMMY_USERS = [
         "role": "Employee",
         "department": "Engineering"
     },
+    {
+        "username": "guest",
+        "password": "guest123",
+        "user_id": "u_guest_1",
+        "role": "Guest",
+        "department": "General"
+    },
 ]
 
 
