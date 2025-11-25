@@ -4,13 +4,17 @@ from transformers import pipeline
 # Import the shared Pydantic models from our central service file
 from .llm_service import TextRequest, SummarizationResponse, GenerationResponse, SentimentResponse
 
-print("Loading local models... This may take a moment.")
+import logging
+
+logger = logging.getLogger(__name__)
+
+logger.info("Loading local models... This may take a moment.")
 
 summarizer = pipeline("summarization", model="google/flan-t5-small")
 generator = pipeline("text-generation", model="google/flan-t5-small")
 sentiment_analyzer = pipeline("sentiment-analysis", model="distilbert-base-uncased-finetuned-sst-2-english")
 
-print("Local models loaded successfully.")
+logger.info("Local models loaded successfully.")
 
 def summarize_text(request: TextRequest) -> SummarizationResponse:
     result = summarizer(request.text, max_length=150, min_length=30, do_sample=False)

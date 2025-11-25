@@ -301,7 +301,7 @@ async def add_document_json(req: AddDocRequest, requester: Dict[str, Any] = Depe
     validate_metadata(metadata)
 
     try:
-        ids = add_document_to_rag_local(source_name=req.source_name, text=req.text, metadata=metadata)
+        ids = await add_document_to_rag_local(source_name=req.source_name, text=req.text, metadata=metadata)
     except Exception as e:
         logger.exception("Failed to add document: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
@@ -333,7 +333,7 @@ async def add_document_file(
     validate_metadata(metadata)
 
     try:
-        ids = add_document_to_rag_local(source_name=file.filename, text=text, metadata=metadata)
+        ids = await add_document_to_rag_local(source_name=file.filename, text=text, metadata=metadata)
     except Exception as e:
         logger.exception("Failed to add file: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
@@ -348,6 +348,10 @@ async def seed_defaults(
     reseed: bool = False
 ):
     try:
+<<<<<<< HEAD:ai_backend/app/api_routes_local.py
+        # Pass the reseed flag to force re-seeding logic
+=======
+>>>>>>> main:ai_backend/app/api_routes_rag.py
         ids = await seed_from_file(force_reseed=reseed)
         if ids:
             return AddResponse(message=f"Seeded default docs from companyData. Chunks added: {len(ids)}.", chunk_count=len(ids))

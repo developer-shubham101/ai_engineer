@@ -1,5 +1,3 @@
-# COPILOT_CONTEXT.md
-
 **Single Source of Truth for Project Context**
 
 > **Instructions for Copilot**: When generating code, prioritize the information in this file. Use only this file + the currently open buffer for context. Do not read the entire repository unless explicitly asked.
@@ -25,10 +23,11 @@ User Request → FastAPI → RAG Pipeline → RBAC Filter → Local LLM → Resp
 ### Main Components
 
 - **Backend**: FastAPI application (`app/main.py`, `app/api_routes_local.py`)
+- **Configuration**: Centralized settings in `app/config.py`
 - **RAG Services**: 
-  - `rag_local_service.py` - Core RAG with RBAC, local embeddings, LLM integration
-  - `rag_manual_service.py` - Simplified wrapper for CLI/scripts
-  - `rag_service.py` - Legacy Google-based RAG (optional)
+  - `rag_local_service.py` - Core RAG with RBAC and data indexing logic.
+  - `model_manager.py` - Handles loading and caching of local LLM instances.
+  - `prompt_builder.py` - Constructs prompts and manages token budgets.
 - **Vector DB**: ChromaDB (persistent storage in `app/chroma_storage/`)
 - **Embeddings**: SentenceTransformers (all-MiniLM-L6-v2) - loaded from `embeddings_models/`
 - **Local LLM**: Mistral-7B-Instruct-v0.2.Q3_K_M.gguf via llama-cpp-python (default model, with optional dynamic selection)
@@ -41,7 +40,7 @@ User Request → FastAPI → RAG Pipeline → RBAC Filter → Local LLM → Resp
 
 - `app/` - Main application code
   - `services/` - Business logic modules
-  - `config/` - Configuration files (e.g., `onboarding_fields.json`)
+  - `config/` - Configuration files (e.g., `onboarding_fields.json`, `config.py`)
   - `data/` - SQLite databases, seed data
   - `chroma_storage/` - ChromaDB persistence
 - `data/` - Document examples, company overview, seed files
@@ -71,12 +70,19 @@ User Request → FastAPI → RAG Pipeline → RBAC Filter → Local LLM → Resp
 
 **RAG Services** (`rag_local_service.py`):
 - `initialize_local_rag()` - Initialize Chroma client and collection
-- `add_document_to_rag_local(source_name, text, metadata)` - Chunk, embed, store document
-- `query_local_rag(query_text, n_results, requester, llm_prompt_prefix, use_llm, max_tokens, session_id)` - Query with RBAC
+- `add_document_to_rag_local(source_name, text, metadata)` - Asynchronously chunk, embed, store document
+- `query_local_rag(query_text, n_results, requester, llm_prompt_prefix, use_llm, max_tokens, session_id)` - Asynchronously query with RBAC
 - `seed_from_file(file_path, source_name)` - Seed from file or directory
 - `clear_collection()` - Delete all documents
+
+**Model Manager** (`model_manager.py`):
 - `get_llm_instance(model_key)` - Lazy-load and cache LLM instances (default: mistral-7b-instruct-v0.2.Q3_K_M.gguf)
 - `choose_model_for_task(task)` - Select model based on task type (only if `ENABLE_DYNAMIC_MODEL_SELECTION=True`)
+
+**Prompt Builder** (`prompt_builder.py`):
+- `build_prompt_with_selected_chunks(prefix, context_text, question)` - Constructs the final prompt for the LLM.
+- `select_chunks_by_token_budget(...)` - Selects document chunks to fit within the model's context window.
+- `_invoke_llm_with_chunk_budget(...)` - Asynchronously invokes the LLM with a token-budgeted prompt.
 
 **Support Chat** (`support_chat.py`):
 - `create_session(session_id, role, department)` - Create new session
@@ -89,10 +95,9 @@ User Request → FastAPI → RAG Pipeline → RBAC Filter → Local LLM → Resp
 
 **Utilities** (`utility.py`):
 - `get_embedding_model_instance()` - Singleton embedding model loader
-- `embed_texts(texts)` - Embed list of texts
+- `embed_texts(texts)` - Asynchronously embed list of texts
 - `chunk_text_basic(text, chunk_size, overlap)` - Text chunking
 - `sanitize_metadata_dict(meta)` - Sanitize metadata for Chroma
-- `build_tone_guidance(tone)` - Generate tone-aware LLM instructions (20-60 tokens, uses normalized canonical tones)
 - `normalize_tone_label(raw_tone)` - Map raw tone labels to canonical forms (angry, confused, happy, frustrated, polite, urgent, neutral)
 - `get_local_embedding_model_path()` - Get embedding model path
 - `get_data_path(filename)`, `get_config_path(filename)` - Path helpers
@@ -127,8 +132,8 @@ User Request → FastAPI → RAG Pipeline → RBAC Filter → Local LLM → Resp
   - Use dependency injection (FastAPI `Depends`) for auth/requester
 - **Error Handling**: Use FastAPI `HTTPException` for API errors; log exceptions with context
 - **Logging**: Use module-level loggers (`logging.getLogger(__name__)`)
-- **Constants**: Define in `utility.py`; import rather than duplicate
-- **Circular Imports**: Avoid by importing from `utility.py` for shared constants
+- **Constants**: Define in `app/config.py`; import rather than duplicate
+- **Circular Imports**: Avoid by importing shared constants from `app/config.py` or `app/services/utility.py`.
 
 ---
 
@@ -136,13 +141,15 @@ User Request → FastAPI → RAG Pipeline → RBAC Filter → Local LLM → Resp
 
 - `app/main.py` - FastAPI app entry point, lifespan handlers, endpoint registration
 - `app/api_routes_local.py` - Local RAG API routes, request/response models, RBAC enforcement
-- `app/services/rag_local_service.py` - Core RAG logic: chunking, embedding, retrieval, RBAC filtering, LLM integration
+- `app/config.py` - Centralized configuration for the application.
+- `app/services/rag_local_service.py` - Core RAG logic: data indexing and retrieval.
+- `app/services/model_manager.py` - Handles loading and caching of local LLM instances.
+- `app/services/prompt_builder.py` - Constructs prompts and manages token budgets.
 - `app/services/support_chat.py` - SQLite session management, message storage, profile management, tone guidance
 - `app/services/utility.py` - **Centralized utilities**: paths, constants, embedding loader, text processing, metadata sanitization
 - `app/services/chroma_utils.py` - ChromaDB wrapper functions for client/collection operations
 - `app/services/auth.py` - API key to user mapping (role-based access)
 - `app/services/sentiment_classifier.py` - Local sentiment/tone classification using scikit-learn
-- `app/services/rag_manual_service.py` - Simplified RAG wrapper for CLI/scripts
 - `app/logging_config.py` - Logging configuration
 - `app/config/onboarding_fields.json` - Onboarding question definitions
 - `requirements.txt` - Python dependencies (FastAPI, ChromaDB, sentence-transformers, llama-cpp-python, etc.)
@@ -233,7 +240,7 @@ User Request → FastAPI → RAG Pipeline → RBAC Filter → Local LLM → Resp
 }
 ```
 
-**Model Selection Configuration** (`rag_local_service.py`):
+**Model Selection Configuration** (`app/config.py`):
 - `ENABLE_DYNAMIC_MODEL_SELECTION = False` - Flag to enable dynamic model selection based on task
 - `DEFAULT_MODEL_NAME = "mistral-7b-instruct-v0.2.Q3_K_M.gguf"` - Primary model to use
 - By default, system uses only the default model
@@ -321,13 +328,13 @@ uvicorn app.main:app --host 0.0.0.0 --port 5444
 
 1. **Prioritize this file** - Use information from `COPILOT_CONTEXT.md` as the primary source of truth
 2. **Use only this file + currently open buffer** - Do not read entire repository unless explicitly requested
-3. **Import from `utility.py`** - Always import shared paths, constants, and utilities from `app/services/utility.py` to avoid duplication
-4. **Follow architecture patterns** - Maintain separation: routes in `api_routes_local.py`, business logic in `services/`, utilities centralized
+3. **Import from `app/config.py`** - Always import shared constants and configurations from `app/config.py`.
+4. **Follow architecture patterns** - Maintain separation: routes in `api_routes_local.py`, business logic in `services/`, utilities centralized. Use `model_manager.py` for LLM loading and `prompt_builder.py` for prompt construction.
 5. **Respect RBAC** - Always enforce sensitivity levels when accessing documents
 6. **Use type hints** - Include type annotations for all function parameters and returns
 7. **Handle errors gracefully** - Use FastAPI `HTTPException` for API errors; log with context
 8. **Maintain singleton patterns** - Use `get_embedding_model_instance()` from `utility.py` for embeddings
-9. **Avoid circular imports** - Import shared constants from `utility.py`, not from other service modules
+9. **Avoid circular imports** - Import shared constants from `app/config.py` or `app/services/utility.py`.
 10. **Keep it local-first** - Prefer local solutions; cloud APIs are optional
 11. **Model selection** - By default, use only `mistral-7b-instruct-v0.2.Q3_K_M.gguf`. Dynamic selection only if flag enabled
 12. **Tone normalization** - Always use `normalize_tone_label()` to ensure canonical tone labels (angry, confused, happy, frustrated, polite, urgent, neutral)
@@ -335,7 +342,7 @@ uvicorn app.main:app --host 0.0.0.0 --port 5444
 
 **When modifying existing code:**
 
-- Check `utility.py` first for existing utilities before creating new ones
+- Check `utility.py` and `config.py` first for existing utilities and configurations before creating new ones
 - Update `COPILOT_CONTEXT.md` if adding new major features or changing architecture
 - Maintain backward compatibility with existing API endpoints
 - Follow existing patterns for error handling and logging
@@ -345,6 +352,10 @@ uvicorn app.main:app --host 0.0.0.0 --port 5444
 **Last Updated**: 2025-01-XX
 
 **Recent Updates**:
+- **Refactoring**: Broke down `rag_local_service.py` into `model_manager.py` and `prompt_builder.py`.
+- **Configuration**: Centralized configuration into `app/config.py`.
+- **Consolidation**: Removed legacy `rag_service.py` and `rag_manual_service.py`.
+- **Performance**: Made embedding and LLM calls asynchronous.
 - Model selection: Default to single model (`mistral-7b-instruct-v0.2.Q3_K_M.gguf`) with optional dynamic selection via flag
 - Sentiment/tone: Added canonical tone normalization, improved error handling with defaults
 - Tone guidance: Shortened to 20-60 tokens for token efficiency
