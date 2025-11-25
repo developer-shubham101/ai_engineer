@@ -23,6 +23,8 @@ from app.services.support_chat import (
     set_profile_value,
     get_full_profile,
 )
+from app.utils.doc_parser import parse_text, RawFormat
+import os
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/rag", tags=["RAG"])
@@ -324,10 +326,28 @@ async def add_document_file(
         raise HTTPException(status_code=413, detail="File too large (max 5 MB).")
 
     try:
-        text = raw.decode("utf-8", errors="ignore")
+        text_content = raw.decode("utf-8", errors="ignore")
     except Exception as e:
         logger.exception("Failed to decode uploaded file: %s", e)
         raise HTTPException(status_code=400, detail="Failed to decode file; ensure it's a text file (UTF-8).")
+
+    # Determine format from extension
+    ext = os.path.splitext(file.filename)[1].lower()
+    if ext in ['.md', '.markdown']:
+        fmt = RawFormat.MARKDOWN
+    elif ext in ['.html', '.htm']:
+        fmt = RawFormat.HTML
+    elif ext in ['.json']:
+        fmt = RawFormat.JSON
+    else:
+        fmt = RawFormat.PLAIN
+
+    try:
+        # Parse text using doc_parser
+        text = parse_text(text_content, format=fmt)
+    except Exception as e:
+        logger.warning(f"Failed to parse file {file.filename} as {fmt}, falling back to plain text. Error: {e}")
+        text = text_content
 
     metadata = {"department": department, "sensitivity": sensitivity, "ingested_by": requester.get("user_id")}
     validate_metadata(metadata)

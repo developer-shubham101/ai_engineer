@@ -50,6 +50,7 @@ from app.services.utility import (
     sanitize_metadata_dict,
     get_data_path, is_collection_empty,
 )
+from app.utils.doc_parser import parse_file
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -486,7 +487,8 @@ async def seed_from_file(file_path: Optional[str] = None, source_name: Optional[
         for child in sorted(path.iterdir()):
             if child.is_file():
                 try:
-                    text = child.read_text(encoding="utf-8")
+                    # Use doc_parser to read and parse file
+                    text = parse_file(str(child))
                     # Use relative path + name for source_name for better uniqueness
                     src_name = str(child.relative_to(path.parent))
                     ids = await add_document_to_rag_local(source_name=src_name, text=text, chunks=None,
@@ -501,7 +503,7 @@ async def seed_from_file(file_path: Optional[str] = None, source_name: Optional[
 
     # Otherwise, it's a single file; ingest it. (Old behavior, primarily for backward compatibility)
     try:
-        text = path.read_text(encoding="utf-8")
+        text = parse_file(str(path))
     except Exception as e:
         logger.exception("Failed to read seed file %s: %s", path, e)
         return []
