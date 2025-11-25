@@ -348,10 +348,6 @@ async def seed_defaults(
     reseed: bool = False
 ):
     try:
-<<<<<<< HEAD:ai_backend/app/api_routes_local.py
-        # Pass the reseed flag to force re-seeding logic
-=======
->>>>>>> main:ai_backend/app/api_routes_rag.py
         ids = await seed_from_file(force_reseed=reseed)
         if ids:
             return AddResponse(message=f"Seeded default docs from companyData. Chunks added: {len(ids)}.", chunk_count=len(ids))

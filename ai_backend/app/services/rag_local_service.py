@@ -16,6 +16,7 @@ import uuid
 from pathlib import Path
 from typing import List, Optional, Dict, Any
 
+from app.config import ENABLE_DYNAMIC_MODEL_SELECTION, DEFAULT_MODEL_NAME
 # new import to fetch recent messages (tone is stored there by support_chat)
 from app.services.support_chat import fetch_recent_messages
 
@@ -47,8 +48,6 @@ from app.services.utility import (
     embed_texts,
     chunk_text_basic,
     sanitize_metadata_dict,
-    build_tone_guidance,
-    MODELS_DIR,
     get_data_path, is_collection_empty,
 )
 
@@ -491,7 +490,7 @@ async def seed_from_file(file_path: Optional[str] = None, source_name: Optional[
                     # Use relative path + name for source_name for better uniqueness
                     src_name = str(child.relative_to(path.parent))
                     ids = await add_document_to_rag_local(source_name=src_name, text=text, chunks=None,
-                                                    metadata={"seeded": True})
+                                                          metadata={"seeded": True})
                     if ids:
                         added_ids.extend(ids)
                         logger.info("Seeded file %s -> %d chunks", child.name, len(ids))

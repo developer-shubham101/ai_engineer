@@ -35,17 +35,17 @@ async def lifespan(app: FastAPI):
     - Initializes local RAG (embeddings + chroma)
     - Optionally seeds the DB from a default file (if present)
     """
-    logger.info("🔵 Application startup...")
+    logger.info("Application startup...")
 
     # Initialize the local RAG using rag_local_service
     try:
         if hasattr(rag_local_service, "initialize_local_rag"):
             rag_local_service.initialize_local_rag()
-            logger.info("✔ Local RAG initialized successfully.")
+            logger.info("Local RAG initialized successfully.")
         else:
-            logger.warning("⚠ initialize_local_rag() not found in rag_local_service.")
+            logger.warning("initialize_local_rag() not found in rag_local_service.")
     except Exception as e:
-        logger.error(f"❌ Error initializing Local RAG: {e}")
+        logger.error(f"Error initializing Local RAG: {e}")
 
     # Optional: Seed data at startup (uses seed_from_file in rag_local_service)
     try:
@@ -53,7 +53,7 @@ async def lifespan(app: FastAPI):
             # This calls seed_from_file(force_reseed=False) implicitly
             seeded_ids = await rag_local_service.seed_from_file()
             if seeded_ids:
-                logger.info(f"✔ Seeded default file. Chunks added: {len(seeded_ids)}")
+                logger.info(f"Seeded default file. Chunks added: {len(seeded_ids)}")
             else:
                 logger.info("No seed file found or collection was already populated, skipping startup seed.")
         else:
@@ -63,7 +63,7 @@ async def lifespan(app: FastAPI):
 
     yield
 
-    logger.info("🔴 Application shutdown...")
+    logger.info("Application shutdown...")
 
 # -----------------------------
 # Create FastAPI app

@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field
 
 from .chroma_utils import ensure_chroma_client, query_collection
 from .llm_service import IdeaRequest, IdeaResponse
+from .prompt_builder import build_tone_guidance
 from .rag_local_service import estimate_tokens_from_text, build_prompt_with_selected_chunks
 
 load_dotenv()
@@ -29,7 +30,7 @@ import logging
 from typing import Optional, Dict, Any
 
 from app.services.support_chat import fetch_recent_messages
-from app.services.utility import embed_texts, DEFAULT_PERSIST_DIR, DEFAULT_COLLECTION_NAME, build_tone_guidance
+from app.services.utility import embed_texts, DEFAULT_PERSIST_DIR, DEFAULT_COLLECTION_NAME
 
 logger = logging.getLogger(__name__)
 

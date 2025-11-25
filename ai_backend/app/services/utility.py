@@ -7,6 +7,8 @@ import os
 from pathlib import Path
 from typing import Optional, Dict, Any, List
 
+from starlette.concurrency import run_in_threadpool
+
 logger = logging.getLogger(__name__)
 
 # ============================================================================
