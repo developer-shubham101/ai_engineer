@@ -21,11 +21,7 @@ class SentimentResponse(BaseModel):
     label: str
     score: float
 
-class IdeaRequest(BaseModel):
-    topic: str = Field(..., min_length=3, description="The topic to generate ideas for.")
-
-class IdeaResponse(BaseModel):
-    ideas: str
+# IdeaRequest and IdeaResponse moved to google_models.py to fix circular import
 
 # --- Importing and Exposing Service Functions ---
 # We import the functions from our specialized modules so that main.py
@@ -39,7 +35,7 @@ from .openai_models import generate_text_openai
 
 
 # Models for the new Chat service
-from .google_models import ChatRequest, ChatResponse
+from .google_models import ChatRequest, ChatResponse, IdeaRequest, IdeaResponse
 
 # From our stable, working Google Gemini chain
 from .google_models import generate_content_ideas, get_chat_response

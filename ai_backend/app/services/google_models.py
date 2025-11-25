@@ -11,7 +11,7 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from pydantic import BaseModel, Field
 
 from .chroma_utils import ensure_chroma_client, query_collection
-from .llm_service import IdeaRequest, IdeaResponse
+# from .llm_service import IdeaRequest, IdeaResponse # Removed to fix circular import
 from .prompt_builder import build_tone_guidance
 from .rag_local_service import estimate_tokens_from_text, build_prompt_with_selected_chunks
 
@@ -24,6 +24,12 @@ class ChatRequest(BaseModel):
 
 class ChatResponse(BaseModel):
     ai_response: str
+
+class IdeaRequest(BaseModel):
+    topic: str = Field(..., min_length=3, description="The topic to generate ideas for.")
+
+class IdeaResponse(BaseModel):
+    ideas: str
 
 
 import logging
