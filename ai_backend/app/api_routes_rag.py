@@ -115,114 +115,147 @@ async def query(
     model_provider: str,
     req: QueryRequest,
     requester: Optional[Dict[str, Any]] = Depends(get_current_user_optional),
+    x_session_id: Optional[str] = Header(None, alias="X-Session-Id"),
     rag_service=Depends(get_rag_service),
 ):
     """
-    Query the RAG. Supports session-aware onboarding and personalization.
-    This endpoint can be used with different model providers (e.g., 'local', 'google').
+    RAG query endpoint.
+    - Authenticated users: Profile fetched from DB (user_meta), onboarding skipped.
+    - Guest users: Onboarding questions asked if X-Session-Id provided.
     """
-    logger.info("Query request: provider=%s, role=%s user=%s question=%s", 
-                model_provider, 
-                requester.get("role") if requester else "Guest", 
-                requester.get("user_id") if requester else None, 
-                req.question)
-
-    llm_prefix = None
-    session_history = []
-    session_id = requester.get("user_id") if requester else None  # Use user_id as session_id
-
-    # For authenticated users, use their user_id as session
-    if session_id:
-        # Touch session to update last activity
-        if support_chat.session_exists(session_id):
+    
+    # Determine session context
+    user_id = requester.get("user_id") if requester else None
+    
+    # 1. AUTHENTICATED USER FLOW
+    if user_id:
+        # Fetch profile from user_meta using user_id (persistent profile)
+        profile = get_all_user_meta(user_id)
+        
+        # Use session_id from token if available, otherwise fallback to user_id
+        session_id = requester.get("session_id") or user_id
+        
+        # Ensure session exists in support_sessions.db for history
+        if not support_chat.session_exists(session_id):
             try:
-                support_chat.touch_session(
+                support_chat.create_session(
                     session_id=session_id,
                     role=requester.get("role"),
-                    department=requester.get("department"),
+                    department=requester.get("department")
                 )
-            except ValueError as exc:
-                logger.warning(f"Session touch failed: {exc}")
+            except Exception:
+                pass # Session might exist
+        
+        # Touch session
+        try:
+            support_chat.touch_session(
+                session_id=session_id,
+                role=requester.get("role"),
+                department=requester.get("department"),
+            )
+        except ValueError:
+            pass
 
-        # Fetch conversation history
+        # Fetch history for this specific session
         session_history = support_chat.fetch_recent_messages(
             session_id=session_id,
             limit=support_chat.MAX_HISTORY_TURNS,
         )
+        
+        # NO ONBOARDING for authenticated users (as per requirement)
 
-    # Check user profile and handle onboarding
-    if session_id:
-        # Get profile from user_meta table
-        profile = get_all_user_meta(session_id)
-        next_field = get_next_missing_profile_key(session_id)
-
-        # If user has missing profile fields, handle onboarding
-        if next_field:
-            last_assistant_msg = None
-            if session_history:
-                last_msg = session_history[-1]
-                if last_msg.get("speaker", "").lower() == "assistant":
-                    last_assistant_msg = last_msg.get("content", "")
-
-            expected_question = next_field["question"]
-            key_to_save = next_field["key"]
-
-            # Check if this is a response to the onboarding question
-            if last_assistant_msg and last_assistant_msg.strip() == expected_question.strip():
-                user_reply = req.question.strip()
-
+    # 2. GUEST USER FLOW
+    else:
+        session_id = x_session_id
+        profile = {}
+        session_history = []
+        
+        if session_id:
+            # Ensure guest session exists
+            if not support_chat.session_exists(session_id):
                 try:
-                    support_chat.store_message(session_id, "user", req.question)
+                    support_chat.create_session(session_id=session_id, role="Guest", department="General")
                 except Exception:
-                    logger.exception("Failed to store user onboarding reply (non-fatal)")
+                    pass
 
-                # Save to user_meta instead of session profile
-                try:
-                    set_user_meta(session_id, key_to_save, user_reply)
-                except Exception as exc:
-                    logger.exception("Failed to save onboarding value: %s", exc)
-                    raise HTTPException(status_code=500, detail="Failed to save onboarding data.")
+            # Fetch history
+            session_history = support_chat.fetch_recent_messages(
+                session_id=session_id,
+                limit=support_chat.MAX_HISTORY_TURNS,
+            )
+            
+            # Handle Onboarding for Guests
+            # Use support_chat functions which use session_profiles table
+            next_field = support_chat.get_next_missing_profile_key(session_id)
+            
+            if next_field:
+                last_assistant_msg = None
+                if session_history:
+                    last_msg = session_history[-1]
+                    if last_msg.get("speaker", "").lower() == "assistant":
+                        last_assistant_msg = last_msg.get("content", "")
 
-                # Check for next missing field
-                next_field = get_next_missing_profile_key(session_id)
-                if next_field:
+                expected_question = next_field["question"]
+                key_to_save = next_field["key"]
+
+                # Check if this is a response to the onboarding question
+                if last_assistant_msg and last_assistant_msg.strip() == expected_question.strip():
+                    user_reply = req.question.strip()
+
                     try:
-                        support_chat.store_message(session_id, "assistant", next_field["question"])
+                        support_chat.store_message(session_id, "user", req.question)
                     except Exception:
-                        logger.exception("Failed to store assistant follow-up question (non-fatal)")
-                    return QueryResponse(answer=next_field["question"], retrieved=[], context=None)
+                        logger.exception("Failed to store user onboarding reply (non-fatal)")
 
-                completion_msg = "Thank you! Your details have been saved."
-                try:
-                    support_chat.store_message(session_id, "assistant", completion_msg)
-                except Exception:
-                    logger.exception("Failed to store onboarding completion message (non-fatal)")
-                return QueryResponse(answer=completion_msg, retrieved=[], context=None)
+                    # Save to session_profiles (for guests)
+                    try:
+                        support_chat.set_profile_value(session_id, key_to_save, user_reply)
+                    except Exception as exc:
+                        logger.exception("Failed to save onboarding value: %s", exc)
+                        raise HTTPException(status_code=500, detail="Failed to save onboarding data.")
 
-            else:
-                # Ask the first onboarding question
-                try:
-                    support_chat.store_message(session_id, "assistant", expected_question)
-                except Exception:
-                    logger.exception("Failed to store assistant onboarding question (non-fatal)")
+                    # Check for next missing field
+                    next_field = support_chat.get_next_missing_profile_key(session_id)
+                    if next_field:
+                        try:
+                            support_chat.store_message(session_id, "assistant", next_field["question"])
+                        except Exception:
+                            logger.exception("Failed to store assistant follow-up question (non-fatal)")
+                        return QueryResponse(answer=next_field["question"], retrieved=[], context=None)
 
-                return QueryResponse(answer=expected_question, retrieved=[], context=None)
+                    completion_msg = "Thank you! Your details have been saved."
+                    try:
+                        support_chat.store_message(session_id, "assistant", completion_msg)
+                    except Exception:
+                        logger.exception("Failed to store onboarding completion message (non-fatal)")
+                    return QueryResponse(answer=completion_msg, retrieved=[], context=None)
+
+                else:
+                    # Ask the first onboarding question
+                    try:
+                        support_chat.store_message(session_id, "assistant", expected_question)
+                    except Exception:
+                        logger.exception("Failed to store assistant onboarding question (non-fatal)")
+
+                    return QueryResponse(answer=expected_question, retrieved=[], context=None)
+
+            # Get full profile for context
+            profile = support_chat.get_full_profile(session_id)
+
 
     # Build LLM prefix with profile if available
-    if session_id:
-        profile = get_all_user_meta(session_id)
-        llm_prefix = support_chat.build_prompt_prefix(
-            requester=requester,
-            history=session_history,
-            category=req.category,
-        )
+    llm_prefix = support_chat.build_prompt_prefix(
+        requester=requester or {"role": "Guest", "department": "General"},
+        history=session_history,
+        category=req.category,
+    )
 
-        if profile:
-            prefix_extra_lines = ["User Profile:"]
-            for k, v in profile.items():
-                prefix_extra_lines.append(f"- {k}: {v}")
-            prefix_extra = "\n".join(prefix_extra_lines) + "\n\n"
-            llm_prefix = prefix_extra + llm_prefix
+    if profile:
+        prefix_extra_lines = ["User Profile:"]
+        for k, v in profile.items():
+            prefix_extra_lines.append(f"- {k}: {v}")
+        prefix_extra = "\n".join(prefix_extra_lines) + "\n\n"
+        llm_prefix = prefix_extra + llm_prefix
 
     # Execute RAG query
     try:

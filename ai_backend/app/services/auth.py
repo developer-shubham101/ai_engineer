@@ -162,12 +162,13 @@ def get_user_from_api_key(key: str) -> Optional[Dict[str, Any]]:
     return _API_KEYS.get(key)
 
 
-def create_access_token(user_data: Dict[str, Any]) -> str:
+def create_access_token(user_data: Dict[str, Any], session_id: Optional[str] = None) -> str:
     """
     Create a JWT access token for a user.
     
     Args:
         user_data: Dict containing user_id, username, role, department
+        session_id: Optional session ID to include in token
         
     Returns:
         JWT token string
@@ -181,6 +182,7 @@ def create_access_token(user_data: Dict[str, Any]) -> str:
         "username": user_data.get("username"),
         "role": user_data["role"],
         "department": user_data["department"],
+        "session_id": session_id,
         "exp": expire,
         "iat": datetime.utcnow()
     }

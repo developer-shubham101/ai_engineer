@@ -4,16 +4,14 @@ import UploadFileForm from './UploadFileForm.jsx'
 import UpdateMetadataForm from './UpdateMetadataForm.jsx'
 import ToastList from './ToastList.jsx'
 import { BASE_API_URL } from '../utility/const.js'
-import { getStoredToken, getStoredUser, getSessionIdFromToken, clearAuth } from '../utility/auth.js'
 
 
-export default function RAGChat({ onLogout }){
-  const [token, setToken] = useState(getStoredToken())
-  const [user, setUser] = useState(getStoredUser())
-  const [sessionId, setSessionId] = useState(() => {
-    const storedToken = getStoredToken();
-    return storedToken ? getSessionIdFromToken(storedToken) : '';
-  })
+export default function RAGChat(){
+  const [apiKey, setApiKey] = useState(
+    localStorage.getItem("api_key") || "key-guest-1"
+  );
+  const [rememberKey, setRememberKey] = useState(localStorage.getItem('remember_api_key') === 'true')
+  const [role, setRole] = useState('Employee')
   const [useLlm, setUseLlm] = useState(false)
   const [topK, setTopK] = useState(3)
   const [composer, setComposer] = useState('')
@@ -23,11 +21,13 @@ export default function RAGChat({ onLogout }){
   const [fileMeta, setFileMeta] = useState({ department:'', sensitivity:'public', tags:'' })
   const [toasts, setToasts] = useState([])
   const [modelProvider, setModelProvider] = useState(localStorage.getItem('model_provider') || 'local')
+  const [sessionId, setSessionId] = useState(localStorage.getItem('x-session-id') || '')
   const [theme, setTheme] = useState(localStorage.getItem('theme') || 'system')
   const messagesRef = useRef(null)
 
-  useEffect(()=> { localStorage.setItem('chat_history_v1', JSON.stringify(messages)) }, [messages])
-  useEffect(()=> { localStorage.setItem('model_provider', modelProvider) }, [modelProvider])
+  useEffect(()=>{ localStorage.setItem('chat_history_v1', JSON.stringify(messages)) }, [messages])
+  useEffect(()=>{ localStorage.setItem('model_provider', modelProvider) }, [modelProvider])
+  useEffect(()=>{ localStorage.setItem('x-session-id', sessionId) }, [sessionId])
   useEffect(()=>{
     localStorage.setItem('theme', theme)
     if (theme === 'system') {
@@ -48,20 +48,16 @@ export default function RAGChat({ onLogout }){
       return () => mediaQuery.removeEventListener('change', handleChange)
     }
   }, [theme])
-  useEffect(()=> { if (messagesRef.current) messagesRef.current.scrollTop = messagesRef.current.scrollHeight }, [messages])
+  useEffect(()=>{ if (rememberKey) localStorage.setItem('api_key', apiKey || ''); localStorage.setItem('remember_api_key', rememberKey ? 'true' : 'false') }, [apiKey, rememberKey])
+  useEffect(()=>{ if (messagesRef.current) messagesRef.current.scrollTop = messagesRef.current.scrollHeight }, [messages])
 
   function addToast(text, kind='danger', title=''){ const id=Date.now(); setToasts(t=>[...t,{id,text,kind,title}]); setTimeout(()=>setToasts(t=>t.filter(x=>x.id!==id)),5000) }
   function pushMessage(msg){ setMessages(m=>[...m,{...msg, ts: new Date().toLocaleString()}]) }
 
-  function handleLogout() {
-    clearAuth();
-    if (onLogout) onLogout();
-  }
-
   async function sendQuery(){
     if (inFlight) return
     if (!composer.trim()) return addToast('Please enter a question', 'warning', 'Validation')
-    if (!token) return addToast('Please login first', 'warning', 'Auth')
+    if (!apiKey) return addToast('API key required', 'warning', 'Auth')
 
     setInFlight(true)
     const userMsg = { role:'user', text: composer }
@@ -71,7 +67,7 @@ export default function RAGChat({ onLogout }){
     const payload = { question: composer, top_k: Number(topK||3), use_llm: !!useLlm }
 
     try {
-      const headers = { "Content-Type": "application/json", "Authorization": `Bearer ${token}` };
+      const headers = { "Content-Type": "application/json", "X-API-Key": apiKey };
       if (sessionId) headers['X-Session-ID'] = sessionId;
       const res = await fetch(BASE_API_URL + `/api/rag/${modelProvider}/query`, {
         method: "POST",
@@ -93,9 +89,42 @@ export default function RAGChat({ onLogout }){
     }
   }
 
+  async function startSession(){
+    if (!apiKey) return addToast('API key required', 'warning', 'Auth')
+    try {
+      const res = await fetch(BASE_API_URL + '/api/rag/session/start', {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-API-Key": apiKey },
+      });
+      if (!res.ok){ const txt = await res.text().catch(()=>res.statusText); throw new Error(`Server error: ${res.status} - ${txt}`) }
+      const data = await res.json();
+      console.log('New session ID:', data['session_id']);
+      setSessionId(data["session_id"]);
+      addToast('Session started', 'success');
+    } catch(err){
+      addToast(err.message || 'Network error', 'danger', 'Error')
+    }
+  }
+
+  async function endSession(){
+    if (!apiKey) return addToast('API key required', 'warning', 'Auth')
+    if (!sessionId) return addToast('No session to end', 'warning')
+    try {
+      const res = await fetch(BASE_API_URL + '/api/rag/session/end', {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-API-Key": apiKey, "X-Session-ID": sessionId },
+      });
+      if (!res.ok){ const txt = await res.text().catch(()=>res.statusText); throw new Error(`Server error: ${res.status} - ${txt}`) }
+      setSessionId('');
+      addToast('Session ended', 'success');
+    } catch(err){
+      addToast(err.message || 'Network error', 'danger', 'Error')
+    }
+  }
+
   async function postAddJson({ source_name, text, metadata }){
-    if (!token) return addToast('Please login first', 'warning', 'Auth')
-    const headers = { 'Content-Type':'application/json', 'Authorization': `Bearer ${token}` };
+    if (!apiKey) return addToast('API key required', 'warning', 'Auth')
+    const headers = { 'Content-Type':'application/json', 'X-API-Key': apiKey };
     if (sessionId) headers['X-Session-ID'] = sessionId;
     try {
       const res = await fetch(BASE_API_URL + `/api/rag/${modelProvider}/add`, { method:'POST', headers: headers, body: JSON.stringify({ source_name, text, metadata }) })
@@ -105,8 +134,8 @@ export default function RAGChat({ onLogout }){
   }
 
   async function postUploadFile(formData){
-    if (!token) return addToast('Please login first', 'warning', 'Auth')
-    const headers = { 'Authorization': `Bearer ${token}` };
+    if (!apiKey) return addToast('API key required', 'warning', 'Auth')
+    const headers = { 'X-API-Key': apiKey };
     if (sessionId) headers['X-Session-ID'] = sessionId;
     try {
       const res = await fetch(BASE_API_URL + `/api/rag/${modelProvider}/add-file`, { method:'POST', headers: headers, body: formData })
@@ -116,8 +145,8 @@ export default function RAGChat({ onLogout }){
   }
 
   async function requestAccess({ document_id, source_name, reason }){
-    if (!token) return addToast('Please login first', 'warning', 'Auth')
-    const headers = { 'Content-Type':'application/json', 'Authorization': `Bearer ${token}` };
+    if (!apiKey) return addToast('API key required', 'warning', 'Auth')
+    const headers = { 'Content-Type':'application/json', 'X-API-Key': apiKey };
     if (sessionId) headers['X-Session-ID'] = sessionId;
     try {
       const res = await fetch(BASE_API_URL + '/request-access', { method:'POST', headers: headers, body: JSON.stringify({ document_id, source_name, reason }) })
@@ -127,8 +156,8 @@ export default function RAGChat({ onLogout }){
   }
 
   async function fetchAccessRequests(){
-    if (!token) return addToast('Please login first', 'warning', 'Auth')
-    const headers = { 'Authorization': `Bearer ${token}` };
+    if (!apiKey) return addToast('API key required', 'warning', 'Auth')
+    const headers = { 'X-API-Key': apiKey };
     if (sessionId) headers['X-Session-ID'] = sessionId;
     try {
       const res = await fetch(BASE_API_URL + '/access-requests', { headers: headers })
@@ -143,11 +172,36 @@ export default function RAGChat({ onLogout }){
       <div className="d-flex justify-content-between align-items-center mb-2">
         <h3>RAG Chat (React)</h3>
         <div className="d-flex gap-2 align-items-center">
-          {user && (
-            <div className="badge bg-primary">
-              {user.username} ({user.role})
-            </div>
-          )}
+          <div className="input-group input-group-sm">
+            <span className="input-group-text">API Key</span>
+            <input
+              className="form-control"
+              type="password"
+              value={apiKey}
+              onChange={(e) => setApiKey(e.target.value)}
+              placeholder="sk-xxxx"
+            />
+            <button
+              className={`btn ${
+                rememberKey ? "btn-success" : "btn-outline-secondary"
+              }`}
+              onClick={() => setRememberKey((r) => !r)}
+            >
+              🔒
+            </button>
+          </div>
+          <select
+            className="form-select form-select-sm"
+            style={{ width: 160 }}
+            value={role}
+            onChange={(e) => setRole(e.target.value)}
+          >
+            <option>Employee</option>
+            <option>Manager</option>
+            <option>HR</option>
+            <option>Legal</option>
+            <option>Executive</option>
+          </select>
           <div className="form-check form-switch">
             <input
               className="form-check-input"
@@ -188,10 +242,17 @@ export default function RAGChat({ onLogout }){
             <option value="dark">Dark</option>
           </select>
           <button
-            className="btn btn-sm btn-outline-danger"
-            onClick={handleLogout}
+            className="btn btn-sm btn-outline-success"
+            onClick={startSession}
           >
-            Logout
+            New Session
+          </button>
+          <button
+            className="btn btn-sm btn-outline-danger"
+            onClick={endSession}
+            disabled={!sessionId}
+          >
+            End Session
           </button>
         </div>
       </div>
@@ -202,7 +263,7 @@ export default function RAGChat({ onLogout }){
             <div className="card-body d-flex flex-column">
               <div className="d-flex justify-content-between mb-2">
                 <h5>Chat</h5>
-                <small className="text-muted">Session: {sessionId || 'none'}</small>
+                <small className="text-muted">Session: local</small>
               </div>
               <div
                 ref={messagesRef}

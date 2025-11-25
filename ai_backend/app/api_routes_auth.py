@@ -5,6 +5,7 @@ Handles user login and token generation.
 """
 from typing import Dict, Any
 import logging
+import uuid
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel
 
@@ -63,19 +64,22 @@ async def login(request: TokenRequest):
             headers={"WWW-Authenticate": "Bearer"},
         )
     
-    # Generate access token
-    access_token = create_access_token(user_data)
+    # Generate a new session ID for this login
+    session_id = f"sess_{uuid.uuid4().hex}"
+
+    # Generate access token with session_id
+    access_token = create_access_token(user_data, session_id=session_id)
     
-    # Auto-create support chat session using user_id
+    # Auto-create support chat session using the new session_id
     try:
         support_chat.create_session(
-            session_id=user_data["user_id"],  # Use user_id as session_id
+            session_id=session_id,
             role=user_data["role"],
             department=user_data["department"]
         )
-        logger.info(f"Created support session for user {user_data['user_id']}")
+        logger.info(f"Created support session {session_id} for user {user_data['user_id']}")
     except Exception as e:
-        # Session might already exist, that's okay
+        # Session might already exist (unlikely with UUID), that's okay
         logger.debug(f"Session creation skipped or failed: {e}")
     
     # Get user profile from user_meta
