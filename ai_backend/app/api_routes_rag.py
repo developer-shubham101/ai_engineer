@@ -226,14 +226,25 @@ async def query(
             llm_prefix = prefix_extra + llm_prefix
 
     try:
-        res = query_local_rag(
-            query_text=req.question,
-            n_results=req.top_k,
-            requester=requester,       # pass role info for filtering in service
-            llm_prompt_prefix=llm_prefix,
-            use_llm=req.use_llm,
-            max_tokens=req.max_tokens,
-        )
+        if model_provider == "local":
+            res = await query_local_rag(
+                query_text=req.question,
+                n_results=req.top_k,
+                requester=requester,
+                llm_prompt_prefix=llm_prefix,
+                use_llm=req.use_llm,
+                max_tokens=req.max_tokens,
+            )
+        elif model_provider == "google":
+            res = await query_google_rag(
+                query_text=req.question,
+                n_results=req.top_k,
+                requester=requester,
+                llm_prompt_prefix=llm_prefix,
+                use_llm=req.use_llm,
+            )
+        else:
+            raise HTTPException(status_code=400, detail=f"Invalid model provider: {model_provider}")
     except Exception as e:
         logger.exception("RAG query failed: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
@@ -337,8 +348,11 @@ async def seed_defaults(
     reseed: bool = False
 ):
     try:
+<<<<<<< HEAD:ai_backend/app/api_routes_local.py
         # Pass the reseed flag to force re-seeding logic
-        ids = seed_from_file(force_reseed=reseed)
+=======
+>>>>>>> main:ai_backend/app/api_routes_rag.py
+        ids = await seed_from_file(force_reseed=reseed)
         if ids:
             return AddResponse(message=f"Seeded default docs from companyData. Chunks added: {len(ids)}.", chunk_count=len(ids))
         else:
