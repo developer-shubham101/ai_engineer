@@ -63,8 +63,22 @@ def add_documents_to_collection(collection: Any,
     """
     Add documents to an existing collection. Handles different chroma method signatures.
     """
-    logger.warning("Mark:- add_documents_to_collection called where documents=%s, metadatas=%s, ids=%s, embeddings=%s",
-                   documents, metadatas, ids, "provided" if embeddings else "not provided")
+    logger.info("Adding %d documents to collection", len(documents))
+    # Clean metadatas to ensure no None values (some versions don't accept None)
+    
+    cleaned_metadatas = []
+    for metadata in metadatas:
+        cleaned_metadata = {k: (v if v is not None else "") for k, v in metadata.items()}
+        cleaned_metadatas.append(cleaned_metadata)
+    metadatas = cleaned_metadatas
+
+    from rich import print as rprint
+    rprint("[yellow]Adding documents to collection[/yellow]")
+    rprint(f"Documents: {documents}")
+    rprint(f"Metadatas: {metadatas}")
+    rprint(f"IDs: {ids}")
+    rprint(f"Embeddings: {'provided' if embeddings else 'not provided'}")
+    rprint("[yellow]Calling collection.add()[/yellow]")
 
     try:
         if embeddings is not None:
