@@ -77,7 +77,7 @@
 - `package.json` — dependencies and NPM scripts (`dev`, `build`, `preview`).
 - `src/main.jsx` — application bootstrap, mounts React tree.
 - `src/App.jsx` — top-level app container with authentication routing (shows Login or RAGChat based on auth state).
-- `src/components/Login.jsx` — login form with username/password fields, calls `/api/auth/token` and stores JWT.
+- `src/components/Login.jsx` — login form with username/password fields and "Login with Guest" button (auto-fills guest/guest123), calls `/api/auth/token` and stores JWT.
 - `src/components/RAGChat.jsx` — core chat UI and main network wrappers. Uses Bearer token authentication. Displays user info and logout button.
 - `src/components/AddJsonForm.jsx` — modal form to POST `/add`.
 - `src/components/UploadFileForm.jsx` — modal form to post `/add-file` (multipart).
@@ -93,8 +93,8 @@
 **Login request:**
 ```json
 {
-  "username": "admin",
-  "password": "admin123"
+  "username": "guest",
+  "password": "guest123"
 }
 ```
 
@@ -146,3 +146,4 @@
   "Authorization": "Bearer eyJhbGc...",
   "X-Session-ID": "sess_d41a5bf69cd2474a84bf9e7853e27678"
 }
+```
