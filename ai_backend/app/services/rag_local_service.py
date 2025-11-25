@@ -41,16 +41,14 @@ from app.services.chroma_utils import (
 )
 
 # Import centralized utilities
-from app.config import (
-    ENABLE_DYNAMIC_MODEL_SELECTION,
-    DEFAULT_MODEL_NAME,
+from app.services.utility import (
     DEFAULT_PERSIST_DIR,
     DEFAULT_COLLECTION_NAME,
-)
-from app.services.utility import (
     embed_texts,
     chunk_text_basic,
     sanitize_metadata_dict,
+    build_tone_guidance,
+    MODELS_DIR,
     get_data_path, is_collection_empty,
 )
 
@@ -426,8 +424,8 @@ async def query_local_rag(
     return out
 
 
-async def seed_from_file(file_path: Optional[str] = None, source_name: Optional[str] = None, force_reseed: bool = False) -> \
-List[str]:
+async def seed_from_file(file_path: Optional[str] = None, source_name: Optional[str] = None,
+                         force_reseed: bool = False) -> List[str]:
     """
     Read the given file or directory and index it.
 

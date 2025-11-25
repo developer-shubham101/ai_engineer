@@ -2,10 +2,10 @@
 Centralized utility module for common paths, constants, and shared functions.
 This module prevents code duplication and circular import issues.
 """
-from pathlib import Path
-from typing import Optional, Dict, Any, List
 import logging
 import os
+from pathlib import Path
+from typing import Optional, Dict, Any, List
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +40,7 @@ SENTIMENT_ARTIFACTS_DIR = PROJECT_ROOT / "sentiment"
 # CHROMA DEFAULTS
 # ============================================================================
 from app.config import DEFAULT_PERSIST_DIR, DEFAULT_COLLECTION_NAME
+
 
 # ============================================================================
 # FILE PATHS
@@ -101,8 +102,6 @@ def get_embedding_model_instance():
 
     return _embedding_model_instance
 
-
-from fastapi.concurrency import run_in_threadpool
 
 async def embed_texts(texts: List[str]) -> List[List[float]]:
     """Embed a list of texts using the shared embedding model."""
