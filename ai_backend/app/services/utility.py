@@ -29,8 +29,10 @@ from app.config import EMBEDDING_MODEL_NAME
 # ============================================================================
 # DIRECTORY PATHS
 # ============================================================================
-# DATA_DIR (relative to app/) is app/data
+# DATA_DIR (relative to app/) is app/data - for app-specific data
 DATA_DIR = BASE_DIR / "data"
+# DATABASE_DIR (relative to project root) is project_root/database - for SQLite databases
+from app.config import DATABASE_DIR
 # TRAINING_DATA_DIR (relative to project root) is project_root/data
 TRAINING_DATA_DIR = PROJECT_ROOT / "data"
 CONFIG_DIR = BASE_DIR / "config"
@@ -65,6 +67,11 @@ def get_data_path(filename: str) -> Path:
 def get_sentiment_artifact_path(filename: str) -> Path:
     """Get path to a sentiment classifier artifact file."""
     return SENTIMENT_ARTIFACTS_DIR / filename
+
+
+def get_database_path(filename: str) -> Path:
+    """Get path to a database file in the database directory."""
+    return DATABASE_DIR / filename
 
 
 # ============================================================================

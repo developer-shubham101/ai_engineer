@@ -17,9 +17,9 @@ from datetime import datetime
 logger = logging.getLogger(__name__)
 
 # Database path
-from app.services.utility import get_data_path
+from app.services.utility import get_database_path
 
-VERSION_DB_PATH = get_data_path("document_versions.db")
+VERSION_DB_PATH = get_database_path("document_versions.db")
 
 
 def _get_connection() -> sqlite3.Connection:

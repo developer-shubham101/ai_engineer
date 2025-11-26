@@ -20,9 +20,15 @@ COPY requirements.txt .
 RUN pip install -r requirements.txt
 
 # 5. Copy the rest of your application code into the container.
-# This includes your 'app' directory and your 'data' directory for the RAG service.
+# This includes your 'app' directory, 'data' directory, and other necessary directories.
 COPY ./app /code/app
 COPY ./data /code/data
+COPY ./models /code/models
+COPY ./embeddings_models /code/embeddings_models
+COPY ./sentiment /code/sentiment
+
+# Create directories for runtime data (will be populated at runtime)
+RUN mkdir -p /code/database /code/chroma_storage /code/logs
 
 # 6. Expose the port the app runs on.
 EXPOSE 5444

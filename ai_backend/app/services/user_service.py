@@ -13,8 +13,8 @@ from datetime import datetime
 logger = logging.getLogger(__name__)
 
 # Database path
-from app.services.utility import DATA_DIR
-USER_DB_PATH = DATA_DIR / "users.db"
+from app.services.utility import DATABASE_DIR
+USER_DB_PATH = DATABASE_DIR / "users.db"
 
 # Dummy users to seed on initialization
 DUMMY_USERS = [
@@ -87,8 +87,8 @@ def init_user_db(reset_on_start: bool = False) -> None:
     Args:
         reset_on_start: If True, drop and recreate the table (for development)
     """
-    # Ensure data directory exists
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    # Ensure database directory exists
+    DATABASE_DIR.mkdir(parents=True, exist_ok=True)
     
     conn = _get_connection()
     cursor = conn.cursor()

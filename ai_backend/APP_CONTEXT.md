@@ -40,7 +40,7 @@ User Request → FastAPI → RAG Pipeline → RBAC Filter → LLM (Local or Goog
 - **Vector DB**: ChromaDB (persistent storage in `chroma_storage/`)
 - **Embeddings**: SentenceTransformers (all-MiniLM-L6-v2) - loaded from `embeddings_models/`
 - **Local LLM**: Mistral-7B-Instruct-v0.2.Q3_K_M.gguf via llama-cpp-python (default model, with optional dynamic selection)
-- **Support Chat**: SQLite-based session management (`app/data/support_sessions.db`) - **sessions auto-created on login using user_id**
+- **Support Chat**: SQLite-based session management (`database/support_sessions.db`) - **sessions auto-created on login using user_id**
 - **Sentiment Analysis**: Local classifier using scikit-learn + sentence-transformers
 - **Utilities**: Centralized paths, constants, shared functions (`app/services/utility.py`)
 
@@ -52,8 +52,9 @@ User Request → FastAPI → RAG Pipeline → RBAC Filter → LLM (Local or Goog
     - `auth.py` - JWT token handling
   - `utils/` - Utility modules (e.g., `doc_parser.py`)
   - `config/` - Configuration files (e.g., `onboarding_fields.json`, `config.py`)
-  - `data/` - SQLite databases (**users.db with user_meta table**, support_sessions.db), seed data
-  - `chroma_storage/` - ChromaDB persistence
+  - `data/` - Seed data and app-specific files
+- `database/` - SQLite databases (**users.db with user_meta table**, support_sessions.db, document_versions.db)
+- `chroma_storage/` - ChromaDB persistence
   - `dependencies.py` - Dependency injection providers (auth, RBAC, services)
   - `api_routes_auth.py` - Authentication API routes
 - `data/` - Document examples, company overview, seed files

@@ -8,3 +8,8 @@ __pycache__
 .vscode
 README.md
 venv
+
+# Runtime directories (will be created in container)
+database/
+chroma_storage/
+logs/

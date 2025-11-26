@@ -69,8 +69,8 @@ User → FastAPI → RAG Pipeline → RBAC Filter → Local LLM → Response
 | **FastAPI Server**           | Provides REST endpoints for query, add, seed, chat sessions |
 | **RAG Local Service**        | Chunking, embeddings, Chroma querying, RBAC filtering       |
 | **Local LLM (Mistral 7B)**   | Generates final natural-language answers                    |
-| **ChromaDB**                 | Stores vector embeddings + metadata                         |
-| **SQLite Support Chat**      | Memory + session history                                    |
+| **ChromaDB**                 | Stores vector embeddings + metadata (`chroma_storage/`)     |
+| **SQLite Databases**         | User auth, chat sessions, document versions (`database/`)   |
 | **Auth Layer**               | API-key based role simulation                               |
 | **Role & Department System** | Controls document visibility                                |
 

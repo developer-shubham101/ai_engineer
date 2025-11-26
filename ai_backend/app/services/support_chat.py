@@ -12,14 +12,14 @@ from app.services.prompt_builder import build_tone_guidance
 from app.services.sentiment_classifier import get_global_sentiment
 # Import centralized paths and utilities
 from app.services.utility import (
-    DATA_DIR,
+    DATABASE_DIR,
     get_config_path,
 )
 
 logger = logging.getLogger(__name__)
 
 # DB PATHS
-DB_PATH = DATA_DIR / "support_sessions.db"
+DB_PATH = DATABASE_DIR / "support_sessions.db"
 
 MAX_HISTORY_TURNS = 5
 _DB_INITIALIZED = False
@@ -41,7 +41,7 @@ def init_support_chat_db(reset_on_start: bool = False) -> None:
     if _DB_INITIALIZED:
         return
 
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    DATABASE_DIR.mkdir(parents=True, exist_ok=True)
 
     if reset_on_start and DB_PATH.exists():
         try:

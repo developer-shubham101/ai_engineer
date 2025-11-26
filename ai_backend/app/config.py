@@ -12,6 +12,7 @@ import os
 PROJECT_ROOT = Path(os.getcwd()).resolve()
 BASE_DIR = PROJECT_ROOT / "app/"
 CHROMA_STORAGE_DIR = PROJECT_ROOT / "chroma_storage"
+DATABASE_DIR = PROJECT_ROOT / "database"
 
 # ============================================================================
 # MODEL CONFIGURATION

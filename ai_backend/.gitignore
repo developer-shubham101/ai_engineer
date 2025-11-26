@@ -11,4 +11,12 @@ venv/
 .vscode/
 .DS_Store
 
+# Database files (SQLite)
+database/*.db
+
+# ChromaDB storage
+chroma_storage/
+
+# Logs
+logs/
 
