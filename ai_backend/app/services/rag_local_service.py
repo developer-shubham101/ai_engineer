@@ -41,6 +41,9 @@ from app.services.chroma_utils import (
     delete_all_documents,
 )
 
+# Version tracking
+from app.services import version_tracking
+
 # Import centralized utilities
 from app.services.utility import (
     DEFAULT_PERSIST_DIR,
@@ -72,6 +75,19 @@ _llm_instances = {}  # Dict[str, Any] - cache for different model keys
 def _generate_ids(prefix: str, n: int) -> List[str]:
     """Generate a list of unique IDs with a given prefix."""
     return [f"{prefix}_{uuid.uuid4().hex}" for _ in range(n)]
+
+
+def _generate_document_id(source_name: str) -> str:
+    """Generate a stable document ID from source name."""
+    import hashlib
+    # Use hash of source name for deterministic document_id
+    hash_obj = hashlib.md5(source_name.encode())
+    return f"doc_{hash_obj.hexdigest()[:16]}"
+
+
+def _calculate_next_version(document_id: str) -> str:
+    """Calculate the next version number for a document."""
+    return version_tracking.generate_next_version(document_id)
 
 
 # ---------- Public API ----------
@@ -113,45 +129,90 @@ def initialize_local_rag(embedding_model_instance: Optional[Any] = None,
     logger.info("Local RAG initialization completed (collection: %s)", collection_name or DEFAULT_COLLECTION_NAME)
 
 
-async def add_document_to_rag_local(source_name: str,
-                                    text: str,
-                                    chunks: Optional[List[str]] = None,
-                                    metadata: Optional[Dict[str, Any]] = None) -> List[str]:
+async def add_document_to_rag_local(
+    source_name: str,
+    text: str,
+    chunks: Optional[List[str]] = None,
+    metadata: Optional[Dict[str, Any]] = None,
+    document_id: Optional[str] = None,
+    version: Optional[str] = None,
+    parent_version: Optional[str] = None,
+    status: str = "published",
+    version_notes: Optional[str] = None,
+    created_by: Optional[str] = None
+) -> Dict[str, Any]:
     """
-    Add a document (or precomputed chunks) to the local chroma collection.
+    Add a document (or precomputed chunks) to the local chroma collection with versioning support.
 
     This function takes a document, splits it into chunks (if not already chunked),
     computes embeddings for each chunk, and then adds the chunks, metadatas,
-    and embeddings to the ChromaDB collection.
+    and embeddings to the ChromaDB collection. It also tracks version history.
 
-    Returns the list of ids added.
+    Args:
+        source_name: Name of the source document
+        text: Document text content
+        chunks: Optional pre-computed chunks
+        metadata: Optional metadata dictionary
+        document_id: Optional document ID (generated if not provided)
+        version: Optional version number (auto-calculated if not provided)
+        parent_version: Previous version number
+        status: Version status (draft, pending_approval, published, archived)
+        version_notes: Optional change description
+        created_by: User ID who created this version
 
-    - Splits text into chunks if chunks not provided.
-    - Computes embeddings locally for each chunk.
-    - Adds documents, metadatas, ids, and embeddings to Chroma via chroma_utils.
+    Returns:
+        Dictionary with:
+        - ids: List of chunk IDs added
+        - document_id: Document identifier
+        - version: Version number
+        - chunk_count: Number of chunks
     """
 
+    # Generate document_id if not provided
+    if not document_id:
+        document_id = _generate_document_id(source_name)
+    
+    # Calculate version if not provided
+    if not version:
+        version = _calculate_next_version(document_id)
+    
     if not chunks:
         chunks = chunk_text_basic(text)
 
     if not chunks:
         logger.warning("No chunks produced for document: %s", source_name)
-        return []
+        return {
+            "ids": [],
+            "document_id": document_id,
+            "version": version,
+            "chunk_count": 0
+        }
 
     # sanitize metadata and ensure source is present
     base_meta = metadata or {}
     sanitized_base = sanitize_metadata_dict(base_meta)
     sanitized_base["source"] = source_name
+    
+    # Add version metadata
+    from datetime import datetime
+    sanitized_base["document_id"] = document_id
+    sanitized_base["version"] = version
+    sanitized_base["version_created_at"] = datetime.utcnow().isoformat() + "Z"
+    sanitized_base["version_created_by"] = created_by
+    sanitized_base["parent_version"] = parent_version
+    sanitized_base["status"] = status
+    sanitized_base["is_latest_version"] = True  # Will be updated if newer version created
+    
     logger.debug("Ingest metadata keys (sample): %s", list(sanitized_base.keys())[:8])
+    
     # add ingestion timestamp if not present
     if "ingested_at" not in sanitized_base:
-        from datetime import datetime
         sanitized_base["ingested_at"] = datetime.utcnow().isoformat() + "Z"
 
     metadatas = [dict(sanitized_base) for _ in chunks]
-    ids = _generate_ids(prefix=source_name, n=len(chunks))
-    logger.info("Preparing to add document to RAG: source=%s chunks=%d ids_sample=%s", source_name, len(chunks),
-                ids[:3])
+    ids = _generate_ids(prefix=f"{document_id}_v{version}", n=len(chunks))
+    logger.info("Preparing to add document to RAG: source=%s document_id=%s version=%s chunks=%d ids_sample=%s", 
+                source_name, document_id, version, len(chunks), ids[:3])
 
     # compute embeddings locally
     try:
@@ -166,12 +227,295 @@ async def add_document_to_rag_local(source_name: str,
                                                   collection_name=DEFAULT_COLLECTION_NAME)
         add_documents_to_collection(collection=collection, documents=chunks, metadatas=metadatas, ids=ids,
                                     embeddings=embeddings)
-        logger.info("Added %d chunks for source %s to collection %s", len(chunks), source_name, DEFAULT_COLLECTION_NAME)
+        logger.info("Added %d chunks for source %s (document_id=%s version=%s) to collection %s", 
+                   len(chunks), source_name, document_id, version, DEFAULT_COLLECTION_NAME)
     except Exception as e:
         logger.exception("Failed to add documents to Chroma collection: %s", e)
         raise
+    
+    # Create version record in version tracking database
+    try:
+        version_tracking.create_version_record(
+            document_id=document_id,
+            version=version,
+            source_name=source_name,
+            chunk_ids=ids,
+            created_by=created_by,
+            parent_version=parent_version,
+            status=status,
+            version_notes=version_notes,
+            metadata=sanitized_base
+        )
+        logger.info("Created version record: document_id=%s version=%s", document_id, version)
+    except Exception as e:
+        logger.warning("Failed to create version record (non-fatal): %s", e)
 
-    return ids
+    # Mark previous version as not latest (if this is an update)
+    if parent_version:
+        try:
+            # Update previous version's is_latest_version flag
+            prev_version_info = version_tracking.get_version(document_id, parent_version)
+            if prev_version_info:
+                prev_chunk_ids = prev_version_info["chunk_ids"]
+                update_metadatas(collection=collection, ids=prev_chunk_ids, 
+                               metadata={"is_latest_version": False})
+                logger.info("Marked previous version %s as not latest", parent_version)
+        except Exception as e:
+            logger.warning("Failed to update previous version metadata (non-fatal): %s", e)
+
+    return {
+        "ids": ids,
+        "document_id": document_id,
+        "version": version,
+        "chunk_count": len(ids)
+    }
+
+
+async def update_document_version(
+    document_id: str,
+    text: str,
+    metadata: Optional[Dict[str, Any]] = None,
+    version_notes: Optional[str] = None,
+    requester_id: Optional[str] = None,
+    status: str = "published"
+) -> Dict[str, Any]:
+    """
+    Create a new version of an existing document (non-destructive update).
+    
+    Args:
+        document_id: Document ID to update
+        text: New document content
+        metadata: Optional metadata updates
+        version_notes: Description of changes
+        requester_id: User ID making the update
+        status: Version status
+    
+    Returns:
+        Dictionary with version info
+    """
+    # Get latest version to determine parent
+    latest = version_tracking.get_latest_version(document_id)
+    if not latest:
+        raise ValueError(f"Document {document_id} not found")
+    
+    parent_version = latest["version"]
+    source_name = latest["source_name"]
+    
+    # Calculate next version
+    next_version = _calculate_next_version(document_id)
+    
+    # Create new version
+    result = await add_document_to_rag_local(
+        source_name=source_name,
+        text=text,
+        metadata=metadata,
+        document_id=document_id,
+        version=next_version,
+        parent_version=parent_version,
+        status=status,
+        version_notes=version_notes,
+        created_by=requester_id
+    )
+    
+    logger.info("Updated document %s from version %s to %s", document_id, parent_version, next_version)
+    return result
+
+
+async def get_document_version(
+    document_id: str,
+    version: Optional[str] = None
+) -> Optional[Dict[str, Any]]:
+    """
+    Retrieve a specific version of a document with its chunks.
+    
+    Args:
+        document_id: Document ID
+        version: Version number (if None, get latest)
+    
+    Returns:
+        Dictionary with chunks, metadata, and version info
+    """
+    # Get version record
+    if version:
+        version_info = version_tracking.get_version(document_id, version)
+    else:
+        version_info = version_tracking.get_latest_version(document_id)
+    
+    if not version_info:
+        return None
+    
+    # Get chunks from ChromaDB
+    try:
+        from app.services.chroma_utils import get_documents_by_ids
+        client, collection = ensure_chroma_client(
+            persist_directory=str(DEFAULT_PERSIST_DIR),
+            collection_name=DEFAULT_COLLECTION_NAME
+        )
+        
+        chunk_ids = version_info["chunk_ids"]
+        result = get_documents_by_ids(collection, chunk_ids)
+        
+        chunks = result.get("documents", [])
+        metadatas = result.get("metadatas", [])
+        
+        return {
+            "document_id": document_id,
+            "version": version_info["version"],
+            "source_name": version_info["source_name"],
+            "chunks": chunks,
+            "metadatas": metadatas,
+            "created_at": version_info["created_at"],
+            "created_by": version_info["created_by"],
+            "status": version_info["status"],
+            "version_notes": version_info["version_notes"],
+            "parent_version": version_info["parent_version"]
+        }
+    except Exception as e:
+        logger.exception("Failed to retrieve document version: %s", e)
+        return None
+
+
+async def compare_document_versions(
+    document_id: str,
+    version1: str,
+    version2: str
+) -> Optional[Dict[str, Any]]:
+    """
+    Compare two versions of a document.
+    
+    Args:
+        document_id: Document ID
+        version1: First version number
+        version2: Second version number
+    
+    Returns:
+        Dictionary with version data and diff
+    """
+    # Get both versions
+    v1_data = await get_document_version(document_id, version1)
+    v2_data = await get_document_version(document_id, version2)
+    
+    if not v1_data or not v2_data:
+        return None
+    
+    # Combine chunks into full text
+    text1 = "\n\n".join(v1_data["chunks"])
+    text2 = "\n\n".join(v2_data["chunks"])
+    
+    # Compute diff
+    import difflib
+    diff = difflib.unified_diff(
+        text1.splitlines(keepends=True),
+        text2.splitlines(keepends=True),
+        fromfile=f"Version {version1}",
+        tofile=f"Version {version2}",
+        lineterm=''
+    )
+    diff_text = ''.join(diff)
+    
+    # Calculate statistics
+    added_lines = diff_text.count('\n+')
+    removed_lines = diff_text.count('\n-')
+    chunk_diff = len(v2_data["chunks"]) - len(v1_data["chunks"])
+    
+    return {
+        "document_id": document_id,
+        "version1": version1,
+        "version2": version2,
+        "diff": diff_text,
+        "summary": {
+            "added_lines": added_lines,
+            "removed_lines": removed_lines,
+            "chunk_difference": chunk_diff,
+            "v1_chunks": len(v1_data["chunks"]),
+            "v2_chunks": len(v2_data["chunks"])
+        },
+        "version1_info": {
+            "created_at": v1_data["created_at"],
+            "created_by": v1_data["created_by"],
+            "notes": v1_data["version_notes"]
+        },
+        "version2_info": {
+            "created_at": v2_data["created_at"],
+            "created_by": v2_data["created_by"],
+            "notes": v2_data["version_notes"]
+        }
+    }
+
+
+async def list_documents(
+    department: Optional[str] = None,
+    status: Optional[str] = None,
+    latest_only: bool = True
+) -> List[Dict[str, Any]]:
+    """
+    List all documents with optional filtering.
+    
+    Args:
+        department: Filter by department
+        status: Filter by status
+        latest_only: If True, only return latest versions
+    
+    Returns:
+        List of document summaries
+    """
+    # Get all documents from version tracking
+    if status:
+        documents = version_tracking.get_documents_by_status(status)
+    else:
+        documents = version_tracking.list_all_documents(latest_only=latest_only)
+    
+    # Filter by department if specified
+    if department:
+        filtered = []
+        for doc in documents:
+            if doc.get("metadata", {}).get("department") == department:
+                filtered.append(doc)
+        documents = filtered
+    
+    return documents
+
+
+async def archive_document_version(
+    document_id: str,
+    version: str
+) -> bool:
+    """
+    Archive (soft-delete) a specific version of a document.
+    
+    Args:
+        document_id: Document ID
+        version: Version number
+    
+    Returns:
+        True if successful
+    """
+    try:
+        # Update version tracking status
+        success = version_tracking.update_version_status(document_id, version, "archived")
+        
+        if not success:
+            return False
+        
+        # Update ChromaDB metadata
+        version_info = version_tracking.get_version(document_id, version)
+        if not version_info:
+            return False
+        
+        chunk_ids = version_info["chunk_ids"]
+        client, collection = ensure_chroma_client(
+            persist_directory=str(DEFAULT_PERSIST_DIR),
+            collection_name=DEFAULT_COLLECTION_NAME
+        )
+        
+        update_metadatas(collection=collection, ids=chunk_ids, 
+                        metadata={"status": "archived", "is_latest_version": False})
+        
+        logger.info("Archived document version: %s v%s", document_id, version)
+        return True
+    except Exception as e:
+        logger.exception("Failed to archive document version: %s", e)
+        return False
 
 
 async def retrieve_documents(query_text: str, n_results: int) -> Dict[str, Any]:
@@ -440,7 +784,7 @@ async def seed_from_file(file_path: Optional[str] = None, source_name: Optional[
     """
 
     # NEW DEFAULT PATH: data/companyData
-    default_path = get_data_path("companyData")
+    default_path = get_data_path("company")
     path = Path(file_path) if file_path else default_path
     logger.info("looking for path for data %s", path)
     if not path.exists():
@@ -471,7 +815,7 @@ async def seed_from_file(file_path: Optional[str] = None, source_name: Optional[
 
     added_ids: List[str] = []
 
-    # If path is a directory, iterate files (non-recursive) and ingest each
+    #If path is a directory, check if it contains version subdirectories
     if path.is_dir():
         # NOTE: If force_reseed is True, we are re-adding chunks which may result in duplicates
         # unless IDs are managed carefully. For a learning environment, this is often acceptable
@@ -481,21 +825,104 @@ async def seed_from_file(file_path: Optional[str] = None, source_name: Optional[
             logger.warning("Force re-seeding entire directory: %s. This may create duplicate chunks.", path)
 
         logger.info("Seeding directory: %s", path)
-        for child in sorted(path.iterdir()):
-            if child.is_file():
+        
+        # Check if this directory contains version subdirectories (v1, v2, v3, etc.)
+        # Filter for directories starting with 'v' followed by a number
+        version_dirs = []
+        for d in path.iterdir():
+            if d.is_dir() and d.name.lower().startswith('v'):
                 try:
-                    # Use doc_parser to read and parse file
-                    text = parse_file(str(child))
-                    # Use relative path + name for source_name for better uniqueness
-                    src_name = str(child.relative_to(path.parent))
-                    ids = await add_document_to_rag_local(source_name=src_name, text=text, chunks=None,
-                                                          metadata={"seeded": True})
-                    if ids:
-                        added_ids.extend(ids)
-                        logger.info("Seeded file %s -> %d chunks", child.name, len(ids))
-                except Exception as e:
-                    logger.exception("Failed to seed file %s: %s", child, e)
+                    # Verify the rest is a number (e.g., "1", "1.0", "2.5")
+                    float(d.name[1:])
+                    version_dirs.append(d)
+                except ValueError:
                     continue
+        
+        if version_dirs:
+            # Sort version directories numerically (v2 < v10)
+            def get_version_float(d):
+                try:
+                    return float(d.name[1:])
+                except ValueError:
+                    return 0.0
+            
+            sorted_version_dirs = sorted(version_dirs, key=get_version_float)
+            logger.info("Found %d version directories in %s. Processing order: %s", 
+                       len(sorted_version_dirs), path, [d.name for d in sorted_version_dirs])
+            
+            category = path.name  # e.g., "company", "mission", etc.
+            
+            # Track the last seen version for each document to correctly link parents
+            # Map: document_base_name -> version_string
+            latest_versions_map = {}
+            
+            for version_dir in sorted_version_dirs:
+                version_str = version_dir.name[1:]  # Remove 'v' prefix
+                # Normalize version to semantic format (e.g., "1" -> "1.0")
+                if '.' not in version_str:
+                    version_str = f"{version_str}.0"
+                
+                logger.info("Processing version directory: %s (version %s)", version_dir.name, version_str)
+                
+                for file_path in sorted(version_dir.iterdir()):
+                    if file_path.is_file():
+                        try:
+                            # Use doc_parser to read and parse file
+                            text = parse_file(str(file_path))
+                            
+                            # Generate document_id based on category + filename (same across versions)
+                            doc_base_name = file_path.stem  # filename without extension
+                            document_id = _generate_document_id(f"{category}/{doc_base_name}")
+                            
+                            # Source name for display
+                            src_name = f"{category}/{version_dir.name}/{file_path.name}"
+                            
+                            # Determine parent version dynamically
+                            # If we've seen this doc before, that's the parent. 
+                            # If not, and this isn't v1.0, parent is None (it's a new doc introduced in a later version)
+                            parent_version = latest_versions_map.get(doc_base_name)
+                            
+                            result = await add_document_to_rag_local(
+                                source_name=src_name,
+                                text=text,
+                                chunks=None,
+                                metadata={"seeded": True, "category": category},
+                                document_id=document_id,
+                                version=version_str,
+                                parent_version=parent_version,
+                                status="published",
+                                created_by="system_seed"
+                            )
+                            
+                            if result and result.get("ids"):
+                                added_ids.extend(result["ids"])
+                                logger.info("Seeded %s -> v%s (%d chunks, document_id=%s, parent=%s)", 
+                                          file_path.name, version_str, result["chunk_count"], document_id, parent_version)
+                                
+                            # Update the map so the next version knows this is the parent
+                            latest_versions_map[doc_base_name] = version_str
+                            
+                        except Exception as e:
+                            logger.exception("Failed to seed file %s: %s", file_path, e)
+                            continue
+        else:
+            # Backward compatibility: process files directly in directory (old behavior)
+            logger.info("No version directories found, processing files directly")
+            for child in sorted(path.iterdir()):
+                if child.is_file():
+                    try:
+                        # Use doc_parser to read and parse file
+                        text = parse_file(str(child))
+                        # Use relative path + name for source_name for better uniqueness
+                        src_name = str(child.relative_to(path.parent))
+                        result = await add_document_to_rag_local(source_name=src_name, text=text, chunks=None,
+                                                               metadata={"seeded": True})
+                        if result and result.get("ids"):
+                            added_ids.extend(result["ids"])
+                            logger.info("Seeded file %s -> %d chunks (v%s)", child.name, result["chunk_count"], result["version"])
+                    except Exception as e:
+                        logger.exception("Failed to seed file %s: %s", child, e)
+                        continue
         return added_ids
 
     # Otherwise, it's a single file; ingest it. (Old behavior, primarily for backward compatibility)
@@ -507,10 +934,10 @@ async def seed_from_file(file_path: Optional[str] = None, source_name: Optional[
 
     name = source_name or path.name
     try:
-        ids = await add_document_to_rag_local(source_name=name, text=text, chunks=None, metadata={"seeded": True})
-        if ids:
-            added_ids.extend(ids)
-            logger.info("Seeded file %s -> %d chunks", path.name, len(ids))
+        result = await add_document_to_rag_local(source_name=name, text=text, chunks=None, metadata={"seeded": True})
+        if result and result.get("ids"):
+            added_ids.extend(result["ids"])
+            logger.info("Seeded file %s -> %d chunks (v%s)", path.name, result["chunk_count"], result["version"])
     except Exception as e:
         logger.exception("Failed to seed file %s: %s", path, e)
 

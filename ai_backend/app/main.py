@@ -60,17 +60,27 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"Error initializing user database: {e}")
 
-    # Optional: Seed data at startup (uses seed_from_file in rag_local_service)
+    # Initialize version tracking database
     try:
-        if hasattr(rag_local_service, "seed_from_file"):
-            # This calls seed_from_file(force_reseed=False) implicitly
-            seeded_ids = await rag_local_service.seed_from_file()
+        from app.services.version_tracking import init_version_db
+        init_version_db(reset_on_start=False)  # Set to True for development to reset versions
+        logger.info("Version tracking database initialized successfully.")
+    except Exception as e:
+        logger.error(f"Error initializing version tracking database: {e}")
+
+    # Seed from default path (supports version folders: data/company/v1/, v2/, v3/...
+    try:
+        from pathlib import Path
+        default_seed = Path.cwd() / "data" / "company"
+        if default_seed.exists() and hasattr(rag_local_service, "seed_from_file"):
+            logger.info("Attempting to seed from %s (version-aware)", default_seed)
+            seeded_ids = await rag_local_service.seed_from_file(seed_path=default_seed, force_reseed=False)
             if seeded_ids:
-                logger.info(f"Seeded default file. Chunks added: {len(seeded_ids)}")
+                logger.info(f"Seeded {len(seeded_ids)} chunks from versioned folders")
             else:
-                logger.info("No seed file found or collection was already populated, skipping startup seed.")
+                logger.info("No seed or collection already populated, skipping startup seed.")
         else:
-            logger.info("seed_from_file() not found in rag_local_service; skipping seeding.")
+            logger.info("Seed path not found or seed_from_file() not available; skipping seeding.")
     except Exception as e:
         logger.warning(f"Seeding at startup skipped or failed: {e}")
 
@@ -238,10 +248,10 @@ async def add_document(file: UploadFile = File(...)):
     try:
         content = await file.read()
         document_text = content.decode("utf-8", errors="ignore")
-        # Use local RAG service to add doc; it returns list of chunk ids
-        ids = await rag_local_service.add_document_to_rag_local(source_name=file.filename, text=document_text, metadata=None)
-        if ids:
-            message = f"Successfully processed and added '{file.filename}'. {len(ids)} chunks ingested."
+        # Use local RAG service to add doc; it returns dict with version info
+        result = await rag_local_service.add_document_to_rag_local(source_name=file.filename, text=document_text, metadata=None)
+        if result and result.get("chunk_count", 0) > 0:
+            message = f"Successfully processed and added '{file.filename}' (v{result['version']}, {result['chunk_count']} chunks, document_id={result['document_id']})."
             return GenerationResponse(generated_text=message)
         else:
             raise HTTPException(status_code=400, detail="The file was empty or could not be processed.")

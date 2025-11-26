@@ -76,18 +76,33 @@ User Request → FastAPI → RAG Pipeline → RBAC Filter → LLM (Local or Goog
 
 **RAG Services** (`/api/rag/*`):
 - `POST /api/rag/{model_provider}/query` - RAG query with RBAC filtering, optional LLM generation, session-aware. **Public endpoint** (no auth required, Guest users see public docs only). **Uses user_id from JWT token as session identifier (no X-Session-Id header needed)**. `model_provider` can be `local` or `google`.
-- `POST /api/rag/add` - Add document via JSON (text + metadata). **Requires**: SuperAdmin, HR, Manager, or Employee role.
-- `POST /api/rag/add-file` - Upload text file (≤5MB) for ingestion. **Requires**: SuperAdmin, HR, Manager, or Employee role.
+- `POST /api/rag/add` - Add document via JSON (text + metadata). **Creates version 1.0**. **Requires**: SuperAdmin, HR, Manager, or Employee role.
+- `POST /api/rag/add-file` - Upload text file (≤5MB) for ingestion. **Creates version 1.0**. **Requires**: SuperAdmin, HR, Manager, or Employee role.
 - `POST /api/rag/seed` - Seed default `data/companyData`. **Requires**: SuperAdmin role only.
 - `POST /api/rag/clear` - Clear Chroma collection. **Requires**: SuperAdmin role only.
 - `POST /api/rag/sentiment` - Analyze sentiment/tone of text. **Requires**: SuperAdmin role only.
 - `GET /api/rag/sentiment/stats` - Get sentiment statistics. **Requires**: SuperAdmin role only.
 
+**Document Versioning** (`/api/rag/documents/*`):
+- `POST /api/rag/documents/update` - Update document (creates new version, non-destructive). **Requires**: SuperAdmin, HR, Manager, or Employee role.
+  - Request: `{"document_id": "doc_abc...", "text": "...", "version_notes": "Fixed typos", "status": "published"}`
+  - Response: `{"message": "...", "document_id": "...", "version": "2.0", "chunk_count": 5, "status": "published"}`
+- `GET /api/rag/documents/list` - List all documents with filtering. Query params: `?department=HR&status=published&latest_only=true`. **Requires**: SuperAdmin, HR, Manager, or Employee role.
+- `GET /api/rag/documents/{document_id}/versions` - Get version history for a document. **Requires**: SuperAdmin, HR, Manager, or Employee role.
+- `GET /api/rag/documents/{document_id}/versions/{version}` - Get specific version with full content. **Requires**: SuperAdmin, HR, Manager, or Employee role.
+- `GET /api/rag/documents/{document_id}/compare?version1=1.0&version2=2.0` - Compare two versions (shows diff). **Requires**: SuperAdmin, HR, Manager, or Employee role.
+- `POST /api/rag/documents/{document_id}/archive` - Archive a version (soft-delete). **Requires**: SuperAdmin, HR, or Manager role.
+
 ### Core Service Functions
 
 **RAG Services** (`rag_local_service.py`):
 - `initialize_local_rag()` - Initialize Chroma client and collection.
-- `add_document_to_rag_local(source_name, text, metadata)` - Asynchronously chunk, embed, store document.
+- `add_document_to_rag_local(source_name, text, metadata, document_id, version, parent_version, status, version_notes, created_by)` - Asynchronously chunk, embed, store document **with versioning support**. Returns dict with `{ids, document_id, version, chunk_count}`.
+- `update_document_version(document_id, text, metadata, version_notes, requester_id, status)` - Create new version of existing document (non-destructive).
+- `get_document_version(document_id, version)` - Retrieve specific version with its chunks.
+- `compare_document_versions(document_id, version1, version2)` - Compare two versions and return diff.
+- `list_documents(department, status, latest_only)` - List all documents with filtering.
+- `archive_document_version(document_id, version)` - Archive (soft-delete) a version.
 - `query_local_rag(query_text, n_results, requester, llm_prompt_prefix, use_llm, max_tokens, session_id)` - Main orchestrator for RAG queries (calls modular sub-functions).
 - `retrieve_documents(query_text, n_results)` - Handle embedding and ChromaDB retrieval.
 - `normalize_chroma_result(result)` - Normalize ChromaDB response format.
@@ -96,6 +111,17 @@ User Request → FastAPI → RAG Pipeline → RBAC Filter → LLM (Local or Goog
 - `generate_rag_response(query_text, context_text, final_prefix, use_llm, max_tokens, session_id)` - Generate LLM response.
 - `seed_from_file(force_reseed)` - Seed from file or directory.
 - `clear_collection()` - Delete all documents.
+
+**Version Tracking** (`version_tracking.py`):
+- `init_version_db(reset_on_start)` - Initialize version tracking SQLite database.
+- `create_version_record(document_id, version, source_name, chunk_ids, created_by, parent_version, status, version_notes, metadata)` - Store version metadata.
+- `get_version_history(document_id)` - Get all versions of a document.
+- `get_version(document_id, version)` - Get specific version metadata.
+- `get_latest_version(document_id)` - Get most recent version.
+- `update_version_status(document_id, version, status)` - Update version status (draft/published/archived).
+- `get_documents_by_status(status)` - Filter documents by status.
+- `list_all_documents(latest_only)` - List all documents.
+- `generate_next_version(document_id)` - Calculate next semantic version number.
 
 **Authentication & User Management** (`user_service.py`, `auth.py`):
 - `init_user_db(reset_on_start)` - Initialize user database, **create user_meta table**, and seed dummy users with profiles.
@@ -444,42 +470,44 @@ uvicorn app.main:app --host 0.0.0.0 --port 5444
 
 ---
 
-**Last Updated**: 2025-11-25
+**Last Updated**: 2025-11-26
 
-**Recent Updates**:
-- **Removed Legacy API Key Authentication (2025-11-25)**:
-  - Removed unused `_API_KEYS` dictionary and `get_user_from_api_key()` function from `auth.py`.
-  - System now exclusively uses JWT-based Bearer token authentication.
-  - Updated documentation to reflect JWT-only authentication.
+## Recent Updates
 
-- **Session Management Refactoring (2025-11-25)**:
-  - Removed `/api/rag/session/start` and `/api/rag/session/end` endpoints.
-  - Sessions now auto-created on login using `user_id` as session identifier.
-  - Added `user_meta` table for dynamic user profile storage (key-value pairs).
-  - Query endpoint uses `user_id` from JWT token instead of `X-Session-Id` header.
-  - Onboarding responses saved to `user_meta` table.
-  - Profile-based onboarding: skips questions if user already has complete profile.
-  - Login response now includes user profile from `user_meta` table.
-- **JWT Authentication System (2025-11-25)**:
-  - Implemented JWT-based authentication with Bearer token support (`Authorization: Bearer <token>`).
-  - Created user management system with SQLite database (`app/data/users.db`).
-  - Added `/api/auth/token` endpoint for login (username/password → JWT token).
-  - Password hashing with bcrypt for secure storage.
-  - Role-based access control (RBAC) on all endpoints with `require_roles()` dependency.
-  - Added `SuperAdmin` role with full permissions.
-  - Public query endpoint (no auth required, Guest users see only public documents).
-  - Configurable token expiration (default: 1 day via `JWT_EXPIRATION_DAYS`).
-  - Dummy users seeded: admin, hr_manager, manager, employee.
-- **Code Quality Refactoring (2025-11-25)**: 
-  - Decomposed `query_local_rag` into modular functions (`retrieve_documents`, `filter_documents_by_rbac`, `inject_tone_guidance`, `generate_rag_response`) for improved testability and maintainability.
-  - Introduced dependency injection pattern via `app/dependencies.py` for better separation of concerns and easier testing.
-  - Updated verification scripts to support new DI architecture.
-- **Refactoring**: Broke down `rag_local_service.py` into `model_manager.py` and `prompt_builder.py`.
-- **Configuration**: Centralized configuration into `app/config.py`.
-- **Consolidation**: Removed legacy `rag_service.py` and `rag_manual_service.py`.
-- **API Routes**: Migrated from `/api/local` to `/api/rag` and added support for multiple model providers (`/api/rag/{model_provider}/query`).
-- **Performance**: Made embedding and LLM calls asynchronous.
-- **Model selection**: Default to single model (`mistral-7b-instruct-v0.2.Q3_K_M.gguf`) with optional dynamic selection via flag.
-- **Sentiment/tone**: Added canonical tone normalization, improved error handling with defaults.
-- **Tone guidance**: Shortened to 20-60 tokens for token efficiency.
+### 1. Code Quality Refactoring
+- Modularized functions in `rag_local_service.py` for better maintainability
+- Created dedicated functions: `retrieve_documents()`, `filter_documents_by_rbac()`, `inject_tone_guidance()`, `generate_rag_response()`
+- Implemented dependency injection pattern via `app/dependencies.py` for testability
 
+### 2. Authentication & Session Management
+- Migrated from API key to JWT token-based authentication
+- Session management now uses `session_id` embedded in JWT token (via `user_id`)
+- Removed legacy `/api/rag/session/start` and `/api/rag/session/end` endpoints
+- Login endpoint (`/api/auth/token`) returns user profile from `user_meta` table
+
+### 3. Document Parser Integration
+- Created `doc_parser` module in `app/utils/` for extensible document parsing
+- Supports Markdown, HTML, JSON, and plain text formats
+- Integrated into file upload endpoint (`/api/rag/add-file`) for automatic format detection
+
+### 4. Document Versioning System
+- Implemented comprehensive version tracking with SQLite database (`version_tracking.py`)
+- **Folder-Based Versioning**: Supports `data/{category}/v{version}/*.md` structure (e.g., `data/company/v1/policy.md`)
+- Auto-detection of versions from folder paths during seeding
+- All document additions now create version 1.0 automatically
+- Non-destructive updates create new versions (2.0, 3.0, etc.) while preserving history
+- New metadata fields: `document_id`, `version`, `version_created_at`, `version_created_by`, `parent_version`, `status`, `is_latest_version`
+- **Reorganized API Endpoints**:
+  - `POST /api/rag/documents/add` - Add document (JSON)
+  - `POST /api/rag/documents/add-file` - Add document (File)
+  - `POST /api/rag/documents/update` - Update document (creates new version)
+  - `POST /api/rag/documents/seed` - Seed from data folder
+  - `POST /api/rag/documents/clear` - Clear all documents
+  - `GET /api/rag/documents/list` - List documents with filtering
+  - `GET /api/rag/documents/{document_id}/versions` - Get version history
+  - `GET /api/rag/documents/{document_id}/versions/{version}` - Get specific version
+  - `GET /api/rag/documents/{document_id}/compare` - Compare two versions with diff
+  - `POST /api/rag/documents/{document_id}/archive` - Archive a version
+- Version comparison uses Python's `difflib` for unified diffs
+- Semantic versioning (1.0, 2.0, 3.0) with auto-increment
+- Version status support: draft, pending_approval, published, archived

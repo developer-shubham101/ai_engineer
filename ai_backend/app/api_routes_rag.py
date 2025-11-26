@@ -45,6 +45,7 @@ class QueryRequest(BaseModel):
     use_llm: bool = False
     max_tokens: int = 256
     category: Optional[str] = None
+    debug: bool = False
 
 class QueryResponse(BaseModel):
     answer: Optional[str] = None
@@ -105,13 +106,8 @@ def validate_metadata(meta: Optional[Dict[str, Any]]):
 
 
 
-
-# ---------------------------
-# Routes
-# ---------------------------
-
 @router.post("/{model_provider}/query", response_model=QueryResponse)
-async def query(
+async def query_rag(
     model_provider: str,
     req: QueryRequest,
     requester: Optional[Dict[str, Any]] = Depends(get_current_user_optional),
@@ -123,6 +119,9 @@ async def query(
     2. Authenticated Guest User (Guest role): Ask onboarding questions, use session_id from token
     3. Unauthenticated User: Basic RAG without onboarding or session tracking
     """
+    
+    # Add debug flag support
+    debug_mode = getattr(req, "debug", False)
     
     # Determine user context
     user_id = requester.get("user_id") if requester else None
@@ -332,7 +331,7 @@ async def query(
     return QueryResponse(answer=answer, retrieved=docs, context=res.get("context"))
 
 
-@router.post("/add", response_model=AddResponse, dependencies=[Depends(require_roles(["SuperAdmin", "HR", "Manager", "Employee"]))])
+@router.post("/documents/add", response_model=AddResponse, dependencies=[Depends(require_roles(["SuperAdmin", "HR", "Manager", "Employee"]))])
 async def add_document_json(
     req: AddDocRequest,
     requester: Dict[str, Any] = Depends(get_current_user),
@@ -348,16 +347,21 @@ async def add_document_json(
     validate_metadata(metadata)
 
     try:
-        ids = await rag_service.add_document_to_rag_local(source_name=req.source_name, text=req.text, metadata=metadata)
+        result = await rag_service.add_document_to_rag_local(
+            source_name=req.source_name, 
+            text=req.text, 
+            metadata=metadata,
+            created_by=requester.get("user_id")
+        )
     except Exception as e:
         logger.exception("Failed to add document: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
-    msg = f"Added {len(ids)} chunks for {req.source_name}"
-    return AddResponse(message=msg, chunk_count=len(ids))
+    msg = f"Added document '{req.source_name}' (v{result['version']}, {result['chunk_count']} chunks, document_id={result['document_id']})"
+    return AddResponse(message=msg, chunk_count=result['chunk_count'])
 
 
-@router.post("/add-file", response_model=AddResponse, dependencies=[Depends(require_roles(["SuperAdmin", "HR", "Manager", "Employee"]))])
+@router.post("/documents/add-file", response_model=AddResponse, dependencies=[Depends(require_roles(["SuperAdmin", "HR", "Manager", "Employee"]))])
 async def add_document_file(
     file: UploadFile = File(...),
     requester: Dict[str, Any] = Depends(get_current_user),
@@ -399,16 +403,21 @@ async def add_document_file(
     validate_metadata(metadata)
 
     try:
-        ids = await rag_service.add_document_to_rag_local(source_name=file.filename, text=text, metadata=metadata)
+        result = await rag_service.add_document_to_rag_local(
+            source_name=file.filename, 
+            text=text, 
+            metadata=metadata,
+            created_by=requester.get("user_id")
+        )
     except Exception as e:
         logger.exception("Failed to add file: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
-    msg = f"Successfully ingested '{file.filename}'. {len(ids)} chunks created."
-    return AddResponse(message=msg, chunk_count=len(ids))
+    msg = f"Successfully ingested '{file.filename}' (v{result['version']}, {result['chunk_count']} chunks, document_id={result['document_id']})"
+    return AddResponse(message=msg, chunk_count=result['chunk_count'])
 
 
-@router.post("/seed", response_model=AddResponse, dependencies=[Depends(require_roles(["SuperAdmin"]))])
+@router.post("/documents/seed", response_model=AddResponse, dependencies=[Depends(require_roles(["SuperAdmin"]))])
 async def seed_defaults(
     requester: Dict[str, Any] = Depends(get_current_user),
     reseed: bool = False,
@@ -427,7 +436,7 @@ async def seed_defaults(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/clear", response_model=AddResponse, dependencies=[Depends(require_roles(["SuperAdmin"]))])
+@router.post("/documents/clear", response_model=AddResponse, dependencies=[Depends(require_roles(["SuperAdmin"]))])
 def clear_store(
     requester: Dict[str, Any] = Depends(get_current_user),
     rag_service=Depends(get_rag_service)
@@ -440,6 +449,199 @@ def clear_store(
         logger.exception("Failed to clear collection: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
+
+# ---------------------------
+# Document Versioning Endpoints
+# ---------------------------
+
+class UpdateDocumentRequest(BaseModel):
+    document_id: str
+    text: str
+    metadata: Optional[Dict[str, Any]] = None
+    version_notes: Optional[str] = None
+    status: str = "published"
+
+
+class UpdateDocumentResponse(BaseModel):
+    message: str
+    document_id: str
+    version: str
+    chunk_count: int
+    status: str
+
+
+class DocumentListResponse(BaseModel):
+    documents: List[Dict[str, Any]]
+    count: int
+
+
+class VersionHistoryResponse(BaseModel):
+    document_id: str
+    versions: List[Dict[str, Any]]
+
+
+class DocumentVersionResponse(BaseModel):
+    document_id: str
+    version: str
+    source_name: str
+    chunks: List[str]
+    created_at: str
+    created_by: Optional[str]
+    status: str
+    version_notes: Optional[str]
+
+
+class CompareVersionsResponse(BaseModel):
+    document_id: str
+    version1: str
+    version2: str
+    diff: str
+    summary: Dict[str, Any]
+
+
+@router.post("/documents/update", response_model=UpdateDocumentResponse, 
+             dependencies=[Depends(require_roles(["SuperAdmin", "HR", "Manager", "Employee"]))])
+async def update_document(
+    req: UpdateDocumentRequest,
+    requester: Dict[str, Any] = Depends(get_current_user),
+    rag_service=Depends(get_rag_service)
+):
+    """
+    Update a document by creating a new version (non-destructive).
+    """
+    try:
+        result = await rag_service.update_document_version(
+            document_id=req.document_id,
+            text=req.text,
+            metadata=req.metadata,
+            version_notes=req.version_notes,
+            requester_id=requester.get("user_id"),
+            status=req.status
+        )
+        
+        return UpdateDocumentResponse(
+            message=f"Created version {result['version']} for document {req.document_id}",
+            document_id=result["document_id"],
+            version=result["version"],
+            chunk_count=result["chunk_count"],
+            status=req.status
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.exception("Failed to update document: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/documents/list", response_model=DocumentListResponse,
+            dependencies=[Depends(require_roles(["SuperAdmin", "HR", "Manager", "Employee"]))])
+async def list_all_documents(
+    department: Optional[str] = None,
+    status: Optional[str] = None,
+    latest_only: bool = True,
+    rag_service=Depends(get_rag_service)
+):
+    """
+    List all documents with optional filtering.
+    """
+    try:
+        documents = await rag_service.list_documents(
+            department=department,
+            status=status,
+            latest_only=latest_only
+        )
+        return DocumentListResponse(documents=documents, count=len(documents))
+    except Exception as e:
+        logger.exception("Failed to list documents: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/documents/{document_id}/versions", response_model=VersionHistoryResponse,
+            dependencies=[Depends(require_roles(["SuperAdmin", "HR", "Manager", "Employee"]))])
+async def get_version_history(
+    document_id: str,
+    rag_service=Depends(get_rag_service)
+):
+    """
+    Get version history for a document.
+    """
+    try:
+        from app.services import version_tracking
+        versions = version_tracking.get_version_history(document_id)
+        return VersionHistoryResponse(document_id=document_id, versions=versions)
+    except Exception as e:
+        logger.exception("Failed to get version history: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/documents/{document_id}/versions/{version}", response_model=DocumentVersionResponse,
+            dependencies=[Depends(require_roles(["SuperAdmin", "HR", "Manager", "Employee"]))])
+async def get_specific_version(
+    document_id: str,
+    version: str,
+    rag_service=Depends(get_rag_service)
+):
+    """
+    Get a specific version of a document.
+    """
+    try:
+        result = await rag_service.get_document_version(document_id, version)
+        if not result:
+            raise HTTPException(status_code=404, detail=f"Version {version} of document {document_id} not found")
+        
+        return DocumentVersionResponse(**result)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Failed to get document version: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/documents/{document_id}/compare", response_model=CompareVersionsResponse,
+            dependencies=[Depends(require_roles(["SuperAdmin", "HR", "Manager", "Employee"]))])
+async def compare_versions(
+    document_id: str,
+    version1: str,
+    version2: str,
+    rag_service=Depends(get_rag_service)
+):
+    """
+    Compare two versions of a document.
+    """
+    try:
+        result = await rag_service.compare_document_versions(document_id, version1, version2)
+        if not result:
+            raise HTTPException(status_code=404, detail="One or both versions not found")
+        
+        return CompareVersionsResponse(**result)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Failed to compare versions: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/documents/{document_id}/archive", response_model=AddResponse,
+             dependencies=[Depends(require_roles(["SuperAdmin", "HR", "Manager"]))])
+async def archive_version(
+    document_id: str,
+    version: str,
+    rag_service=Depends(get_rag_service)
+):
+    """
+    Archive a specific version of a document.
+    """
+    try:
+        success = await rag_service.archive_document_version(document_id, version)
+        if not success:
+            raise HTTPException(status_code=404, detail=f"Version {version} of document {document_id} not found")
+        
+        return AddResponse(message=f"Archived version {version} of document {document_id}", chunk_count=0)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Failed to archive version: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 

@@ -3,40 +3,42 @@
 Here are **ready-to-run cURL examples** for testing the AI Engineering API.
 
 ## Table of Contents
-1. [Support Chat & Onboarding](#1-support-chat--onboarding)
+1. [Authentication](#1-authentication)
 2. [RAG Services](#2-rag-services)
 3. [LLM Services](#3-llm-services)
 4. [Sentiment Analysis](#4-sentiment-analysis)
-
----
-
-## 1. Support Chat & Onboarding
-
-### Start a Session
-```bash
-curl -X POST http://localhost:8000/api/rag/session/start
+  "token_type": "bearer",
+  "user": {
+    "user_id": "u_admin_1",
+    "username": "admin",
+    "role": "SuperAdmin",
+    "department": "Executive",
+    "profile": {
+      "name": "Admin User",
+      "email": "admin@company.com"
+    }
+  }
+}
 ```
-*Returns `session_id`. Use this in headers for subsequent requests.*
 
-### End a Session
+**Set token as environment variable:**
 ```bash
-curl -X POST http://localhost:8000/api/rag/session/end \
-  -H "Content-Type: application/json" \
-  -d '{"session_id": "sess_xxxxx"}'
+export TOKEN="your_jwt_token_here"
 ```
+
+**Note:** Sessions are now managed automatically via JWT tokens. The `user_id` from the token is used as the session identifier. No separate session start/end endpoints needed.
 
 ---
 
 ## 2. RAG Services
 
-### Query (Local Model)
-*Supports RBAC and session context.*
+### Query (Local Model - Authenticated)
+*Supports RBAC and session context via JWT token.*
 
 ```bash
-curl -X POST http://localhost:8000/api/rag/local/query \
+curl -X POST http://localhost:5444/api/rag/local/query \
   -H "Content-Type: application/json" \
-  -H "X-Session-Id: sess_xxxxx" \
-  -H "X-API-Key: employee_key" \
+  -H "Authorization: Bearer $TOKEN" \
   -d '{
         "question": "What are the company leave policies?",
         "top_k": 3,
@@ -44,78 +46,48 @@ curl -X POST http://localhost:8000/api/rag/local/query \
       }'
 ```
 
-### Query (Google Model)
+### Query (Guest/Unauthenticated)
+*Public endpoint - no authentication required. Returns only public documents.*
+
 ```bash
-curl -X POST http://localhost:8000/api/rag/google/query \
+curl -X POST http://localhost:5444/api/rag/local/query \
   -H "Content-Type: application/json" \
-  -H "X-Session-Id: sess_xxxxx" \
   -d '{
-        "question": "Explain the project roadmap.",
+        "question": "What are your office hours?",
+        "top_k": 3,
         "use_llm": true
       }'
 ```
 
-### Add Document (JSON)
+### Query (Google Model)
 ```bash
-curl -X POST http://localhost:8000/api/rag/add \
+curl -X POST http://localhost:5444/api/rag/google/query \
   -H "Content-Type: application/json" \
-  -H "X-API-Key: manager_key" \
-  -d '{
-        "source_name": "policy_update.txt",
-        "text": "New policy: Fridays are half-days.",
-        "metadata": {"department": "HR", "sensitivity": "public_internal"}
-      }'
-```
-
-### Add Document (File Upload)
-*Supports .md, .html, .json, .txt. Automatically parses content.*
-
-```bash
-curl -X POST http://localhost:8000/api/rag/add-file \
-  -H "X-API-Key: manager_key" \
-  -F "file=@/path/to/document.md" \
-  -F "department=Engineering"
-```
-
-### Seed Default Data
-```bash
-curl -X POST http://localhost:8000/api/rag/seed?reseed=true
-```
-
-### Clear Collection (Exec/Legal only)
-```bash
-curl -X POST http://localhost:8000/api/rag/clear \
-  -H "X-API-Key: executive_key"
-```
-
----
-
-## 3. LLM Services
-
+  -H "Authorization: Bearer $TOKEN" \
 ### Chat (Conversational)
 ```bash
-curl -X POST http://localhost:8000/chat \
+curl -X POST http://localhost:5444/chat \
   -H "Content-Type: application/json" \
   -d '{"user_input": "Hello, who are you?"}'
 ```
 
 ### Generate Content Ideas
 ```bash
-curl -X POST http://localhost:8000/generate/ideas \
+curl -X POST http://localhost:5444/generate/ideas \
   -H "Content-Type: application/json" \
   -d '{"topic": "Future of AI in Healthcare"}'
 ```
 
 ### Simple Text Generation
 ```bash
-curl -X POST http://localhost:8000/generate \
+curl -X POST http://localhost:5444/generate \
   -H "Content-Type: application/json" \
   -d '{"text": "Write a haiku about coding."}'
 ```
 
 ### Summarization
 ```bash
-curl -X POST http://localhost:8000/summarize \
+curl -X POST http://localhost:5444/summarize \
   -H "Content-Type: application/json" \
   -d '{"text": "Long text content here..."}'
 ```
@@ -124,39 +96,76 @@ curl -X POST http://localhost:8000/summarize \
 
 ## 4. Sentiment Analysis
 
+*SuperAdmin only*
+
 ### Analyze Text
 ```bash
-curl -X POST http://localhost:8000/api/rag/sentiment \
+curl -X POST http://localhost:5444/api/rag/sentiment \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" \
   -d '{"text": "I am frustrated with this error!"}'
 ```
 
 ### Get Stats
 ```bash
-curl http://localhost:8000/api/rag/sentiment/stats
+curl -X GET http://localhost:5444/api/rag/sentiment/stats \
+  -H "Authorization: Bearer $TOKEN"
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{
+        "document_id": "doc_abc123...",
+        "text": "Company Leave Policy v2.0\n\nEmployees get 20 days annual leave (updated!).",
+        "version_notes": "Increased annual leave from 15 to 20 days",
+        "status": "published"
+      }'
 ```
 
----
-
-## RAG Conversation Flow Diagram
-
-```mermaid
-flowchart TD
-  Start([Start]) --> StartSession["POST /api/rag/session/start\n(x-api-key)"]
-  StartSession -->|200: {session_id, message}| SessionCreated["Session Created\nstore session_id"]
-
-  subgraph User Conversation Loop
-    direction TB
-    UserQuery["POST /api/rag/local/query\n(x-session-id, x-api-key)\n{question, top_k, use_llm, max_tokens, category}"]
-    RAGResponse["RAG Response\n{answer, retrieved, context}"]
-    UserQuery --> RAGResponse
-    RAGResponse --> CheckIfFinal{Is answer ==\n'Thank you! Your details have been saved.'?}
-    CheckIfFinal -->|No| UserProvidesAnswer["User replies (next query)\nrepeat loop"]
-    CheckIfFinal -->|Yes| Finalized["Persist collected details\nreturn final ack"]
-    UserProvidesAnswer --> UserQuery
-  end
-
-  SessionCreated --> UserQuery
-  Finalized --> LLMFollowup["POST /api/rag/local/query\n(use_llm: true)\n{AI-generated followup question}"]
-  LLMFollowup --> End([End / Next: Chat App Integration])
+### List All Documents
+```bash
+curl -X GET "http://localhost:5444/api/rag/documents/list?latest_only=true" \
+  -H "Authorization: Bearer $TOKEN"
 ```
+
+### List by Department
+```bash
+curl -X GET "http://localhost:5444/api/rag/documents/list?department=HR&latest_only=true" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### Get Version History
+```bash
+curl -X GET "http://localhost:5444/api/rag/documents/doc_abc123.../versions" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### Get Specific Version
+```bash
+curl -X GET "http://localhost:5444/api/rag/documents/doc_abc123.../versions/1.0" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### Compare Two Versions
+```bash
+curl -X GET "http://localhost:5444/api/rag/documents/doc_abc123.../compare?version1=1.0&version2=2.0" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### Archive a Version
+```bash
+curl -X POST "http://localhost:5444/api/rag/documents/doc_abc123.../archive" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{"version": "1.0"}'
+```
+
+### Query (With Versioning - Returns Latest Only)
+```bash
+curl -X POST http://localhost:5444/api/rag/local/query \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{
+        "question": "What is the leave policy?",
+        "top_k": 3,
+        "use_llm": true
+      }'
+```
+*Note: Query automatically filters for latest published versions only*
