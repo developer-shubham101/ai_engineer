@@ -3,30 +3,19 @@ from __future__ import annotations
 import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Optional, Any, Dict
 
-from fastapi import FastAPI, HTTPException, File, UploadFile, Depends
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 # Logging setup
 from app.logging_config import setup_logging
 
-# LLM service (models / Pydantic models used for responses)
-from app.services import llm_service
-from app.services.llm_service import GenerationResponse
-
-# RAG services:
-# - rag_local_service: low-level local RAG, initialization, seeding, local add
-# - rag_manual_service: simpler wrappers used by CLI/scripts and the ask-document endpoint
-from app.services import rag_local_service as rag_local_service
+# RAG services
+from app.services import rag_local_service
 
 # Routers
 from app.api_routes_rag import router as rag_router
 from app.api_routes_auth import router as auth_router
-
-# Dependencies
-from app.dependencies import get_current_user_optional
-from app.services.user_service import get_all_user_meta
 
 logger = setup_logging()
 
@@ -118,145 +107,6 @@ def read_root():
     return {"status": "ok", "message": "Welcome to the AI Engineering API!"}
 
 
-# --- LLM Endpoints (unchanged, forwarding to llm_service) ---
-@app.post("/summarize",
-          response_model=llm_service.SummarizationResponse,
-          tags=["LLM Services"])
-def summarize(request: llm_service.TextRequest, user: Optional[Dict[str, Any]] = Depends(get_current_user_optional)):
-    """
-    Summarize text. Optionally provide Bearer token for personalized responses.
-    """
-    try:
-        # Add user profile to request if authenticated
-        if user:
-            profile = get_all_user_meta(user["user_id"])
-            if profile:
-                # Prepend profile context to text
-                profile_text = "User Profile: " + ", ".join([f"{k}: {v}" for k, v in profile.items()])
-                request.text = f"{profile_text}\n\n{request.text}"
-        return llm_service.summarize_text(request)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.post("/generate",
-          response_model=llm_service.GenerationResponse,
-          tags=["LLM Services"])
-def generate(request: llm_service.TextRequest, user: Optional[Dict[str, Any]] = Depends(get_current_user_optional)):
-    """
-    Generate text. Optionally provide Bearer token for personalized responses.
-    """
-    try:
-        # Add user profile to request if authenticated
-        if user:
-            profile = get_all_user_meta(user["user_id"])
-            if profile:
-                # Prepend profile context to text
-                profile_text = "User Profile: " + ", ".join([f"{k}: {v}" for k, v in profile.items()])
-                request.text = f"{profile_text}\n\n{request.text}"
-        return llm_service.generate_text(request)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.post("/sentiment",
-          response_model=llm_service.SentimentResponse,
-          tags=["LLM Services"])
-def sentiment(request: llm_service.TextRequest):
-    try:
-        return llm_service.classify_sentiment(request)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.post("/generate/openai",
-          response_model=llm_service.GenerationResponse,
-          tags=["LLM Services (OpenAI)"])
-def generate_openai(request: llm_service.TextRequest):
-    try:
-        return llm_service.generate_text_openai(request)
-    except ConnectionError as e:
-        raise HTTPException(status_code=503, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.post("/generate/hf",
-          response_model=llm_service.GenerationResponse,
-          tags=["LLM Services (Hugging Face API)"])
-def generate_hf(request: llm_service.TextRequest):
-    try:
-        return llm_service.generate_text_hf_inference_langchain(request)
-    except ConnectionError as e:
-        raise HTTPException(status_code=503, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.post("/generate/ideas",
-          response_model=llm_service.IdeaResponse,
-          tags=["LLM Services (LangChain)"])
-def generate_ideas(request: llm_service.IdeaRequest):
-    try:
-        return llm_service.generate_content_ideas(request)
-    except ConnectionError as e:
-        raise HTTPException(status_code=503, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.post("/chat",
-          response_model=llm_service.ChatResponse,
-          tags=["LLM Services (Conversational)"])
-def chat(request: llm_service.ChatRequest):
-    try:
-        return llm_service.get_chat_response(request)
-    except ConnectionError as e:
-        raise HTTPException(status_code=503, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-# --- RAG / Document endpoints ---
-
-@app.post("/ask-document",
-          response_model=GenerationResponse,
-          tags=["RAG Services"])
-async def ask_document(request: llm_service.TextRequest):
-    """
-    Ask a question against documents using the local RAG service.
-    """
-    try:
-        # Query the local RAG service
-        result = await rag_local_service.query_local_rag(query_text=request.text, n_results=3, requester=None, use_llm=False)
-        # Prefer a generated answer if present, otherwise provide safe composed text.
-        answer = result.get("answer") or result.get("context") or (result.get("public_summaries") and "\n\n".join(result.get("public_summaries"))) or "No relevant documents found."
-        return GenerationResponse(generated_text=answer)
-    except ConnectionError as e:
-        raise HTTPException(status_code=503, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.post("/add-document",
-          response_model=GenerationResponse,
-          tags=["RAG Services"])
-async def add_document(file: UploadFile = File(...)):
-    """
-    Add a document using the local RAG service.
-    """
-    try:
-        content = await file.read()
-        document_text = content.decode("utf-8", errors="ignore")
-        # Use local RAG service to add doc; it returns dict with version info
-        result = await rag_local_service.add_document_to_rag_local(source_name=file.filename, text=document_text, metadata=None)
-        if result and result.get("chunk_count", 0) > 0:
-            message = f"Successfully processed and added '{file.filename}' (v{result['version']}, {result['chunk_count']} chunks, document_id={result['document_id']})."
-            return GenerationResponse(generated_text=message)
-        else:
-            raise HTTPException(status_code=400, detail="The file was empty or could not be processed.")
-    except ConnectionError as e:
-        raise HTTPException(status_code=503, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to process document: {e}")
+# Legacy endpoints removed - use /api/rag/{provider}/query instead
+# All functionality moved to proper RAG router endpoints
 

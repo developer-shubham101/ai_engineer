@@ -6,70 +6,75 @@
 
 ## 1. Project Summary
 
-A **versatile enterprise RAG (Retrieval Augmented Generation) system** designed for learning and offline testing, supporting multiple LLM providers through a unified architecture. The system simulates an enterprise AI assistant for a fictional company with role-based access control (RBAC), document retrieval, sentiment analysis, and multi-turn chat sessions. It supports **local models** (Mistral-7B-Instruct GGUF), **Google Gemini API**, **OpenAI GPT**, and **Hugging Face Inference API** through a common base service architecture. All providers share the same RBAC filtering, document retrieval, and session management capabilities.
+A **clean, multi-provider enterprise RAG system** designed for learning and testing. Supports **local models** (Mistral-7B-Instruct GGUF), **Google Gemini**, **OpenAI GPT**, and **Hugging Face** through a unified base architecture. Features enterprise-grade RBAC, document versioning, session management, and consistent API across all providers.
 
 ---
 
 ## 2. High-Level Architecture
 
 ```
-User Request → FastAPI → RAG Pipeline → RBAC Filter → LLM (Local or Google) → Response
-                                    ↓
-                            Chroma Vector DB
-                                    ↓
-                        Local Embeddings (MiniLM)
+User → FastAPI → Provider Router → Base RAG Service → RBAC Filter → Provider LLM → Response
+                                         ↓
+                                 Shared Components:
+                                 • ChromaDB (Vector Storage)
+                                 • MiniLM (Embeddings)
+                                 • Session Management
+                                 • Document Versioning
 ```
 
-### Main Components
+### Core Architecture
 
-- **Backend**: FastAPI application (`app/main.py`, `app/api_routes_rag.py`, `app/api_routes_auth.py`)
-- **Configuration**: Centralized settings in `app/config.py` (includes JWT configuration)
-- **Dependency Injection**: `app/dependencies.py` - Provides service dependencies and authentication for testability
-- **Authentication & Authorization**:
-  - `user_service.py` - User management with SQLite database, password hashing (bcrypt), **user profile storage (user_meta table)**
-  - `auth.py` - JWT token generation and verification
-  - `api_routes_auth.py` - Authentication endpoints (`/api/auth/token`)
-  - Bearer token authentication via `Authorization` header
-  - Role-based access control (RBAC) for endpoints
-  - **Auto-session creation on login using user_id**
-- **RAG Services Architecture**: 
-  - `base_rag_service.py` - **Abstract base class with common RAG functionality** (document retrieval, RBAC filtering, session management, response building)
-  - `rag_local_service.py` - Local RAG implementation extending BaseRAGService (Mistral-7B-Instruct GGUF)
-  - `google_models.py` - Google Gemini RAG implementation extending BaseRAGService
-  - `gpt_rag_service.py` - OpenAI GPT RAG implementation extending BaseRAGService
-  - `hf_rag_service.py` - Hugging Face Inference API RAG implementation extending BaseRAGService
-  - `model_manager.py` - Handles loading and caching of local LLM instances
-  - `prompt_builder.py` - Constructs prompts and manages token budgets
-  - `llm_service.py` - **Legacy service** (kept for backward compatibility with existing endpoints)
-- **Vector DB**: ChromaDB (persistent storage in `chroma_storage/`) - **shared across all providers**
-- **Embeddings**: SentenceTransformers (all-MiniLM-L6-v2) - loaded from `embeddings_models/` - **shared across all providers**
-- **Local LLM**: Mistral-7B-Instruct-v0.2.Q3_K_M.gguf via llama-cpp-python (default model, with optional dynamic selection)
-- **Support Chat**: SQLite-based session management (`database/support_sessions.db`) - **sessions auto-created on login using user_id**
-- **Sentiment Analysis**: Local classifier using scikit-learn + sentence-transformers
-- **Utilities**: Centralized paths, constants, shared functions (`app/services/utility.py`)
+**🏗️ Base Layer:**
+- `base_rag_service.py` - Abstract base with common RAG functionality
+- `chroma_utils.py` - Vector database operations
+- `utility.py` - Shared utilities and embeddings
 
-### Key Directories
+**🤖 Provider Layer:**
+- `rag_local_service.py` - Local Mistral-7B implementation + document management
+- `google_models.py` - Google Gemini implementation
+- `gpt_rag_service.py` - OpenAI GPT implementation  
+- `hf_rag_service.py` - Hugging Face implementation
 
-- `app/` - Main application code
-  - `services/` - Business logic modules (clean, modular architecture)
-    - `base_rag_service.py` - **Core RAG abstraction**
-    - `rag_local_service.py`, `google_models.py`, `gpt_rag_service.py`, `hf_rag_service.py` - **Provider implementations**
-    - `user_service.py` - User management with SQLite, **user_meta table for profiles**
-    - `auth.py` - JWT token handling
-    - `chroma_utils.py`, `utility.py`, `prompt_builder.py` - **Shared utilities**
-  - `utils/` - Utility modules (e.g., `doc_parser.py`)
-  - `config/` - Configuration files (e.g., `onboarding_fields.json`, `config.py`)
-  - `data/` - Seed data and app-specific files
-- `database/` - SQLite databases (**users.db with user_meta table**, support_sessions.db, document_versions.db)
-- `chroma_storage/` - ChromaDB persistence
-  - `dependencies.py` - Dependency injection providers (auth, RBAC, services)
-  - `api_routes_auth.py` - Authentication API routes
-- `data/` - Document examples, company overview, seed files
-- `models/` - Local LLM model files (*.gguf, *.ggml, *.bin)
-- `embeddings_models/` - Local embedding model cache
-- `sentiment/` - Sentiment classifier artifacts
-- `scripts/` - Utility scripts (seed, test, download)
-- `docs/` - Documentation
+**🔐 Security & Data:**
+- `auth.py` + `user_service.py` - JWT authentication & user management
+- `support_chat.py` - Session management & conversation history
+- `version_tracking.py` - Document versioning system
+
+**⚙️ Infrastructure:**
+- `model_manager.py` - Local LLM loading & caching
+- `prompt_builder.py` - Prompt construction & token management
+- `sentiment_classifier.py` - Sentiment analysis
+
+**🌐 API Layer:**
+- `main.py` - FastAPI app with clean startup/shutdown
+- `api_routes_rag.py` - Multi-provider RAG endpoints
+- `api_routes_auth.py` - Authentication endpoints
+- `dependencies.py` - Dependency injection
+
+### Clean Directory Structure
+
+```
+app/
+├── services/           # 🎯 Core business logic (15 clean modules)
+│   ├── base_rag_service.py      # Abstract RAG base
+│   ├── rag_local_service.py     # Local + document management
+│   ├── google_models.py         # Google Gemini
+│   ├── gpt_rag_service.py       # OpenAI GPT
+│   ├── hf_rag_service.py        # Hugging Face
+│   ├── auth.py + user_service.py # Authentication
+│   ├── support_chat.py          # Sessions
+│   ├── version_tracking.py      # Document versions
+│   └── utility.py + chroma_utils.py # Shared tools
+├── main.py             # 🚀 Clean FastAPI app
+├── api_routes_*.py     # 🌐 API endpoints
+├── dependencies.py     # 🔧 Dependency injection
+└── config.py          # ⚙️ Configuration
+
+database/              # 💾 SQLite databases
+chroma_storage/        # 🗄️ Vector database
+models/               # 🤖 Local LLM files
+data/                 # 📄 Seed documents
+```
 
 ---
 
@@ -82,14 +87,21 @@ User Request → FastAPI → RAG Pipeline → RBAC Filter → LLM (Local or Goog
   - Request: `{"username": "string", "password": "string"}`
   - Response: `{"access_token": "jwt_token", "token_type": "bearer", "user": {..., "profile": {...}}}`
 
-**RAG Services** (`/api/rag/*`):
-- `POST /api/rag/{model_provider}/query` - RAG query with RBAC filtering, optional LLM generation, session-aware. **Public endpoint** (no auth required, Guest users see public docs only). **Uses user_id from JWT token as session identifier (no X-Session-Id header needed)**. `model_provider` can be `local`, `google`, `gpt`, `huggingface`, or `hf`.
-- `POST /api/rag/add` - Add document via JSON (text + metadata). **Creates version 1.0**. **Requires**: SuperAdmin, HR, Manager, or Employee role.
-- `POST /api/rag/add-file` - Upload text file (≤5MB) for ingestion. **Creates version 1.0**. **Requires**: SuperAdmin, HR, Manager, or Employee role.
-- `POST /api/rag/seed` - Seed default `data/companyData`. **Requires**: SuperAdmin role only.
-- `POST /api/rag/clear` - Clear Chroma collection. **Requires**: SuperAdmin role only.
-- `POST /api/rag/sentiment` - Analyze sentiment/tone of text. **Requires**: SuperAdmin role only.
-- `GET /api/rag/sentiment/stats` - Get sentiment statistics. **Requires**: SuperAdmin role only.
+**Multi-Provider RAG** (`/api/rag/*`):
+- `POST /api/rag/{provider}/query` - Unified query interface
+  - `provider`: `local`, `google`, `gpt`, `huggingface`/`hf`
+  - Public endpoint (no auth required)
+  - Automatic RBAC filtering based on JWT token
+  - Session-aware conversation history
+
+**Document Management**:
+- `POST /api/rag/documents/add` - Add document (JSON)
+- `POST /api/rag/documents/add-file` - Upload file
+- `POST /api/rag/documents/seed` - Seed default data
+- `POST /api/rag/documents/update` - Update with versioning
+- `GET /api/rag/documents/list` - List with filtering
+- `GET /api/rag/documents/{id}/versions` - Version history
+- `POST /api/rag/documents/{id}/archive` - Archive version
 
 **Document Versioning** (`/api/rag/documents/*`):
 - `POST /api/rag/documents/update` - Update document (creates new version, non-destructive). **Requires**: SuperAdmin, HR, Manager, or Employee role.
@@ -103,33 +115,73 @@ User Request → FastAPI → RAG Pipeline → RBAC Filter → LLM (Local or Goog
 
 ### Core Service Functions
 
-**Base RAG Service** (`base_rag_service.py`) - **Common functionality for all providers**:
-- `retrieve_documents(query_text, n_results)` - Handle embedding and ChromaDB retrieval (shared across all providers)
-- `normalize_chroma_result(result)` - Normalize ChromaDB response format
-- `filter_documents_by_rbac(raw_docs, raw_metadatas, raw_ids, raw_distances, requester)` - Apply RBAC filtering with version deduplication
-- `inject_tone_guidance(session_id, llm_prompt_prefix)` - Build tone-aware prompt prefix based on session history
-- `build_context_text(visible_docs)` - Build context text from visible documents
-- `handle_rbac_blocked_response(filtered_out_count, public_summaries)` - Generate appropriate response when documents are blocked
-- `build_base_response(...)` - Build standardized response structure
-- `query_rag(...)` - **Main orchestrator method** that coordinates the RAG flow (template method pattern)
-- `generate_response(...)` - **Abstract method** implemented by each provider for LLM-specific generation
+### Key Service Functions
 
-**Local RAG Service** (`rag_local_service.py`) - **Document management + Local LLM**:
-- `initialize_local_rag()` - Initialize Chroma client and collection
-- `add_document_to_rag_local(source_name, text, metadata, document_id, version, parent_version, status, version_notes, created_by)` - Asynchronously chunk, embed, store document **with versioning support**
+**BaseRAGService** - Template method pattern:
+```python
+async def query_rag(...):
+    # 1. Retrieve documents (shared)
+    # 2. Apply RBAC filtering (shared) 
+    # 3. Build context (shared)
+    # 4. Generate response (provider-specific)
+    # 5. Return standardized format (shared)
+```
+
+**Provider Services** - Implement `generate_response()`:
+- `LocalRAGService` - Mistral-7B via llama-cpp-python
+- `GoogleRAGService` - Gemini API calls
+- `GPTRAGService` - OpenAI API calls  
+- `HuggingFaceRAGService` - HF Inference API
+
+**Document Management** (Local service only):
+- `add_document_to_rag_local()` - Chunk, embed, store with versioning
+- `update_document_version()` - Non-destructive updates
+- `get_document_version()` - Retrieve specific versions
+- `compare_document_versions()` - Version diffs
+- `list_documents()` - Filtered document listing
+
+---
+
+## 5. Ultra-Clean Architecture Summary
+
+### 🏆 **What Makes This Clean:**
+
+**✅ Single Responsibility**: Each service has one clear purpose
+**✅ Provider Abstraction**: Common interface, provider-specific implementation
+**✅ Shared Components**: Vector DB, embeddings, RBAC work across all providers
+**✅ No Legacy Code**: Removed all unused files and endpoints
+**✅ Consistent API**: Same `/api/rag/{provider}/query` pattern for all
+**✅ Clean Dependencies**: Minimal imports, clear separation of concerns
+
+### 🛠️ **15 Core Services** (down from 20+ files):
+```
+🎯 Base: base_rag_service.py
+🤖 Providers: rag_local_service.py, google_models.py, gpt_rag_service.py, hf_rag_service.py
+🔐 Security: auth.py, user_service.py
+📊 Data: chroma_utils.py, utility.py, version_tracking.py, support_chat.py
+⚙️ Tools: model_manager.py, prompt_builder.py, sentiment_classifier.py
+```
+
+### 🚀 **Usage Examples:**
+```bash
+# Local offline model
+curl -X POST "/api/rag/local/query" -d '{"question": "What is our policy?", "use_llm": true}'
+
+# Google Gemini
+curl -X POST "/api/rag/google/query" -d '{"question": "What is our policy?", "use_llm": true}'
+
+# OpenAI GPT
+curl -X POST "/api/rag/gpt/query" -d '{"question": "What is our policy?", "use_llm": true}'
+
+# Hugging Face
+curl -X POST "/api/rag/hf/query" -d '{"question": "What is our policy?", "use_llm": true}'
+```
+
+**Perfect for learning multi-provider RAG architectures! 🎓**ning support**
 - `update_document_version(document_id, text, metadata, version_notes, requester_id, status)` - Create new version of existing document (non-destructive)
 - `get_document_version(document_id, version)` - Retrieve specific version with its chunks
 - `compare_document_versions(document_id, version1, version2)` - Compare two versions and return diff
-- `list_documents(department, status, latest_only)` - List all documents with filtering
-- `archive_document_version(document_id, version)` - Archive (soft-delete) a version
-- `query_local_rag(...)` - Wrapper that calls the base RAG service with local LLM generation
-- `seed_from_file(force_reseed)` - Seed from file or directory
-- `clear_collection()` - Delete all documents
 
-**Provider-Specific RAG Services**:
-- `query_google_rag(...)` - Google Gemini RAG queries using base service
-- `query_gpt_rag(...)` - OpenAI GPT RAG queries using base service
-- `query_hf_rag(...)` - Hugging Face RAG queries using base service
 
 **Version Tracking** (`version_tracking.py`):
 - `init_version_db(reset_on_start)` - Initialize version tracking SQLite database.
@@ -137,61 +189,7 @@ User Request → FastAPI → RAG Pipeline → RBAC Filter → LLM (Local or Goog
 - `get_version_history(document_id)` - Get all versions of a document.
 - `get_version(document_id, version)` - Get specific version metadata.
 - `get_latest_version(document_id)` - Get most recent version.
-- `update_version_status(document_id, version, status)` - Update version status
-- `get_documents_by_status(status)` - Get documents by status
-- `list_all_documents(latest_only)` - List all documents with optional latest-only filter
-- `generate_next_version(document_id)` - Calculate next version number for a document
-
----
-
-## 4. Multi-Provider RAG Architecture
-
-### Provider Support
-
-The system supports multiple LLM providers through a unified base architecture:
-
-| Provider | Endpoint | Implementation | Status |
-|----------|----------|----------------|--------|
-| **Local** | `/api/rag/local/query` | `LocalRAGService` | ✅ Active |
-| **Google** | `/api/rag/google/query` | `GoogleRAGService` | ✅ Active |
-| **OpenAI** | `/api/rag/gpt/query` | `GPTRAGService` | ✅ Active |
-| **Hugging Face** | `/api/rag/huggingface/query` or `/api/rag/hf/query` | `HuggingFaceRAGService` | ✅ Active |
-
-### Common Features Across All Providers
-
-- **Document Retrieval**: Same ChromaDB collection and embedding model
-- **RBAC Filtering**: Identical role-based access control and version deduplication
-- **Session Management**: Shared session tracking and conversation history
-- **Tone Guidance**: Consistent tone analysis and prompt enhancement
-- **Response Format**: Standardized response structure with metadata
-- **Error Handling**: Unified error handling and logging
-
-### Provider-Specific Differences
-
-- **LLM Generation**: Each provider implements its own `generate_response()` method
-- **API Keys**: Different environment variables (GOOGLE_API_KEY, OPENAI_API_KEY, HUGGINGFACE_API_TOKEN)
-- **Model Selection**: Provider-specific model configurations
-- **Token Limits**: Different max_tokens handling per provider
-
-### Usage Examples
-
-```bash
-# Local Mistral-7B model
-POST /api/rag/local/query
-{"question": "What is our company policy?", "use_llm": true}
-
-# Google Gemini
-POST /api/rag/google/query  
-{"question": "What is our company policy?", "use_llm": true}
-
-# OpenAI GPT
-POST /api/rag/gpt/query
-{"question": "What is our company policy?", "use_llm": true}
-
-# Hugging Face
-POST /api/rag/huggingface/query
-{"question": "What is our company policy?", "use_llm": true}
-```us(document_id, version, status)` - Update version status (draft/published/archived).
+us(document_id, version, status)` - Update version status (draft/published/archived).
 - `get_documents_by_status(status)` - Filter documents by status.
 - `list_all_documents(latest_only)` - List all documents.
 - `generate_next_version(document_id)` - Calculate next semantic version number.
