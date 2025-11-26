@@ -13,6 +13,8 @@ from app.dependencies import get_rag_service, get_current_user, get_current_user
 from app.services.user_service import get_all_user_meta, set_user_meta
 
 from app.services.google_models import query_google_rag
+from app.services.gpt_rag_service import query_gpt_rag
+from app.services.hf_rag_service import query_hf_rag
 from app.services import support_chat
 
 from app.services.support_chat import (
@@ -373,9 +375,34 @@ async def query_rag(
                 requester=requester,
                 llm_prompt_prefix=llm_prefix,
                 use_llm=req.use_llm,
+                session_id=session_id,
+            )
+        elif model_provider == "gpt":
+            res = await query_gpt_rag(
+                query_text=req.question,
+                n_results=req.top_k,
+                requester=requester,
+                llm_prompt_prefix=llm_prefix,
+                use_llm=req.use_llm,
+                max_tokens=req.max_tokens,
+                session_id=session_id,
+            )
+        elif model_provider == "huggingface" or model_provider == "hf":
+            res = await query_hf_rag(
+                query_text=req.question,
+                n_results=req.top_k,
+                requester=requester,
+                llm_prompt_prefix=llm_prefix,
+                use_llm=req.use_llm,
+                max_tokens=req.max_tokens,
+                session_id=session_id,
             )
         else:
-            raise HTTPException(status_code=400, detail=f"Invalid model provider: {model_provider}")
+            supported_providers = ["local", "google", "gpt", "huggingface", "hf"]
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Invalid model provider: {model_provider}. Supported providers: {supported_providers}"
+            )
     except Exception as e:
         logger.exception("RAG query failed: %s", e)
         raise HTTPException(status_code=500, detail=str(e))

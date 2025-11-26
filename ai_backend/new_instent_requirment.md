@@ -1,4 +1,4 @@
-so far so good now review this business reuqirenment vliadte with our implimented task if something is missing the let dicuss and implement # 📘 Additional Business Requirement  
+# 📘 Additional Business Requirement  
 ## Restricting Sensitive Information Visibility in the Chatbot  
 **Version:** 1.0  
 **Audience:** Engineering, IT Security, HR, Finance  

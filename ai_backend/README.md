@@ -1,17 +1,23 @@
-# 🚀 **Local Role-Based Enterprise RAG System (CPU-Only, Offline)**
+# 🚀 **Multi-Provider Enterprise RAG System**
 
 **AI-First Project Summary — For LLM Understanding**
 
-This project is a **fully local, CPU-based enterprise RAG system** designed for **learning, experimentation, and offline testing**.
-It does **not** depend on any external LLM APIs (OpenAI, Google, HuggingFace).
-Everything runs locally using:
+This project is a **versatile enterprise RAG system** designed for **learning, experimentation, and testing** with support for multiple LLM providers through a unified architecture. The system can run **fully offline** with local models or integrate with **cloud APIs** through a common interface.
 
-* **Mistral-7B-Instruct-v0.2.Q3_K_M.gguf**
-* **Local embeddings (MiniLM)**
-* **Local Chroma vector DB**
-* **FastAPI backend**
-* **Custom RBAC (Role-Based Access Control)**
-* **Session-aware Support Chat System (SQLite)**
+Supported providers:
+
+* **Local Models**: Mistral-7B-Instruct-v0.2.Q3_K_M.gguf (CPU-only, offline)
+* **Google Gemini API**: gemini-2.5-flash, gemini-2.5-pro
+* **OpenAI GPT API**: gpt-3.5-turbo, gpt-4
+* **Hugging Face Inference API**: Various models
+
+Common components across all providers:
+
+* **Local embeddings (MiniLM)** - shared vector space
+* **Local Chroma vector DB** - unified document storage
+* **FastAPI backend** - single API interface
+* **Custom RBAC (Role-Based Access Control)** - consistent security
+* **Session-aware Support Chat System (SQLite)** - persistent conversations
 
 This README describes the project **from an AI / system-architecture perspective**, so any LLM can easily understand how the system works and give accurate help.
 
@@ -36,9 +42,9 @@ Five sensitivity levels:
 
 Using MiniLM embeddings + Chroma
 
-### ✅ Run an LLM fully offline
+### ✅ Support multiple LLM providers
 
-Using Mistral-7B-Instruct GGUF via llama.cpp
+Local (Mistral-7B-Instruct GGUF), Google Gemini, OpenAI GPT, Hugging Face
 
 ### ✅ Maintain multi-turn support chat sessions
 
@@ -48,16 +54,16 @@ Stored in SQLite for short-term memory
 
 Built from allowed document chunks only
 
-The entire system works **completely offline**, on a **CPU-only machine**, for **learning and testing**.
+The system supports **offline-first** operation with local models, plus **cloud integration** for enhanced capabilities, designed for **learning and testing**.
 
 ---
 
 # 🏗 **2. System Architecture Overview**
 
 ```
-User → FastAPI → RAG Pipeline → RBAC Filter → Local LLM → Response
-                          ↓
-                   Chroma Vector DB
+User → FastAPI → RAG Pipeline → RBAC Filter → LLM Provider → Response
+                          ↓                      ↓
+                   Chroma Vector DB        [Local|Google|GPT|HF]
                           ↓
                 Local Embeddings (MiniLM)
 ```
@@ -67,12 +73,12 @@ User → FastAPI → RAG Pipeline → RBAC Filter → Local LLM → Response
 | Component                    | Purpose                                                     |
 | ---------------------------- | ----------------------------------------------------------- |
 | **FastAPI Server**           | Provides REST endpoints for query, add, seed, chat sessions |
-| **RAG Local Service**        | Chunking, embeddings, Chroma querying, RBAC filtering       |
-| **Local LLM (Mistral 7B)**   | Generates final natural-language answers                    |
+| **Base RAG Service**         | Common functionality: retrieval, RBAC filtering, sessions   |
+| **Provider Services**        | Local (Mistral), Google (Gemini), GPT, Hugging Face        |
 | **ChromaDB**                 | Stores vector embeddings + metadata (`chroma_storage/`)     |
 | **SQLite Databases**         | User auth, chat sessions, document versions (`database/`)   |
-| **Auth Layer**               | API-key based role simulation                               |
-| **Role & Department System** | Controls document visibility                                |
+| **Auth Layer**               | JWT-based authentication with role management               |
+| **Role & Department System** | Controls document visibility across all providers           |
 
 ---
 
@@ -143,9 +149,9 @@ Including:
 * User role / department context
 * Allowed chunks only
 
-### 6. Local Mistral LLM generates answer
+### 6. Provider-specific LLM generates answer
 
-Only using the allowed visible context.
+Local Mistral, Google Gemini, OpenAI GPT, or Hugging Face - using only the allowed visible context.
 
 ---
 
@@ -178,8 +184,8 @@ This allows local multi-turn AI behavior **without external APIs**.
 
 ### Two methods:
 
-1. `/api/local/add` – JSON text
-2. `/api/local/add-file` – Upload `.txt`
+1. `/api/rag/documents/add` – JSON text
+2. `/api/rag/documents/add-file` – Upload `.txt`
 
 ### Metadata includes:
 
@@ -203,36 +209,49 @@ Chunks are then stored in ChromaDB.
 
 ---
 
-# 🧪 **7. Local LLM (Mistral-7B-Instruct GGUF)**
+# 🧪 **7. Multi-Provider LLM Support**
 
-The project uses:
-
-**mistral-7b-instruct-v0.2.Q3_K_M.gguf**
-
-Loaded through llama.cpp:
-
-* CPU-only
-* No internet
+### **Local Provider** (Offline)
+**mistral-7b-instruct-v0.2.Q3_K_M.gguf** via llama.cpp:
+* CPU-only, no internet required
 * Lazy loaded at first query
 * Auto-detected from `/models/*.gguf`
+
+### **Cloud Providers** (API-based)
+* **Google Gemini**: gemini-2.5-flash (default), gemini-2.5-pro
+* **OpenAI GPT**: gpt-3.5-turbo (default), gpt-4
+* **Hugging Face**: Various models via Inference API
+
+### **Environment Variables**
+```bash
+GOOGLE_API_KEY=your_google_api_key
+OPENAI_API_KEY=your_openai_api_key  
+HUGGINGFACE_API_TOKEN=your_hf_token
+```
 
 ---
 
 # 🔌 **8. API Endpoints (Simplified)**
 
-### **RAG**
+### **Multi-Provider RAG**
 
-* `POST /api/local/query`
-* `POST /api/local/add`
-* `POST /api/local/add-file`
-* `POST /api/local/seed`
+* `POST /api/rag/local/query` - Local Mistral-7B
+* `POST /api/rag/google/query` - Google Gemini
+* `POST /api/rag/gpt/query` - OpenAI GPT
+* `POST /api/rag/huggingface/query` - Hugging Face
+* `POST /api/rag/hf/query` - Hugging Face (alias)
 
-### **LLM Helpers (local only)**
+### **Document Management**
 
-* `/summarize`
-* `/generate`
-* `/chat`
-* `/ask-document`
+* `POST /api/rag/documents/add` - Add document (JSON)
+* `POST /api/rag/documents/add-file` - Upload file
+* `POST /api/rag/documents/seed` - Seed default data
+* `POST /api/rag/documents/update` - Update with versioning
+* `GET /api/rag/documents/list` - List with filtering
+
+### **Authentication**
+
+* `POST /api/auth/token` - JWT login
 
 ---
 
@@ -254,29 +273,49 @@ It simulates what a **real company AI assistant** would look like.
 
 # ⚙️ **10. What Makes This Project Unique**
 
-* 100% offline
-* CPU-only LLM
-* Role & department sensitive content filtering
-* Support chat with memory
-* Zero cloud dependencies
-* Realistic enterprise structure
-* Clean separation of services
-* Beginner-friendly but enterprise-grade concepts
+* **Multi-provider architecture** - unified interface for local and cloud LLMs
+* **Offline-first design** - works without internet using local models
+* **Cloud integration** - seamless API integration when needed
+* **Shared RBAC** - consistent security across all providers
+* **Common vector space** - same embeddings and documents for all providers
+* **Provider abstraction** - easy to add new LLM providers
+* **Enterprise-grade** - realistic role-based access control
+* **Session continuity** - conversation history works across providers
 
 ---
 
 # ✔️ **Summary**
 
-This project is a **complete offline enterprise AI system**, combining:
+This project is a **complete multi-provider enterprise RAG system**, combining:
 
-* **Local LLM**
-* **RAG**
-* **RBAC**
-* **Session memory**
-* **Metadata-rich document ingestion**
-* **FastAPI integration**
+* **Multiple LLM providers** (Local, Google, OpenAI, Hugging Face)
+* **Unified RAG architecture** with shared document retrieval
+* **Consistent RBAC** across all providers
+* **Session memory** and conversation continuity
+* **Document versioning** and metadata management
+* **JWT authentication** with role-based access
+* **FastAPI integration** with clean provider abstraction
 
-Designed specifically for **learning AI engineering**, not production.
+### **Usage Examples**
+
+```bash
+# Local offline model
+curl -X POST "/api/rag/local/query" \
+  -H "Content-Type: application/json" \
+  -d '{"question": "What is our company policy?", "use_llm": true}'
+
+# Google Gemini
+curl -X POST "/api/rag/google/query" \
+  -H "Content-Type: application/json" \
+  -d '{"question": "What is our company policy?", "use_llm": true}'
+
+# OpenAI GPT  
+curl -X POST "/api/rag/gpt/query" \
+  -H "Content-Type: application/json" \
+  -d '{"question": "What is our company policy?", "use_llm": true}'
+```
+
+Designed specifically for **learning AI engineering** and **multi-provider RAG architectures**.
 
 
 

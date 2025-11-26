@@ -12,8 +12,7 @@ from pydantic import BaseModel, Field
 
 from .chroma_utils import ensure_chroma_client, query_collection
 # from .llm_service import IdeaRequest, IdeaResponse # Removed to fix circular import
-from .prompt_builder import build_tone_guidance
-from .rag_local_service import estimate_tokens_from_text, build_prompt_with_selected_chunks
+from .prompt_builder import build_tone_guidance, build_prompt_with_selected_chunks, estimate_tokens_from_text
 
 load_dotenv()
 
@@ -35,7 +34,7 @@ class IdeaResponse(BaseModel):
 import logging
 from typing import Optional, Dict, Any
 
-from app.services.support_chat import fetch_recent_messages
+from app.services.base_rag_service import BaseRAGService
 from app.services.utility import embed_texts, DEFAULT_PERSIST_DIR, DEFAULT_COLLECTION_NAME
 
 logger = logging.getLogger(__name__)
@@ -151,121 +150,27 @@ def get_chat_response(request: ChatRequest) -> ChatResponse:
         raise ConnectionError(f"Failed to get response from Google conversation chain: {e}")
 
 
-async def query_google_rag(
+class GoogleRAGService(BaseRAGService):
+    """
+    Google RAG service implementation using Google Gemini models.
+    Inherits common functionality from BaseRAGService.
+    """
+    
+    async def generate_response(
+        self,
         query_text: str,
-        n_results: int = 3,
-        requester: Optional[Dict[str, str]] = None,
-        llm_prompt_prefix: Optional[str] = None,
-        use_llm: bool = True,
-        session_id: Optional[str] = None
-) -> Dict[str, Any]:
-    # Ensure Chroma client
-    client, collection = ensure_chroma_client(
-        persist_directory=str(DEFAULT_PERSIST_DIR),
-        collection_name=DEFAULT_COLLECTION_NAME
-    )
-
-    logger.debug(
-        "query_google_rag called: query_text_len=%d n_results=%d use_llm=%s session_id=%s requester=%s",
-        len(query_text or ""), n_results, use_llm, session_id, (requester or {}).get("user_id"))
-
-    if not query_text:
-        raise ValueError("query_text must be provided")
-
-    # 1. Get embedding for query
-    try:
-        q_emb = (await embed_texts([query_text]))[0]
-        logger.debug("Computed query embedding.")
-    except Exception as e:
-        logger.exception("Failed to embed query: %s", e)
-        raise
-
-    # 2. Retrieve from Chroma
-    try:
-        result = query_collection(collection=collection, query_embeddings=[q_emb], n_results=n_results)
-    except Exception:
-        result = query_collection(collection=collection, query_texts=[query_text], n_results=n_results)
-
-    raw_docs = (result.get("documents") or [[]])[0]
-    raw_metadatas = (result.get("metadatas") or [[]])[0]
-    raw_ids = (result.get("ids") or [[]])[0]
-    raw_distances = (result.get("distances") or [[]])[0]
-
-    logger.debug("Raw retrieval counts: docs=%d metadatas=%d ids=%d distances=%d",
-                 len(raw_docs), len(raw_metadatas), len(raw_ids), len(raw_distances))
-
-    # 3. RBAC filtering
-    def _allowed_by_metadata(meta: Optional[Dict[str, Any]], requester: Optional[Dict[str, str]]) -> bool:
-        sens = meta.get("sensitivity", "public_internal") if meta else "public_internal"
-        if sens == "personal":
-            owner = meta.get("owner_id")
-            if requester and owner == requester.get("user_id"): return True
-            return requester and requester.get("role") in ("HR", "Legal", "Executive")
-        if sens == "highly_confidential":
-            return requester and requester.get("role") in ("Legal", "Executive")
-        if sens == "role_confidential":
-            allowed_roles = meta.get("allowed_roles") or []
-            if requester and requester.get("role") in allowed_roles: return True
-            return requester and requester.get("role") in ("HR", "Legal", "Executive")
-        if sens == "department_confidential":
-            if requester and requester.get("department") == meta.get("department"): return True
-            return requester and requester.get("role") in ("HR", "Legal", "Executive")
-        return True
-
-    visible_docs, visible_metas, visible_ids, visible_distances = [], [], [], []
-    public_summaries, filtered_details = [], []
-    filtered_out_count = 0
-
-    for doc, meta, id_, dist in zip(raw_docs, raw_metadatas, raw_ids, raw_distances):
-        if _allowed_by_metadata(meta, requester):
-            visible_docs.append(doc)
-            visible_metas.append(meta)
-            visible_ids.append(id_)
-            visible_distances.append(dist)
-        else:
-            filtered_out_count += 1
-            ps = meta.get("public_summary") if isinstance(meta, dict) else None
-            if ps: public_summaries.append(ps)
-            filtered_details.append(
-                {"id": id_, "sensitivity": meta.get("sensitivity"), "department": meta.get("department"),
-                 "source": meta.get("source")})
-
-    # 4. Build Context
-    context_text = "\n\n---\n\n".join(visible_docs or [])
-    logger.info("Post-filtering: visible_docs=%d filtered_out=%d", len(visible_docs), filtered_out_count)
-
-    out = {
-        "documents": visible_docs, "metadatas": visible_metas, "ids": visible_ids, "distances": visible_distances,
-        "raw_documents": raw_docs, "raw_metadatas": raw_metadatas, "raw_ids": raw_ids, "raw_distances": raw_distances,
-        "context": context_text, "filtered_out_count": filtered_out_count, "public_summaries": public_summaries,
-        "filtered_details": filtered_details,
-    }
-
-    # 5. Tone-Based Prefix Injection
-    last_user_tone = None
-    if session_id:
-        try:
-            history = fetch_recent_messages(session_id, limit=10)
-            for m in reversed(history):
-                if m.get("speaker") == "user" and m.get("tone"):
-                    last_user_tone = m["tone"]
-                    break
-        except Exception as e:
-            logger.warning("Tone fetch failed: %s", e)
-
-    tone_note = build_tone_guidance(last_user_tone)
-    system_prefix = llm_prompt_prefix or (
-        "You are a helpful assistant. Use the provided context to answer the question. "
-        "If the answer is not present in the context, say you don't know."
-    )
-    final_prefix = f"Conversation Tone Guidance:\n{tone_note}\n\n{system_prefix}"
-    approx_prefix_tokens = estimate_tokens_from_text(final_prefix)
-    approx_context_tokens = estimate_tokens_from_text(context_text)
-    logger.debug("Prompt sizes: prefix_chars=%d context_chars=%d est_prefix_tokens=%d est_context_tokens=%d",
-                 len(final_prefix), len(context_text), approx_prefix_tokens, approx_context_tokens)
-
-    # 6. LLM Call
-    if use_llm:
+        context_text: str,
+        final_prefix: str,
+        use_llm: bool,
+        max_tokens: int,
+        session_id: Optional[str]
+    ) -> Optional[str]:
+        """
+        Generate a response using Google Gemini LLM.
+        """
+        if not use_llm:
+            return None
+            
         if not google_llm:
             raise ConnectionError("Google LLM is not initialized. Check your API key.")
 
@@ -275,12 +180,36 @@ async def query_google_rag(
             answer = google_llm.invoke(prompt)
             answer_len = len(answer.content) if answer and hasattr(answer, 'content') else 0
             logger.info("Google LLM returned answer (approx length=%d) for query session=%s", answer_len, session_id)
-            out["answer"] = answer.content
+            return answer.content
         except Exception as e:
             logger.exception("Google LLM call failed: %s", e)
             raise
 
-    return out
+
+# Create global instance
+_google_rag_service = GoogleRAGService()
+
+
+async def query_google_rag(
+        query_text: str,
+        n_results: int = 3,
+        requester: Optional[Dict[str, str]] = None,
+        llm_prompt_prefix: Optional[str] = None,
+        use_llm: bool = True,
+        session_id: Optional[str] = None
+) -> Dict[str, Any]:
+    """
+    Query the Google RAG service using the base RAG functionality.
+    """
+    return await _google_rag_service.query_rag(
+        query_text=query_text,
+        n_results=n_results,
+        requester=requester,
+        llm_prompt_prefix=llm_prompt_prefix,
+        use_llm=use_llm,
+        max_tokens=256,  # Google doesn't use max_tokens in the same way
+        session_id=session_id
+    )
 
 
 async def generate_content_ideas_with_rag(request: IdeaRequest, requester: Dict[str, str]) -> IdeaResponse:

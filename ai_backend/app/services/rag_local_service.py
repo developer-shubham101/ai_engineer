@@ -17,8 +17,7 @@ from pathlib import Path
 from typing import List, Optional, Dict, Any
 
 from app.config import ENABLE_DYNAMIC_MODEL_SELECTION, DEFAULT_MODEL_NAME
-# new import to fetch recent messages (tone is stored there by support_chat)
-from app.services.support_chat import fetch_recent_messages
+from app.services.base_rag_service import BaseRAGService
 
 # Embed/LLM imports (optional at runtime)
 try:
@@ -518,276 +517,59 @@ async def archive_document_version(
         return False
 
 
-async def retrieve_documents(query_text: str, n_results: int) -> Dict[str, Any]:
+class LocalRAGService(BaseRAGService):
     """
-    Retrieve documents from ChromaDB based on query embedding.
+    Local RAG service implementation using local LLM models.
+    Inherits common functionality from BaseRAGService.
     """
-    client, collection = ensure_chroma_client(
-        persist_directory=str(DEFAULT_PERSIST_DIR),
-        collection_name=DEFAULT_COLLECTION_NAME
-    )
-
-    try:
-        q_emb = (await embed_texts([query_text]))[0]
-        logger.debug("Computed query embedding.")
-    except Exception as e:
-        logger.exception("Failed to embed query: %s", e)
-        raise
-
-    try:
-        result = query_collection(collection=collection, query_embeddings=[q_emb], n_results=n_results)
-    except Exception:
-        result = query_collection(collection=collection, query_texts=[query_text], n_results=n_results)
-
-    return result
-
-
-def normalize_chroma_result(result: Any) -> tuple:
-    """
-    Normalize ChromaDB result into standard lists.
-    """
-    if isinstance(result, dict):
-        raw_docs = (result.get("documents") or [[]])[0]
-        raw_metadatas = (result.get("metadatas") or [[]])[0]
-        raw_ids = (result.get("ids") or [[]])[0]
-        raw_distances = (result.get("distances") or [[]])[0]
-    else:
-        try:
-            raw_docs = result.documents[0]
-            raw_metadatas = result.metadatas[0]
-            raw_ids = result.ids[0]
-            raw_distances = result.distances[0] if hasattr(result, "distances") else []
-        except Exception as e:
-            logger.exception("Unexpected Chroma format: %s", e)
-            raw_docs, raw_metadatas, raw_ids, raw_distances = [], [], [], []
-    return raw_docs, raw_metadatas, raw_ids, raw_distances
-
-
-def _allowed_by_metadata(meta: Optional[Dict[str, Any]], requester: Optional[Dict[str, str]]) -> bool:
-    """Check if a document is accessible based on its metadata and the requester's role/department."""
-    sens = meta.get("sensitivity", "public_internal") if meta else "public_internal"
-
-    # personal
-    if sens == "personal":
-        owner = meta.get("owner_id")
-        if requester and owner == requester.get("user_id"):
-            return True
-        return requester and requester.get("role") in ("HR", "Legal", "Executive")
-
-    # highly_confidential
-    if sens == "highly_confidential":
-        return requester and requester.get("role") in ("Legal", "Executive")
-
-    # role_confidential
-    if sens == "role_confidential":
-        allowed_roles = meta.get("allowed_roles") or []
-        if requester and requester.get("role") in allowed_roles:
-            return True
-        return requester and requester.get("role") in ("HR", "Legal", "Executive")
-
-    # department_confidential
-    if sens == "department_confidential":
-        # Check department match
-        if requester and requester.get("department") == meta.get("department"):
-            return True
-        # Check allowed_roles override (e.g. Authorized Managers from other depts)
-        allowed_roles = meta.get("allowed_roles") or []
-        if requester and requester.get("role") in allowed_roles:
-            return True
-        # Check super roles
-        return requester and requester.get("role") in ("HR", "Legal", "Executive")
-
-    # public_internal
-    return True
-
-
-def filter_documents_by_rbac(
-    raw_docs: List[str],
-    raw_metadatas: List[Dict],
-    raw_ids: List[str],
-    raw_distances: List[float],
-    requester: Optional[Dict[str, str]]
-) -> Dict[str, Any]:
-    """
-    Filter documents based on RBAC rules AND deduplicate versions (show only latest accessible).
-    """
-    temp_docs, temp_metas, temp_ids, temp_distances = [], [], [], []
-    public_summaries, filtered_details = [], []
-    filtered_out_count = 0
-
-    # 1. First Pass: RBAC Filtering
-    for doc, meta, id_, dist in zip(raw_docs, raw_metadatas, raw_ids, raw_distances):
-        try:
-            if _allowed_by_metadata(meta, requester):
-                temp_docs.append(doc)
-                temp_metas.append(meta)
-                temp_ids.append(id_)
-                temp_distances.append(dist)
-            else:
-                filtered_out_count += 1
-                ps = meta.get("public_summary") if isinstance(meta, dict) else None
-                if ps:
-                    public_summaries.append(ps)
-                filtered_details.append({
-                    "id": id_,
-                    "sensitivity": meta.get("sensitivity"),
-                    "department": meta.get("department"),
-                    "source": meta.get("source"),
-                })
-        except Exception as e:
-            logger.exception("Metadata filtering error: %s", e)
-
-    # Audit logging for blocked access attempts
-    if filtered_out_count > 0:
-        logger.warning(
-            "RBAC_ACCESS_DENIED: user_id=%s role=%s dept=%s filtered_count=%d blocked_sources=%s",
-            requester.get("user_id", "anonymous") if requester else "anonymous",
-            requester.get("role", "none") if requester else "none",
-            requester.get("department", "none") if requester else "none",
-            filtered_out_count,
-            [d.get("source", "unknown")[:50] for d in filtered_details[:3]]
-        )
-
-    # 2. Second Pass: Version Deduplication (Show only latest accessible version)
-    # Group by document_id (which is shared across versions)
-    # Map: document_id -> (max_version_float, list_of_indices_in_temp)
-    doc_groups = {}
     
-    for i, meta in enumerate(temp_metas):
-        doc_id = meta.get("document_id")
-        if not doc_id:
-            continue
-            
-        version_str = meta.get("version", "1.0")
-        try:
-            version_val = float(version_str)
-        except ValueError:
-            version_val = 1.0
-            
-        if doc_id not in doc_groups:
-            doc_groups[doc_id] = {"max_ver": version_val, "indices": [i]}
+    async def generate_response(
+        self,
+        query_text: str,
+        context_text: str,
+        final_prefix: str,
+        use_llm: bool,
+        max_tokens: int,
+        session_id: Optional[str]
+    ) -> Optional[str]:
+        """
+        Generate a response using local LLM.
+        """
+        if not use_llm:
+            return None
+
+        if ENABLE_DYNAMIC_MODEL_SELECTION:
+            task = "reason"
+            model_key = choose_model_for_task(task)
+            logger.info("Model chosen=%s for task=%s (dynamic selection enabled)", model_key, task)
         else:
-            current_max = doc_groups[doc_id]["max_ver"]
-            if version_val > current_max:
-                doc_groups[doc_id]["max_ver"] = version_val
-                # We keep indices because we might have multiple chunks for the same version
-            elif version_val < current_max:
-                pass # Don't update max
-            
-            doc_groups[doc_id]["indices"].append(i)
+            model_key = "default"
+            logger.info("Using default model: %s", DEFAULT_MODEL_NAME)
 
-    # Build final list
-    visible_docs, visible_metas, visible_ids, visible_distances = [], [], [], []
-    
-    # We need to preserve order roughly, or just rebuild
-    # To be safe, we iterate through temp again and check if version matches max_ver
-    for i in range(len(temp_docs)):
-        meta = temp_metas[i]
-        doc_id = meta.get("document_id")
-        if not doc_id:
-            # No ID, keep it (safe fallback)
-            visible_docs.append(temp_docs[i])
-            visible_metas.append(temp_metas[i])
-            visible_ids.append(temp_ids[i])
-            visible_distances.append(temp_distances[i])
-            continue
-            
-        version_str = meta.get("version", "1.0")
         try:
-            version_val = float(version_str)
-        except ValueError:
-            version_val = 1.0
-            
-        max_ver = doc_groups[doc_id]["max_ver"]
-        
-        if version_val >= max_ver:
-            visible_docs.append(temp_docs[i])
-            visible_metas.append(temp_metas[i])
-            visible_ids.append(temp_ids[i])
-            visible_distances.append(temp_distances[i])
-        else:
-            # Hidden by newer version
-            pass
-
-    return {
-        "documents": visible_docs,
-        "metadatas": visible_metas,
-        "ids": visible_ids,
-        "distances": visible_distances,
-        "filtered_out_count": filtered_out_count,
-        "public_summaries": public_summaries,
-        "filtered_details": filtered_details
-    }
-
-
-def inject_tone_guidance(session_id: Optional[str], llm_prompt_prefix: Optional[str]) -> str:
-    """
-    Inject tone guidance into the LLM prompt prefix based on session history.
-    """
-    last_user_tone = None
-    if session_id:
-        try:
-            history = fetch_recent_messages(session_id, limit=10)
-            for m in reversed(history):
-                if m.get("speaker") == "user" and m.get("tone"):
-                    last_user_tone = m["tone"]
-                    break
+            llm_instance = get_llm_instance(model_key)
         except Exception as e:
-            logger.warning("Tone fetch failed: %s", e)
+            logger.exception("Failed to load LLM instance: %s", e)
+            raise
 
-    logger.debug("Last user tone detected: %s", last_user_tone)
-    tone_note = build_tone_guidance(last_user_tone)
+        prompt = build_prompt_with_selected_chunks(final_prefix, context_text, query_text)
 
-    system_prefix = llm_prompt_prefix or (
-        "You are a helpful assistant. Use the provided context to answer the question. "
-        "If the answer is not present in the context, say you don't know."
-    )
+        try:
+            answer = await _call_llm_with_retry(
+                llm_instance,
+                prompt,
+                max_tokens=max_tokens,
+                temperature=0.0
+            )
+        except Exception as e:
+            logger.exception("LLM call failed: %s", e)
+            raise
 
-    return f"Conversation Tone Guidance:\n{tone_note}\n\n{system_prefix}"
+        return answer
 
 
-async def generate_rag_response(
-    query_text: str,
-    context_text: str,
-    final_prefix: str,
-    use_llm: bool,
-    max_tokens: int,
-    session_id: Optional[str]
-) -> Optional[str]:
-    """
-    Generate a response using the LLM if requested.
-    """
-    if not use_llm:
-        return None
-
-    if ENABLE_DYNAMIC_MODEL_SELECTION:
-        task = "reason"
-        model_key = choose_model_for_task(task)
-        logger.info("Model chosen=%s for task=%s (dynamic selection enabled)", model_key, task)
-    else:
-        model_key = "default"
-        logger.info("Using default model: %s", DEFAULT_MODEL_NAME)
-
-    try:
-        llm_instance = get_llm_instance(model_key)
-    except Exception as e:
-        logger.exception("Failed to load LLM instance: %s", e)
-        raise
-
-    prompt = build_prompt_with_selected_chunks(final_prefix, context_text, query_text)
-
-    try:
-        answer = await _call_llm_with_retry(
-            llm_instance,
-            prompt,
-            max_tokens=max_tokens,
-            temperature=0.0
-        )
-    except Exception as e:
-        logger.exception("LLM call failed: %s", e)
-        raise
-
-    return answer
+# Create global instance
+_local_rag_service = LocalRAGService()
 
 
 async def query_local_rag(
@@ -800,80 +582,17 @@ async def query_local_rag(
         session_id: Optional[str] = None
 ) -> Dict[str, Any]:
     """
-    Query the local RAG service.
+    Query the local RAG service using the base RAG functionality.
     """
-    logger.debug(
-        "query_local_rag called: query_text_len=%d n_results=%d use_llm=%s max_tokens=%d session_id=%s requester=%s",
-        len(query_text or ""), n_results, use_llm, max_tokens, session_id, (requester or {}).get("user_id"))
-
-    if not query_text:
-        raise ValueError("query_text must be provided")
-
-    # 1. Retrieve
-    raw_result = await retrieve_documents(query_text, n_results)
-    raw_docs, raw_metadatas, raw_ids, raw_distances = normalize_chroma_result(raw_result)
-
-    # 2. Filter (RBAC)
-    filtered_result = filter_documents_by_rbac(raw_docs, raw_metadatas, raw_ids, raw_distances, requester)
-    
-    visible_docs = filtered_result["documents"]
-    public_summaries = filtered_result.get("public_summaries", [])
-    filtered_out_count = filtered_result.get("filtered_out_count", 0)
-    
-    # Handle case where all documents are blocked by RBAC
-    if not visible_docs and filtered_out_count > 0:
-        if public_summaries:
-            # Show public summaries as fallback
-            answer = (
-                "I found relevant information, but you don't have access to the full details. "
-                "Here's what I can share:\n\n" + 
-                "\n".join(f"• {s}" for s in public_summaries)
-            )
-        else:
-            # No public summaries available
-            answer = (
-                "You do not have permission to view this information. "
-                "Please contact your administrator if you believe this is an error."
-            )
-        
-        return {
-            "documents": [],
-            "metadatas": [],
-            "ids": [],
-            "distances": [],
-            "raw_documents": raw_docs,
-            "raw_metadatas": raw_metadatas,
-            "raw_ids": raw_ids,
-            "raw_distances": raw_distances,
-            "answer": answer,
-            "context": None
-        }
-    
-    context_text = "\n\n---\n\n".join(visible_docs or [])
-
-    # 3. Tone Guidance
-    final_prefix = inject_tone_guidance(session_id, llm_prompt_prefix)
-
-    # 4. Generate
-    answer = await generate_rag_response(
-        query_text, context_text, final_prefix, use_llm, max_tokens, session_id
+    return await _local_rag_service.query_rag(
+        query_text=query_text,
+        n_results=n_results,
+        requester=requester,
+        llm_prompt_prefix=llm_prompt_prefix,
+        use_llm=use_llm,
+        max_tokens=max_tokens,
+        session_id=session_id
     )
-
-    return {
-        "documents": visible_docs,
-        "metadatas": filtered_result["metadatas"],
-        "ids": filtered_result["ids"],
-        "distances": filtered_result["distances"],
-        "raw_documents": raw_docs,
-        "raw_metadatas": raw_metadatas,
-        "raw_ids": raw_ids,
-        "raw_distances": raw_distances,
-        "context": context_text,
-        "filtered_out_count": filtered_result["filtered_out_count"],
-        "public_summaries": filtered_result["public_summaries"],
-        "filtered_details": filtered_result["filtered_details"],
-        "answer": answer
-    }
 
 
 async def seed_from_file(file_path: Optional[str] = None, source_name: Optional[str] = None,
@@ -907,7 +626,7 @@ async def seed_from_file(file_path: Optional[str] = None, source_name: Optional[
                                               collection_name=DEFAULT_COLLECTION_NAME)
     try:
         data = get_collection_data(collection)
-        SHOW_DATA = True
+        SHOW_DATA = True # Just for debugging purpose
         if SHOW_DATA:
             from rich import print as rprint
             rprint(data.get("ids"))
