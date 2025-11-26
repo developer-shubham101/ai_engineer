@@ -348,6 +348,8 @@ Check server logs for these audit entries:
 |------|---------------------------|
 | Guest | `public_internal` |
 | Employee | `public_internal` |
+| Employee L1 | `public_internal` |
+| Employee L2 | `public_internal` |
 | Manager | `public_internal`, `department_confidential` |
 | HR | `public_internal`, `department_confidential`, `role_confidential`, `personal` |
 | SuperAdmin | ALL (including `highly_confidential`) |
@@ -356,7 +358,7 @@ Check server logs for these audit entries:
 
 - **department**: `General`, `HR`, `Finance`, `Engineering`, `IT`, `Legal`, `Executive`, `Admin`
 - **sensitivity**: `public_internal`, `department_confidential`, `role_confidential`, `highly_confidential`, `personal`
-- **allowed_roles**: Array of valid roles: `["SuperAdmin", "HR", "Manager", "Employee", "Guest"]`
+- **allowed_roles**: Array of valid roles: `["SuperAdmin", "HR", "Manager", "Employee", "Employee L1", "Employee L2", "Guest"]`
 - **owner_id**: Required for `personal` sensitivity documents
 - **tags**: Comma-separated string for searchability
 - **public_summary**: Fallback text shown when full content is restricted

@@ -534,4 +534,7 @@ uvicorn app.main:app --host 0.0.0.0 --port 5444
   - `METADATA_CHANGE`: Sensitivity level changes
   - `FILE_UPLOADED`: File upload tracking
 - **Seeding Enhancement**: `seed_from_file()` automatically loads metadata from `.meta.json` companion files
+- **Smart Versioning**: Automatically filters out older versions from search results if a newer version is accessible to the user (Version Deduplication)
+- **Cross-Department Overrides**: `department_confidential` documents can be shared with specific roles (e.g., Managers) from other departments via `allowed_roles`
+- **Expanded Role Support**: Added support for `Employee L1` and `Employee L2` roles
 
