@@ -587,8 +587,14 @@ def _allowed_by_metadata(meta: Optional[Dict[str, Any]], requester: Optional[Dic
 
     # department_confidential
     if sens == "department_confidential":
+        # Check department match
         if requester and requester.get("department") == meta.get("department"):
             return True
+        # Check allowed_roles override (e.g. Authorized Managers from other depts)
+        allowed_roles = meta.get("allowed_roles") or []
+        if requester and requester.get("role") in allowed_roles:
+            return True
+        # Check super roles
         return requester and requester.get("role") in ("HR", "Legal", "Executive")
 
     # public_internal
@@ -603,19 +609,20 @@ def filter_documents_by_rbac(
     requester: Optional[Dict[str, str]]
 ) -> Dict[str, Any]:
     """
-    Filter documents based on RBAC rules.
+    Filter documents based on RBAC rules AND deduplicate versions (show only latest accessible).
     """
-    visible_docs, visible_metas, visible_ids, visible_distances = [], [], [], []
+    temp_docs, temp_metas, temp_ids, temp_distances = [], [], [], []
     public_summaries, filtered_details = [], []
     filtered_out_count = 0
 
+    # 1. First Pass: RBAC Filtering
     for doc, meta, id_, dist in zip(raw_docs, raw_metadatas, raw_ids, raw_distances):
         try:
             if _allowed_by_metadata(meta, requester):
-                visible_docs.append(doc)
-                visible_metas.append(meta)
-                visible_ids.append(id_)
-                visible_distances.append(dist)
+                temp_docs.append(doc)
+                temp_metas.append(meta)
+                temp_ids.append(id_)
+                temp_distances.append(dist)
             else:
                 filtered_out_count += 1
                 ps = meta.get("public_summary") if isinstance(meta, dict) else None
@@ -629,6 +636,78 @@ def filter_documents_by_rbac(
                 })
         except Exception as e:
             logger.exception("Metadata filtering error: %s", e)
+
+    # Audit logging for blocked access attempts
+    if filtered_out_count > 0:
+        logger.warning(
+            "RBAC_ACCESS_DENIED: user_id=%s role=%s dept=%s filtered_count=%d blocked_sources=%s",
+            requester.get("user_id", "anonymous") if requester else "anonymous",
+            requester.get("role", "none") if requester else "none",
+            requester.get("department", "none") if requester else "none",
+            filtered_out_count,
+            [d.get("source", "unknown")[:50] for d in filtered_details[:3]]
+        )
+
+    # 2. Second Pass: Version Deduplication (Show only latest accessible version)
+    # Group by document_id (which is shared across versions)
+    # Map: document_id -> (max_version_float, list_of_indices_in_temp)
+    doc_groups = {}
+    
+    for i, meta in enumerate(temp_metas):
+        doc_id = meta.get("document_id")
+        if not doc_id:
+            continue
+            
+        version_str = meta.get("version", "1.0")
+        try:
+            version_val = float(version_str)
+        except ValueError:
+            version_val = 1.0
+            
+        if doc_id not in doc_groups:
+            doc_groups[doc_id] = {"max_ver": version_val, "indices": [i]}
+        else:
+            current_max = doc_groups[doc_id]["max_ver"]
+            if version_val > current_max:
+                doc_groups[doc_id]["max_ver"] = version_val
+                # We keep indices because we might have multiple chunks for the same version
+            elif version_val < current_max:
+                pass # Don't update max
+            
+            doc_groups[doc_id]["indices"].append(i)
+
+    # Build final list
+    visible_docs, visible_metas, visible_ids, visible_distances = [], [], [], []
+    
+    # We need to preserve order roughly, or just rebuild
+    # To be safe, we iterate through temp again and check if version matches max_ver
+    for i in range(len(temp_docs)):
+        meta = temp_metas[i]
+        doc_id = meta.get("document_id")
+        if not doc_id:
+            # No ID, keep it (safe fallback)
+            visible_docs.append(temp_docs[i])
+            visible_metas.append(temp_metas[i])
+            visible_ids.append(temp_ids[i])
+            visible_distances.append(temp_distances[i])
+            continue
+            
+        version_str = meta.get("version", "1.0")
+        try:
+            version_val = float(version_str)
+        except ValueError:
+            version_val = 1.0
+            
+        max_ver = doc_groups[doc_id]["max_ver"]
+        
+        if version_val >= max_ver:
+            visible_docs.append(temp_docs[i])
+            visible_metas.append(temp_metas[i])
+            visible_ids.append(temp_ids[i])
+            visible_distances.append(temp_distances[i])
+        else:
+            # Hidden by newer version
+            pass
 
     return {
         "documents": visible_docs,
@@ -738,6 +817,38 @@ async def query_local_rag(
     filtered_result = filter_documents_by_rbac(raw_docs, raw_metadatas, raw_ids, raw_distances, requester)
     
     visible_docs = filtered_result["documents"]
+    public_summaries = filtered_result.get("public_summaries", [])
+    filtered_out_count = filtered_result.get("filtered_out_count", 0)
+    
+    # Handle case where all documents are blocked by RBAC
+    if not visible_docs and filtered_out_count > 0:
+        if public_summaries:
+            # Show public summaries as fallback
+            answer = (
+                "I found relevant information, but you don't have access to the full details. "
+                "Here's what I can share:\n\n" + 
+                "\n".join(f"• {s}" for s in public_summaries)
+            )
+        else:
+            # No public summaries available
+            answer = (
+                "You do not have permission to view this information. "
+                "Please contact your administrator if you believe this is an error."
+            )
+        
+        return {
+            "documents": [],
+            "metadatas": [],
+            "ids": [],
+            "distances": [],
+            "raw_documents": raw_docs,
+            "raw_metadatas": raw_metadatas,
+            "raw_ids": raw_ids,
+            "raw_distances": raw_distances,
+            "answer": answer,
+            "context": None
+        }
+    
     context_text = "\n\n---\n\n".join(visible_docs or [])
 
     # 3. Tone Guidance
@@ -865,6 +976,10 @@ async def seed_from_file(file_path: Optional[str] = None, source_name: Optional[
                 logger.info("Processing version directory: %s (version %s)", version_dir.name, version_str)
                 
                 for file_path in sorted(version_dir.iterdir()):
+                    # Skip .meta.json files (they're companions, not documents)
+                    if file_path.suffix == '.json' and file_path.stem.endswith('.meta'):
+                        continue
+                        
                     if file_path.is_file():
                         try:
                             # Use doc_parser to read and parse file
@@ -877,6 +992,24 @@ async def seed_from_file(file_path: Optional[str] = None, source_name: Optional[
                             # Source name for display
                             src_name = f"{category}/{version_dir.name}/{file_path.name}"
                             
+                            # Load custom metadata from companion .meta.json file
+                            meta_file = file_path.with_suffix('.meta.json')
+                            custom_meta = {}
+                            if meta_file.exists():
+                                try:
+                                    import json
+                                    custom_meta = json.loads(meta_file.read_text(encoding='utf-8'))
+                                    logger.info("Loaded metadata from %s", meta_file.name)
+                                except Exception as e:
+                                    logger.warning("Failed to load metadata from %s: %s", meta_file.name, e)
+                            
+                            # Merge metadata: custom metadata takes precedence
+                            metadata = {
+                                "seeded": True,
+                                "category": category,
+                                **custom_meta  # Merge custom metadata
+                            }
+                            
                             # Determine parent version dynamically
                             # If we've seen this doc before, that's the parent. 
                             # If not, and this isn't v1.0, parent is None (it's a new doc introduced in a later version)
@@ -886,7 +1019,7 @@ async def seed_from_file(file_path: Optional[str] = None, source_name: Optional[
                                 source_name=src_name,
                                 text=text,
                                 chunks=None,
-                                metadata={"seeded": True, "category": category},
+                                metadata=metadata,  # Use merged metadata
                                 document_id=document_id,
                                 version=version_str,
                                 parent_version=parent_version,

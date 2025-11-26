@@ -96,13 +96,102 @@ ALLOWED_SENSITIVITY = {
     "personal",
 }
 
+ALLOWED_DEPARTMENTS = {
+    "General",
+    "HR",
+    "Finance",
+    "Engineering",
+    "IT",
+    "Legal",
+    "Executive",
+    "Admin",
+}
 
-def validate_metadata(meta: Optional[Dict[str, Any]]):
+ALLOWED_ROLES = {
+    "SuperAdmin",
+    "HR",
+    "Manager",
+    "Employee",
+    "Employee L1",
+    "Employee L2",
+    "Guest",
+}
+
+# Role-based sensitivity permissions
+SENSITIVITY_PERMISSIONS = {
+    "Guest": ["public_internal"],
+    "Employee": ["public_internal"],
+    "Employee L1": ["public_internal"],
+    "Employee L2": ["public_internal"],
+    "Manager": ["public_internal", "department_confidential"],
+    "HR": ["public_internal", "department_confidential", "role_confidential", "personal"],
+    "SuperAdmin": ["public_internal", "department_confidential", "role_confidential", "highly_confidential", "personal"],
+}
+
+
+def validate_metadata(meta: Optional[Dict[str, Any]], requester: Optional[Dict[str, Any]] = None):
+    """
+    Validate document metadata.
+    
+    Args:
+        meta: Metadata dictionary to validate
+        requester: User making the request (for role-based validation)
+    
+    Raises:
+        HTTPException: If metadata is invalid
+    """
     if not meta:
         return
+    
+    # Validate sensitivity level
     sens = meta.get("sensitivity")
     if sens and sens not in ALLOWED_SENSITIVITY:
-        raise HTTPException(status_code=400, detail=f"Invalid sensitivity '{sens}'. Allowed: {list(ALLOWED_SENSITIVITY)}")
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Invalid sensitivity '{sens}'. Allowed: {list(ALLOWED_SENSITIVITY)}"
+        )
+    
+    # Validate department
+    dept = meta.get("department")
+    if dept and dept not in ALLOWED_DEPARTMENTS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid department '{dept}'. Allowed: {list(ALLOWED_DEPARTMENTS)}"
+        )
+    
+    # Validate allowed_roles if present
+    allowed_roles = meta.get("allowed_roles")
+    if allowed_roles:
+        if not isinstance(allowed_roles, list):
+            raise HTTPException(
+                status_code=400,
+                detail="allowed_roles must be a list of role names"
+            )
+        invalid_roles = [r for r in allowed_roles if r not in ALLOWED_ROLES]
+        if invalid_roles:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid roles in allowed_roles: {invalid_roles}. Allowed: {list(ALLOWED_ROLES)}"
+            )
+    
+    # Role-based sensitivity validation
+    if requester and sens:
+        user_role = requester.get("role")
+        allowed_sensitivities = SENSITIVITY_PERMISSIONS.get(user_role, [])
+        
+        if sens not in allowed_sensitivities:
+            raise HTTPException(
+                status_code=403,
+                detail=f"Your role '{user_role}' cannot create documents with sensitivity '{sens}'. "
+                       f"Allowed sensitivities for your role: {allowed_sensitivities}"
+            )
+    
+    # Validate personal documents have owner_id
+    if sens == "personal" and not meta.get("owner_id"):
+        raise HTTPException(
+            status_code=400,
+            detail="Personal documents must have an 'owner_id' field"
+        )
 
 
 
@@ -344,7 +433,15 @@ async def add_document_json(
     if "ingested_at" in metadata and metadata["ingested_at"] is None:
         del metadata["ingested_at"]
 
-    validate_metadata(metadata)
+    try:
+        validate_metadata(metadata, requester)  # Pass requester for role-based validation
+    except HTTPException as e:
+        # Log validation failures for audit
+        logger.warning(
+            "METADATA_VALIDATION_FAILED: user=%s role=%s attempted to create doc with invalid metadata. Error: %s",
+            requester.get("user_id"), requester.get("role"), e.detail
+        )
+        raise
 
     try:
         result = await rag_service.add_document_to_rag_local(
@@ -352,6 +449,13 @@ async def add_document_json(
             text=req.text, 
             metadata=metadata,
             created_by=requester.get("user_id")
+        )
+        
+        # Log successful creation
+        logger.info(
+            "DOCUMENT_CREATED: user=%s role=%s dept=%s created doc=%s sensitivity=%s",
+            requester.get("user_id"), requester.get("role"), requester.get("department"),
+            result["document_id"], metadata.get("sensitivity")
         )
     except Exception as e:
         logger.exception("Failed to add document: %s", e)
@@ -400,7 +504,16 @@ async def add_document_file(
         text = text_content
 
     metadata = {"department": department, "sensitivity": sensitivity, "ingested_by": requester.get("user_id")}
-    validate_metadata(metadata)
+    
+    try:
+        validate_metadata(metadata, requester)  # Pass requester for role-based validation
+    except HTTPException as e:
+        # Log validation failures for audit
+        logger.warning(
+            "FILE_UPLOAD_VALIDATION_FAILED: user=%s role=%s file=%s. Error: %s",
+            requester.get("user_id"), requester.get("role"), file.filename, e.detail
+        )
+        raise
 
     try:
         result = await rag_service.add_document_to_rag_local(
@@ -408,6 +521,13 @@ async def add_document_file(
             text=text, 
             metadata=metadata,
             created_by=requester.get("user_id")
+        )
+        
+        # Log successful file upload
+        logger.info(
+            "FILE_UPLOADED: user=%s role=%s dept=%s file=%s doc=%s sensitivity=%s",
+            requester.get("user_id"), requester.get("role"), requester.get("department"),
+            file.filename, result["document_id"], metadata.get("sensitivity")
         )
     except Exception as e:
         logger.exception("Failed to add file: %s", e)
@@ -508,15 +628,67 @@ async def update_document(
 ):
     """
     Update a document by creating a new version (non-destructive).
+    
+    Validates:
+    - User has permission to update documents with the new sensitivity level
+    - User's department matches document's department (or is SuperAdmin/HR)
+    - Metadata is valid
     """
     try:
+        # Get current document to check ownership/department
+        from app.services import version_tracking
+        latest_version = version_tracking.get_latest_version(req.document_id)
+        if not latest_version:
+            raise HTTPException(status_code=404, detail=f"Document {req.document_id} not found")
+        
+        current_metadata = latest_version.get("metadata", {})
+        current_dept = current_metadata.get("department", "General")
+        user_role = requester.get("role")
+        user_dept = requester.get("department")
+        
+        # Department ownership check (unless SuperAdmin or HR)
+        if user_role not in ["SuperAdmin", "HR"]:
+            if current_dept != user_dept:
+                logger.warning(
+                    "RBAC_UPDATE_DENIED: user=%s role=%s dept=%s attempted to update document in dept=%s",
+                    requester.get("user_id"), user_role, user_dept, current_dept
+                )
+                raise HTTPException(
+                    status_code=403,
+                    detail=f"You cannot update documents from department '{current_dept}'. "
+                           f"Your department is '{user_dept}'."
+                )
+        
+        # Validate new metadata if provided
+        if req.metadata:
+            # Merge with existing metadata
+            updated_metadata = {**current_metadata, **req.metadata}
+            validate_metadata(updated_metadata, requester)
+            
+            # Log metadata changes
+            if req.metadata.get("sensitivity") and req.metadata["sensitivity"] != current_metadata.get("sensitivity"):
+                logger.info(
+                    "METADATA_CHANGE: user=%s changed sensitivity of doc=%s from %s to %s",
+                    requester.get("user_id"), req.document_id,
+                    current_metadata.get("sensitivity"), req.metadata["sensitivity"]
+                )
+        else:
+            # Use existing metadata
+            updated_metadata = current_metadata
+        
+        # Perform update
         result = await rag_service.update_document_version(
             document_id=req.document_id,
             text=req.text,
-            metadata=req.metadata,
+            metadata=updated_metadata,
             version_notes=req.version_notes,
             requester_id=requester.get("user_id"),
             status=req.status
+        )
+        
+        logger.info(
+            "DOCUMENT_UPDATED: user=%s doc=%s new_version=%s",
+            requester.get("user_id"), req.document_id, result["version"]
         )
         
         return UpdateDocumentResponse(
@@ -526,6 +698,8 @@ async def update_document(
             chunk_count=result["chunk_count"],
             status=req.status
         )
+    except HTTPException:
+        raise
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:

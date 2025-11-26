@@ -1,0 +1,13 @@
+{
+  "department": "HR",
+  "sensitivity": "public_internal",
+  "tags": "remote,work,policy,flexibility",
+  "public_summary": "Remote work policy allowing 1 day per week of remote work for eligible employees.",
+  "allowed_roles": [
+    "HR",
+    "Manager",
+    "Employee"
+  ],
+  "document_type": "policy",
+  "effective_date": "2024-01-01"
+}

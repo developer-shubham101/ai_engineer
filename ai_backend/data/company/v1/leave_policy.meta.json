@@ -1,0 +1,9 @@
+{
+  "department": "HR",
+  "sensitivity": "department_confidential",
+  "tags": "leave,policy,hr,benefits",
+  "public_summary": "Company leave policy providing 15 days of annual leave per year.",
+  "allowed_roles": ["HR", "Manager", "Employee"],
+  "document_type": "policy",
+  "effective_date": "2024-01-01"
+}

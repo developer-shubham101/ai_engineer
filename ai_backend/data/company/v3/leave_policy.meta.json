@@ -1,0 +1,13 @@
+{
+  "department": "HR",
+  "sensitivity": "department_confidential",
+  "tags": "leave,policy,hr,benefits,unlimited,flexible",
+  "public_summary": "Latest company leave policy with 25 days annual leave, unlimited sick leave, and flexible scheduling options.",
+  "allowed_roles": [
+    "HR",
+    "Manager",
+    "Employee"
+  ],
+  "document_type": "policy",
+  "effective_date": "2025-03-01"
+}

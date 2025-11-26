@@ -1,0 +1,14 @@
+{
+  "department": "HR",
+  "sensitivity": "public_internal",
+  "tags": "conduct,ethics,policy,behavior",
+  "public_summary": "Company code of conduct outlining expected professional behavior and core values.",
+  "allowed_roles": [
+    "HR",
+    "Manager",
+    "Employee",
+    "Guest"
+  ],
+  "document_type": "policy",
+  "effective_date": "2024-01-01"
+}

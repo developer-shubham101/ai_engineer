@@ -511,3 +511,27 @@ uvicorn app.main:app --host 0.0.0.0 --port 5444
 - Version comparison uses Python's `difflib` for unified diffs
 - Semantic versioning (1.0, 2.0, 3.0) with auto-increment
 - Version status support: draft, pending_approval, published, archived
+
+### 5. Enhanced RBAC (Role-Based Access Control)
+- **Metadata-Driven Access Control**: Documents use `.meta.json` companion files for permissions
+- **Sensitivity Levels**: `public_internal`, `department_confidential`, `role_confidential`, `highly_confidential`, `personal`
+- **Department Validation**: Enforces valid departments (HR, Finance, Engineering, IT, Legal, Executive, Admin, General)
+- **Role-Based Creation Restrictions**:
+  - Guest/Employee: Can only create `public_internal` documents
+  - Manager: Can create `public_internal` + `department_confidential`
+  - HR: Can create up to `personal` (except `highly_confidential`)
+  - SuperAdmin: Can create ANY sensitivity level
+- **Department Ownership**: Users can only update documents from their own department (unless SuperAdmin/HR)
+- **Metadata Validation**: Validates `sensitivity`, `department`, `allowed_roles`, and `owner_id` fields
+- **Pre-Response Filtering**: `filter_documents_by_rbac()` removes unauthorized content before LLM generation
+- **Public Summaries**: Shows fallback summaries when full content is restricted
+- **Comprehensive Audit Logging**:
+  - `RBAC_ACCESS_DENIED`: Retrieval attempts blocked by permissions
+  - `RBAC_UPDATE_DENIED`: Cross-department update attempts
+  - `METADATA_VALIDATION_FAILED`: Invalid metadata in creation attempts
+  - `DOCUMENT_CREATED`: Successful document creation with metadata
+  - `DOCUMENT_UPDATED`: Successful updates with version info
+  - `METADATA_CHANGE`: Sensitivity level changes
+  - `FILE_UPLOADED`: File upload tracking
+- **Seeding Enhancement**: `seed_from_file()` automatically loads metadata from `.meta.json` companion files
+
