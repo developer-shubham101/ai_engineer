@@ -40,6 +40,7 @@ User Request → FastAPI → RAG Pipeline → RBAC Filter → LLM (Local or Goog
   - `hf_rag_service.py` - Hugging Face Inference API RAG implementation extending BaseRAGService
   - `model_manager.py` - Handles loading and caching of local LLM instances
   - `prompt_builder.py` - Constructs prompts and manages token budgets
+  - `llm_service.py` - **Legacy service** (kept for backward compatibility with existing endpoints)
 - **Vector DB**: ChromaDB (persistent storage in `chroma_storage/`) - **shared across all providers**
 - **Embeddings**: SentenceTransformers (all-MiniLM-L6-v2) - loaded from `embeddings_models/` - **shared across all providers**
 - **Local LLM**: Mistral-7B-Instruct-v0.2.Q3_K_M.gguf via llama-cpp-python (default model, with optional dynamic selection)
@@ -50,9 +51,12 @@ User Request → FastAPI → RAG Pipeline → RBAC Filter → LLM (Local or Goog
 ### Key Directories
 
 - `app/` - Main application code
-  - `services/` - Business logic modules (modular, testable functions)
+  - `services/` - Business logic modules (clean, modular architecture)
+    - `base_rag_service.py` - **Core RAG abstraction**
+    - `rag_local_service.py`, `google_models.py`, `gpt_rag_service.py`, `hf_rag_service.py` - **Provider implementations**
     - `user_service.py` - User management with SQLite, **user_meta table for profiles**
     - `auth.py` - JWT token handling
+    - `chroma_utils.py`, `utility.py`, `prompt_builder.py` - **Shared utilities**
   - `utils/` - Utility modules (e.g., `doc_parser.py`)
   - `config/` - Configuration files (e.g., `onboarding_fields.json`, `config.py`)
   - `data/` - Seed data and app-specific files

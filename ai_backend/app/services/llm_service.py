@@ -1,11 +1,11 @@
 # app/services/llm_service.py
-# This file is now the central hub or "facade" for all AI services.
-# It defines the shared data models and imports the actual logic from other files.
+# Legacy service file - kept for backward compatibility with existing endpoints
+# New multi-provider RAG architecture is in base_rag_service.py and provider-specific services
 
 from pydantic import BaseModel, Field
 
 # --- Shared Pydantic Models ---
-# These are used by multiple services, so they live here.
+# These are used by legacy endpoints in main.py
 
 class TextRequest(BaseModel):
     """Request model for endpoints taking a single text input."""
@@ -21,24 +21,22 @@ class SentimentResponse(BaseModel):
     label: str
     score: float
 
-# IdeaRequest and IdeaResponse moved to google_models.py to fix circular import
-
-# --- Importing and Exposing Service Functions ---
-# We import the functions from our specialized modules so that main.py
-# can access them all from this single 'llm_service' module.
-
-# From our local, free models
-from .local_models import summarize_text, generate_text, classify_sentiment
-
-# From our direct OpenAI integration
-from .openai_models import generate_text_openai
-
-
-# Models for the new Chat service
+# Import models from google_models for backward compatibility
 from .google_models import ChatRequest, ChatResponse, IdeaRequest, IdeaResponse
-
-# From our stable, working Google Gemini chain
 from .google_models import generate_content_ideas, get_chat_response
 
-# You can uncomment the line below if you get the Hugging Face API working
-# from .huggingface_api_models import generate_text_hf_inference_langchain
+# Placeholder functions for removed services - these will raise NotImplementedError
+def summarize_text(request: TextRequest) -> SummarizationResponse:
+    raise NotImplementedError("Local summarization service removed. Use multi-provider RAG endpoints instead.")
+
+def generate_text(request: TextRequest) -> GenerationResponse:
+    raise NotImplementedError("Local generation service removed. Use multi-provider RAG endpoints instead.")
+
+def classify_sentiment(request: TextRequest) -> SentimentResponse:
+    raise NotImplementedError("Local sentiment service removed. Use /api/rag/sentiment endpoint instead.")
+
+def generate_text_openai(request: TextRequest) -> GenerationResponse:
+    raise NotImplementedError("OpenAI service removed. Use /api/rag/gpt/query endpoint instead.")
+
+def generate_text_hf_inference_langchain(request: TextRequest) -> GenerationResponse:
+    raise NotImplementedError("HuggingFace service removed. Use /api/rag/hf/query endpoint instead.")
