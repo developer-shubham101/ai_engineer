@@ -227,11 +227,6 @@ Loaded through llama.cpp:
 * `POST /api/local/add-file`
 * `POST /api/local/seed`
 
-### **Support Chat**
-
-* `POST /api/local/session/start`
-* `POST /api/local/session/end`
-
 ### **LLM Helpers (local only)**
 
 * `/summarize`
@@ -282,86 +277,6 @@ This project is a **complete offline enterprise AI system**, combining:
 * **FastAPI integration**
 
 Designed specifically for **learning AI engineering**, not production.
-
-
-=============================================================
-perfect! my next task is that 
-
-Task 1:
-
-modify 
-POST /api/local/session/start
-
-in which it shoule simulate only oauth/okta (session creation) as user
-hit it should create sesson in local/db (depending on current 
-implimentation) and in response it should session id whic we'll 
-pass in other ednpoint x-session-id, it should not ask anything from user make it empty body api. 
-in case we need any modification in body we'll do it later on.
-
-task 2:
-
-after that modify for 
-x-api-key: key-guest-1 (simulate role for now) 
-POST /api/local/query
-
-in which I want if base on session id
-    
-    senario 1
-    if not and user added session key:
-        then first question what evenr you ask let's say "hi/hello" 
-        then like a support assistent ask what is your name -> Jon (user input in next response)
-        then ask what is you gender -> Male (user input in next response) so on so far ask details of user
-        if possibble add array for now to modify by developer
-        after all query finish save these details in session related info only for that session 
-
-    senario 2
-    if exeist:
-        when user asks any questions it ai should give answer like 
-        Tell me about this company (user query)
-        ai answer : sure, Jon (user name) this comapny is ....
-
-        is there any opening for me I me in this company (user query)
-            there is one requirement for for accountent (Details provided by user at senario 1 if availiable) base on your info 
-            /
-            there is 20 openings for you accountent/hr/developer... (Details we not provided by user in  senario 1 so ai don't know him)
-
-    senario 3
-    if not and user did not added session key:
-        act as unknown user everything user ask if we need any info from user ask 
-
-
-
-Note: we are feeding details to model add_document_to_rag_local so we need uses these data as well and other role functino should remain 
-same
-
-and you can change db for this requirment if is best to use croma the it's also fine if sqlite is fine then aslo good
-
-i know cache Db like radis is best for that sinario but imagin if we want to store user/session info through out life time 
-
-so user some after 10 days as wants to continue same chat
-    
-
-    
-
-
-
-
-
-RAG
-
-POST /api/local/query
-
-POST /api/local/add
-
-POST /api/local/add-file
-
-POST /api/local/seed
-
-Support Chat
-
-
-
-POST /api/local/session/end
 
 
 

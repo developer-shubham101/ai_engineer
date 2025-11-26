@@ -107,34 +107,7 @@ curl -X POST "http://localhost:5444/api/rag/clear" \
 
 ---
 
-## 4. Support Chat Session Management
 
-### 4.1. Start a Support Session
-
-**Endpoint:** `POST /api/rag/session/start`
-
-```bash
-curl -X POST "http://localhost:5444/api/rag/session/start" \
--H "X-API-Key: test_employee_key"
-# Response will include a session_id. Use this in subsequent queries.
-```
-
-### 4.2. End a Support Session
-
-**Endpoint:** `POST /api/rag/session/end`
-*(Replace `YOUR_SESSION_ID` with the actual session ID obtained from starting a session)*
-
-```bash
-curl -X POST "http://localhost:5444/api/rag/session/end" \
--H "Content-Type: application/json" \
--H "X-API-Key: test_employee_key" \
--d 
-'{ 
-  "session_id": "YOUR_SESSION_ID"
-}'
-```
-
----
 
 ## 5. Sentiment Analysis
 

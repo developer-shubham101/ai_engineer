@@ -482,7 +482,6 @@ uvicorn app.main:app --host 0.0.0.0 --port 5444
 ### 2. Authentication & Session Management
 - Migrated from API key to JWT token-based authentication
 - Session management now uses `session_id` embedded in JWT token (via `user_id`)
-- Removed legacy `/api/rag/session/start` and `/api/rag/session/end` endpoints
 - Login endpoint (`/api/auth/token`) returns user profile from `user_meta` table
 
 ### 3. Document Parser Integration

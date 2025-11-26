@@ -116,32 +116,7 @@
   - **Authorization**: Executive or Legal roles only
   - **Response**: `AddResponse` with confirmation message
 
-### Session Management
-- **POST** `/api/rag/session/start` - Start a support chat session
-  - **Headers**: `X-API-Key` (optional)
-  - **Response**: 
-    ```json
-    {
-      "session_id": "string",
-      "message": "Session started"
-    }
-    ```
 
-- **POST** `/api/rag/session/end` - End a support chat session
-  - **Headers**: `X-API-Key` (optional)
-  - **Request Body**:
-    ```json
-    {
-      "session_id": "string"
-    }
-    ```
-  - **Response**: 
-    ```json
-    {
-      "session_id": "string",
-      "message": "Support session ended."
-    }
-    ```
 
 ### Sentiment Analysis
 - **POST** `/api/rag/sentiment` - Analyze sentiment and tone of text
