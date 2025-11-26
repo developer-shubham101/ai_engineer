@@ -37,7 +37,7 @@ User Request → FastAPI → RAG Pipeline → RBAC Filter → LLM (Local or Goog
   - `google_models.py` - RAG logic for Google's generative models.
   - `model_manager.py` - Handles loading and caching of local LLM instances.
   - `prompt_builder.py` - Constructs prompts and manages token budgets.
-- **Vector DB**: ChromaDB (persistent storage in `app/chroma_storage/`)
+- **Vector DB**: ChromaDB (persistent storage in `chroma_storage/`)
 - **Embeddings**: SentenceTransformers (all-MiniLM-L6-v2) - loaded from `embeddings_models/`
 - **Local LLM**: Mistral-7B-Instruct-v0.2.Q3_K_M.gguf via llama-cpp-python (default model, with optional dynamic selection)
 - **Support Chat**: SQLite-based session management (`app/data/support_sessions.db`) - **sessions auto-created on login using user_id**
