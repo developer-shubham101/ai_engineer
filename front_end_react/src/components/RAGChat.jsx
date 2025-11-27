@@ -26,6 +26,7 @@ export default function RAGChat({ onLogout }){
   const [toasts, setToasts] = useState([])
   const [modelProvider, setModelProvider] = useState(localStorage.getItem('model_provider') || 'local')
   const [theme, setTheme] = useState(localStorage.getItem('theme') || 'system')
+  const [showAdminPanel, setShowAdminPanel] = useState(false)
   const messagesRef = useRef(null)
 
   useEffect(()=> { localStorage.setItem('chat_history_v1', JSON.stringify(messages)) }, [messages])
@@ -285,6 +286,12 @@ export default function RAGChat({ onLogout }){
             <option value="dark">Dark</option>
           </select>
           <button
+            className="btn btn-sm btn-outline-secondary me-2"
+            onClick={() => setShowAdminPanel(!showAdminPanel)}
+          >
+            {showAdminPanel ? 'Hide' : 'Show'} Admin
+          </button>
+          <button
             className="btn btn-sm btn-outline-danger"
             onClick={handleLogout}
           >
@@ -294,7 +301,91 @@ export default function RAGChat({ onLogout }){
       </div>
 
       <div className="row g-3">
-        <div className="col-md-8">
+        {showAdminPanel && (
+          <div className="col-md-3">
+            <div className="card mb-3">
+              <div className="card-header">Admin Panel</div>
+              <div className="card-body">
+                <div className="d-grid gap-2">
+                  <button
+                    className="btn btn-outline-primary"
+                    onClick={async () => {
+                      const list = await listDocuments();
+                      console.log("Documents:", list);
+                      addToast("Documents listed (console)", "info");
+                    }}
+                  >
+                    List Documents
+                  </button>
+                  <button
+                    className="btn btn-outline-success"
+                    onClick={async () => {
+                      await seedDocuments();
+                    }}
+                  >
+                    Seed Documents
+                  </button>
+                  <button
+                    className="btn btn-outline-warning"
+                    data-bs-toggle="modal"
+                    data-bs-target="#updateMetadataModal"
+                  >
+                    Update Metadata
+                  </button>
+                  <button
+                    className="btn btn-outline-danger"
+                    onClick={testRBACAccess}
+                  >
+                    Test RBAC
+                  </button>
+                  <button
+                    className="btn btn-outline-secondary"
+                    data-bs-toggle="modal"
+                    data-bs-target="#documentVersionModal"
+                  >
+                    Version Manager
+                  </button>
+                  <button
+                    className="btn btn-outline-primary"
+                    data-bs-toggle="modal"
+                    data-bs-target="#personalizedTestModal"
+                  >
+                    Test Personalization
+                  </button>
+                </div>
+                <hr />
+                <div className="small text-muted">
+                  Messages: {messages.length}
+                </div>
+                <div className="small text-muted">
+                  Last activity:{" "}
+                  {messages.length ? messages[messages.length - 1].ts : "-"}
+                </div>
+              </div>
+            </div>
+
+            <div className="card">
+              <div className="card-header">Add Document</div>
+              <div className="card-body">
+                <button
+                  className="btn btn-success w-100 mb-2"
+                  data-bs-toggle="modal"
+                  data-bs-target="#addJsonModal"
+                >
+                  Add JSON Doc
+                </button>
+                <button
+                  className="btn btn-info w-100"
+                  data-bs-toggle="modal"
+                  data-bs-target="#uploadFileModal"
+                >
+                  Upload File
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+        <div className={showAdminPanel ? "col-md-9" : "col-md-12"}>
           <div className="card h-100">
             <div className="card-body d-flex flex-column">
               <div className="d-flex justify-content-between mb-2">
@@ -518,98 +609,7 @@ export default function RAGChat({ onLogout }){
           </div>
         </div>
 
-        <div className="col-md-4">
-          <div className="card mb-3">
-            <div className="card-header">Admin Panel</div>
-            <div className="card-body">
-              <div className="d-grid gap-2">
-                <button
-                  className="btn btn-outline-primary"
-                  onClick={async () => {
-                    const list = await listDocuments();
-                    console.log("Documents:", list);
-                    addToast("Documents listed (console)", "info");
-                  }}
-                >
-                  List Documents
-                </button>
-                <button
-                  className="btn btn-outline-success"
-                  onClick={async () => {
-                    await seedDocuments();
-                  }}
-                >
-                  Seed Documents
-                </button>
-                <button
-                  className="btn btn-outline-info"
-                  onClick={async () => {
-                    const list = await fetchAccessRequests();
-                    console.log("Access requests:", list);
-                    addToast("Access requests (console)", "info");
-                  }}
-                >
-                  Access Requests
-                </button>
-                <button
-                  className="btn btn-outline-warning"
-                  data-bs-toggle="modal"
-                  data-bs-target="#updateMetadataModal"
-                >
-                  Update Metadata
-                </button>
-                <button
-                  className="btn btn-outline-danger"
-                  onClick={testRBACAccess}
-                >
-                  Test RBAC
-                </button>
-                <button
-                  className="btn btn-outline-secondary"
-                  data-bs-toggle="modal"
-                  data-bs-target="#documentVersionModal"
-                >
-                  Version Manager
-                </button>
-                <button
-                  className="btn btn-outline-primary"
-                  data-bs-toggle="modal"
-                  data-bs-target="#personalizedTestModal"
-                >
-                  Test Personalization
-                </button>
-              </div>
-              <hr />
-              <div className="small text-muted">
-                Messages: {messages.length}
-              </div>
-              <div className="small text-muted">
-                Last activity:{" "}
-                {messages.length ? messages[messages.length - 1].ts : "-"}
-              </div>
-            </div>
-          </div>
 
-          <div className="card">
-            <div className="card-header">Add Document</div>
-            <div className="card-body">
-              <button
-                className="btn btn-success w-100 mb-2"
-                data-bs-toggle="modal"
-                data-bs-target="#addJsonModal"
-              >
-                Add JSON Doc
-              </button>
-              <button
-                className="btn btn-info w-100"
-                data-bs-toggle="modal"
-                data-bs-target="#uploadFileModal"
-              >
-                Upload File
-              </button>
-            </div>
-          </div>
-        </div>
       </div>
 
       {/* Modals */}
