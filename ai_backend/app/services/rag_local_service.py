@@ -557,6 +557,10 @@ class LocalRAGService(BaseRAGService):
         try:
             logger.info("LOCAL_LLM_REQUEST: prompt_len=%d max_tokens=%d session=%s", 
                        len(prompt), max_tokens, session_id or "none")
+            logger.info("LOCAL_PROMPT_COMPONENTS:")
+            logger.info("  - FINAL_PREFIX: %s", final_prefix)
+            logger.info("  - CONTEXT_TEXT: %s", context_text or "[NO_CONTEXT]")
+            logger.info("  - QUERY_TEXT: %s", query_text)
             logger.info("LOCAL_FULL_PROMPT: %s", prompt)
             
             answer = await _call_llm_with_retry(

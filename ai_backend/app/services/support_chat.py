@@ -331,28 +331,41 @@ def get_next_missing_profile_key(session_id: str) -> Optional[Dict[str, str]]:
 def build_prompt_prefix(requester: Dict[str, Optional[str]],
                         history: List[Dict[str, str]],
                         category: Optional[str]) -> str:
+    """
+    Build a clean, optimized prompt prefix without duplication.
+    This is used as a fallback when the main optimization isn't used.
+    """
     role = requester.get("role") or "Guest"
     dept = requester.get("department") or "General"
     cat = (category or "General").title()
-    history_text = render_history(history)
+    
+    # Only include recent, relevant history (last 2 exchanges max)
+    recent_history = history[-4:] if len(history) > 4 else history  # Last 2 exchanges (user + assistant)
+    history_text = render_history(recent_history) if recent_history else "No previous conversation."
 
-    # extract last user tone from history (if present)
+    # Extract last user tone from recent history only
     last_user_tone = None
-    # iterate history backwards to find last user message with tone
-    for msg in reversed(history):
+    for msg in reversed(recent_history):
         if msg.get("speaker", "").lower() == "user" and msg.get("tone"):
             last_user_tone = msg.get("tone")
             break
 
-    tone_guidance = build_tone_guidance(last_user_tone)
-
-    return (
-        f"You are a {cat} support assistant.\n"
-        f"User Role: {role}\n"
-        f"User Department: {dept}\n\n"
-        f"Conversation Tone Guidance:\n{tone_guidance}\n\n"
-        f"Conversation History:\n{history_text}\n"
-    )
+    # Build clean prompt
+    parts = [
+        f"You are a {cat} support assistant for Saarthi Infotech.",
+        f"User: {role} in {dept} department"
+    ]
+    
+    if last_user_tone:
+        tone_guidance = build_tone_guidance(last_user_tone)
+        parts.append(f"Tone: {tone_guidance}")
+    
+    if recent_history:
+        parts.append(f"Recent conversation:\n{history_text}")
+    
+    parts.append("Instructions: Use provided context to answer questions accurately.")
+    
+    return "\n".join(parts)
 
 
 # ---------------------------------------------------------

@@ -108,20 +108,45 @@ def select_chunks_by_token_budget(
 
 def build_prompt_with_selected_chunks(prefix: str, context_text: str, question: str) -> str:
     """
-    Build a consistent prompt using markers that downstream retry/trim helpers can detect.
-    This ensures a standardized prompt structure for the LLM.
+    Build an optimized prompt structure for better LLM performance.
+    Uses clear sections and efficient token usage.
     """
+    logger.info("PROMPT_BUILDER_DEBUG:")
+    logger.info("  - Input prefix length: %d", len(prefix or ""))
+    logger.info("  - Input context length: %d", len(context_text or ""))
+    logger.info("  - Input question length: %d", len(question or ""))
+    
+    # Build optimized prompt structure
     parts = []
+    
+    # System instructions (prefix)
     if prefix:
         parts.append(prefix.rstrip())
-    parts.append("\n\nCONTEXT:\n")
-    if context_text:
+        logger.info("  - Added system prefix")
+    
+    # Knowledge context (if available)
+    if context_text and context_text.strip():
+        parts.append("\nKnowledge Base:")
         parts.append(context_text.rstrip())
+        logger.info("  - Added knowledge context (%d chars)", len(context_text))
     else:
-        parts.append("[NO_CONTEXT_AVAILABLE]")
-    parts.append("\n\nQUESTION:\n")
+        parts.append("\nKnowledge Base: No relevant information found.")
+        logger.info("  - Added empty knowledge base notice")
+    
+    # User question
+    parts.append("\nUser Question:")
     parts.append(question.rstrip())
-    return "".join(parts)
+    logger.info("  - Added user question: %s", question.rstrip())
+    
+    # Response instruction
+    parts.append("\nResponse:")
+    
+    final_prompt = "\n".join(parts)
+    logger.info("OPTIMIZED_PROMPT_FINAL: length=%d tokens_est=%d", 
+                len(final_prompt), len(final_prompt) // 4)
+    logger.info("FINAL_PROMPT_STRUCTURE:\n%s", final_prompt)
+    
+    return final_prompt
 
 
 from fastapi.concurrency import run_in_threadpool

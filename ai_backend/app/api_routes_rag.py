@@ -346,19 +346,8 @@ async def query_rag(
         session_history = []
 
 
-    # Build LLM prefix with profile if available
-    llm_prefix = support_chat.build_prompt_prefix(
-        requester=requester or {"role": "Guest", "department": "General"},
-        history=session_history,
-        category=req.category,
-    )
-
-    if profile:
-        prefix_extra_lines = ["User Profile:"]
-        for k, v in profile.items():
-            prefix_extra_lines.append(f"- {k}: {v}")
-        prefix_extra = "\n".join(prefix_extra_lines) + "\n\n"
-        llm_prefix = prefix_extra + llm_prefix
+    # Use optimized prompt building - pass None to let base service handle it
+    llm_prefix = None  # Let the base RAG service handle prompt optimization
 
     # Execute RAG query (Business Requirement Step 2 & 3: Query + Role Check)
     try:

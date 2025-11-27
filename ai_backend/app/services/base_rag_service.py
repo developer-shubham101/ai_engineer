@@ -13,7 +13,7 @@ from app.services.chroma_utils import ensure_chroma_client, query_collection
 from app.services.support_chat import fetch_recent_messages
 from app.services.prompt_builder import build_tone_guidance, estimate_tokens_from_text
 from app.services.utility import embed_texts, DEFAULT_PERSIST_DIR, DEFAULT_COLLECTION_NAME
-from app.services.profile_analyzer import build_personalized_prompt
+# Removed old profile_analyzer import - using optimized approach
 
 logger = logging.getLogger(__name__)
 
@@ -237,15 +237,21 @@ class BaseRAGService(ABC):
         profile: Optional[Dict[str, str]] = None
     ) -> str:
         """
-        Inject personalized context including tone guidance and profile analysis.
-        Enhanced version of inject_tone_guidance with profile support.
+        Build optimized prompt with personalization and tone guidance.
+        Avoids duplication and creates a clean, token-efficient structure.
         """
+        # Get user context
+        user_role = (requester or {}).get("role", "Guest")
+        user_dept = (requester or {}).get("department", "General")
+        
+        # Get recent conversation history (limit to 4 for last exchange + tone)
         chat_history = []
         last_user_tone = None
         
         if session_id:
             try:
-                chat_history = fetch_recent_messages(session_id, limit=10)
+                chat_history = fetch_recent_messages(session_id, limit=4)
+                # Find last user tone from recent messages only
                 for m in reversed(chat_history):
                     if m.get("speaker") == "user" and m.get("tone"):
                         last_user_tone = m["tone"]
@@ -253,24 +259,63 @@ class BaseRAGService(ABC):
             except Exception as e:
                 logger.warning("History fetch failed: %s", e)
 
-        logger.debug("Last user tone detected: %s", last_user_tone)
-        tone_note = build_tone_guidance(last_user_tone)
-
-        base_system_prefix = llm_prompt_prefix or (
-            "You are a helpful assistant. Use the provided context to answer the question. "
-            "If the answer is not present in the context, say you don't know."
-        )
+        # Build optimized prompt structure
+        prompt_parts = []
         
-        # Add tone guidance
-        enhanced_prefix = f"Conversation Tone Guidance:\n{tone_note}\n\n{base_system_prefix}"
+        # 1. System role and instructions (clean, no duplication)
+        category = "General"  # Default category
+        if llm_prompt_prefix and "support assistant" in llm_prompt_prefix:
+            # Extract category from existing prefix if available
+            import re
+            match = re.search(r"You are a (\w+) support assistant", llm_prompt_prefix)
+            if match:
+                category = match.group(1)
         
-        # Add personalization if profile available
-        if profile or (requester and requester.get("role") != "Guest"):
-            enhanced_prefix = build_personalized_prompt(
-                enhanced_prefix, profile or {}, chat_history, query_text, requester or {}
-            )
+        prompt_parts.append(f"You are a {category} support assistant for Saarthi Infotech.")
         
-        return enhanced_prefix
+        # 2. User context (concise)
+        prompt_parts.append(f"User: {user_role} in {user_dept} department")
+        
+        # 3. User profile (if available, keep concise)
+        if profile:
+            profile_items = []
+            for key, value in profile.items():
+                if key in ['name', 'location', 'position'] and value:  # Only include key fields
+                    profile_items.append(f"{key}: {value}")
+            if profile_items:
+                prompt_parts.append(f"Profile: {', '.join(profile_items)}")
+        
+        # 4. Tone guidance (single, clean instruction)
+        if last_user_tone:
+            tone_guidance = build_tone_guidance(last_user_tone)
+            prompt_parts.append(f"Tone: {tone_guidance}")
+        
+        # 5. Recent conversation context (last exchange for continuity)
+        if chat_history and len(chat_history) >= 2:
+            # Include last user-assistant exchange for context
+            recent_msgs = chat_history[-2:]  # Last 2 messages (user + assistant)
+            if len(recent_msgs) == 2:
+                user_msg = recent_msgs[0] if recent_msgs[0].get("speaker") == "user" else recent_msgs[1]
+                assistant_msg = recent_msgs[1] if recent_msgs[1].get("speaker") == "assistant" else recent_msgs[0]
+                
+                if user_msg and assistant_msg:
+                    user_content = user_msg.get('content', '')[:80]
+                    assistant_content = assistant_msg.get('content', '')[:80]
+                    prompt_parts.append(f"Last exchange - User: {user_content} | Assistant: {assistant_content}")
+        elif chat_history and len(chat_history) == 1:
+            # Only one message available
+            last_msg = chat_history[0]
+            if last_msg.get("speaker") == "user":
+                prompt_parts.append(f"Previous: {last_msg.get('content', '')[:80]}")
+        
+        # 6. Instructions
+        prompt_parts.append("Instructions: Use the provided context to answer questions. Be helpful and accurate. If information isn't in the context, say so clearly.")
+        
+        # Join with clean separators
+        optimized_prefix = "\n".join(prompt_parts)
+        
+        logger.info("OPTIMIZED_PROMPT_PREFIX: %s", optimized_prefix)
+        return optimized_prefix
     
     def build_context_text(self, visible_docs: List[str]) -> str:
         """
@@ -421,9 +466,15 @@ class BaseRAGService(ABC):
             len(final_prefix)
         )
         logger.info(
-            "LLM_FINAL_PROMPT: %s\n\nCONTEXT: %s\n\nQUERY: %s",
-            final_prefix,
-            context_text or "",
+            "LLM_FINAL_PREFIX: %s",
+            final_prefix
+        )
+        logger.info(
+            "LLM_CONTEXT_TEXT: %s",
+            context_text or "[NO_CONTEXT]"
+        )
+        logger.info(
+            "LLM_QUERY_TEXT: %s",
             query_text
         )
         
