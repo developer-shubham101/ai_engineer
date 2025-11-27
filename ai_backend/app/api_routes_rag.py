@@ -143,14 +143,7 @@ SENSITIVITY_LEVELS = {
 
 def validate_metadata(meta: Optional[Dict[str, Any]], requester: Optional[Dict[str, Any]] = None):
     """
-    Validate document metadata.
-    
-    Args:
-        meta: Metadata dictionary to validate
-        requester: User making the request (for role-based validation)
-    
-    Raises:
-        HTTPException: If metadata is invalid
+    Validate document metadata with flexible RBAC support.
     """
     if not meta:
         return
@@ -186,16 +179,16 @@ def validate_metadata(meta: Optional[Dict[str, Any]], requester: Optional[Dict[s
                 detail=f"Invalid roles in allowed_roles: {invalid_roles}. Allowed: {list(ALLOWED_ROLES)}"
             )
     
-    # Role-based sensitivity validation
+    # Level-based sensitivity validation
     if requester and sens:
         user_role = requester.get("role")
-        allowed_sensitivities = SENSITIVITY_PERMISSIONS.get(user_role, [])
+        user_level = ROLE_LEVELS.get(user_role, 0)
+        required_level = SENSITIVITY_LEVELS.get(sens, 0)
         
-        if sens not in allowed_sensitivities:
+        if user_level < required_level:
             raise HTTPException(
                 status_code=403,
-                detail=f"Your role '{user_role}' cannot create documents with sensitivity '{sens}'. "
-                       f"Allowed sensitivities for your role: {allowed_sensitivities}"
+                detail=f"Your role '{user_role}' (level {user_level}) cannot create documents with sensitivity '{sens}' (requires level {required_level}+)"
             )
     
     # Validate personal documents have owner_id
@@ -457,7 +450,7 @@ async def query_rag(
     return QueryResponse(answer=answer, retrieved=docs, context=res.get("context"))
 
 
-@router.post("/documents/add", response_model=AddResponse, dependencies=[Depends(require_roles(["SuperAdmin", "HR", "Manager", "Employee"]))])
+@router.post("/documents/add", response_model=AddResponse, dependencies=[Depends(require_roles(["SuperAdmin", "Manager", "HR", "Employee"]))])
 async def add_document_json(
     req: AddDocRequest,
     requester: Dict[str, Any] = Depends(get_current_user),
@@ -502,7 +495,7 @@ async def add_document_json(
     return AddResponse(message=msg, chunk_count=result['chunk_count'])
 
 
-@router.post("/documents/add-file", response_model=AddResponse, dependencies=[Depends(require_roles(["SuperAdmin", "HR", "Manager", "Employee"]))])
+@router.post("/documents/add-file", response_model=AddResponse, dependencies=[Depends(require_roles(["SuperAdmin", "Manager", "HR", "Employee"]))])
 async def add_document_file(
     file: UploadFile = File(...),
     requester: Dict[str, Any] = Depends(get_current_user),
@@ -657,7 +650,7 @@ class CompareVersionsResponse(BaseModel):
 
 
 @router.post("/documents/update", response_model=UpdateDocumentResponse, 
-             dependencies=[Depends(require_roles(["SuperAdmin", "HR", "Manager", "Employee"]))])
+             dependencies=[Depends(require_roles(["SuperAdmin", "Manager", "HR", "Employee"]))])
 async def update_document(
     req: UpdateDocumentRequest,
     requester: Dict[str, Any] = Depends(get_current_user),
@@ -683,8 +676,9 @@ async def update_document(
         user_role = requester.get("role")
         user_dept = requester.get("department")
         
-        # Department ownership check (unless SuperAdmin or HR)
-        if user_role not in ["SuperAdmin", "HR"]:
+        # Department ownership check (unless high-level roles)
+        user_level = ROLE_LEVELS.get(user_role, 0)
+        if user_level < 2:  # Below HR level
             if current_dept != user_dept:
                 logger.warning(
                     "RBAC_UPDATE_DENIED: user=%s role=%s dept=%s attempted to update document in dept=%s",
@@ -692,8 +686,7 @@ async def update_document(
                 )
                 raise HTTPException(
                     status_code=403,
-                    detail=f"You cannot update documents from department '{current_dept}'. "
-                           f"Your department is '{user_dept}'."
+                    detail=f"Your role '{user_role}' cannot update documents from department '{current_dept}'. Your department is '{user_dept}'."
                 )
         
         # Validate new metadata if provided
@@ -745,7 +738,7 @@ async def update_document(
 
 
 @router.get("/documents/list", response_model=DocumentListResponse,
-            dependencies=[Depends(require_roles(["SuperAdmin", "HR", "Manager", "Employee"]))])
+            dependencies=[Depends(require_roles(["SuperAdmin", "Manager", "HR", "Employee"]))])
 async def list_all_documents(
     department: Optional[str] = None,
     status: Optional[str] = None,
@@ -768,7 +761,7 @@ async def list_all_documents(
 
 
 @router.get("/documents/{document_id}/versions", response_model=VersionHistoryResponse,
-            dependencies=[Depends(require_roles(["SuperAdmin", "HR", "Manager", "Employee"]))])
+            dependencies=[Depends(require_roles(["SuperAdmin", "Manager", "HR", "Employee"]))])
 async def get_version_history(
     document_id: str,
     rag_service=Depends(get_rag_service)
@@ -786,7 +779,7 @@ async def get_version_history(
 
 
 @router.get("/documents/{document_id}/versions/{version}", response_model=DocumentVersionResponse,
-            dependencies=[Depends(require_roles(["SuperAdmin", "HR", "Manager", "Employee"]))])
+            dependencies=[Depends(require_roles(["SuperAdmin", "Manager", "HR", "Employee"]))])
 async def get_specific_version(
     document_id: str,
     version: str,
@@ -809,7 +802,7 @@ async def get_specific_version(
 
 
 @router.get("/documents/{document_id}/compare", response_model=CompareVersionsResponse,
-            dependencies=[Depends(require_roles(["SuperAdmin", "HR", "Manager", "Employee"]))])
+            dependencies=[Depends(require_roles(["SuperAdmin", "Manager", "HR", "Employee"]))])
 async def compare_versions(
     document_id: str,
     version1: str,
@@ -833,7 +826,7 @@ async def compare_versions(
 
 
 @router.post("/documents/{document_id}/archive", response_model=AddResponse,
-             dependencies=[Depends(require_roles(["SuperAdmin", "HR", "Manager"]))])
+             dependencies=[Depends(require_roles(["SuperAdmin", "Manager", "HR"]))]) 
 async def archive_version(
     document_id: str,
     version: str,

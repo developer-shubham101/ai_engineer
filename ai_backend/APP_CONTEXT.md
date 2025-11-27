@@ -37,6 +37,7 @@ User → FastAPI → Provider Router → Base RAG Service → RBAC Filter → Pr
 
 **🔐 Security & Data:**
 - `auth.py` + `user_service.py` - JWT authentication & user management
+- `base_rag_service.py` - **Flexible RBAC**: Level-based + role override system
 - `support_chat.py` - Session management & conversation history
 - `version_tracking.py` - Document versioning system
 
@@ -117,14 +118,20 @@ data/                 # 📄 Seed documents
 
 ### Key Service Functions
 
-**BaseRAGService** - Template method pattern:
+**BaseRAGService** - Template method pattern + **Flexible RBAC**:
 ```python
 async def query_rag(...):
     # 1. Retrieve documents (shared)
-    # 2. Apply RBAC filtering (shared) 
+    # 2. Apply RBAC filtering (shared) - NEW: Level-based + role overrides
     # 3. Build context (shared)
     # 4. Generate response (provider-specific)
     # 5. Return standardized format (shared)
+
+# NEW: Flexible RBAC System
+def _allowed_by_metadata(meta, requester):
+    # 1. Specific role override (allowed_roles) - overrides hierarchy
+    # 2. Department matching (for dept_confidential)
+    # 3. Level-based access (default hierarchy)
 ```
 
 **Provider Services** - Implement `generate_response()`:
@@ -155,11 +162,36 @@ async def query_rag(...):
 
 ### 🛠️ **15 Core Services** (down from 20+ files):
 ```
-🎯 Base: base_rag_service.py
+🎯 Base: base_rag_service.py (+ Flexible RBAC)
 🤖 Providers: rag_local_service.py, google_models.py, gpt_rag_service.py, hf_rag_service.py
 🔐 Security: auth.py, user_service.py
 📊 Data: chroma_utils.py, utility.py, version_tracking.py, support_chat.py
 ⚙️ Tools: model_manager.py, prompt_builder.py, sentiment_classifier.py
+```
+
+### 🔐 **NEW: Flexible RBAC System**
+
+**Role Hierarchy** (Level-based access):
+```
+SuperAdmin (4) → Manager (3) → HR (2) → Employee (1) → Guest/PublicUser (0)
+```
+
+**Sensitivity Levels**:
+```
+super_confidential (4) - SuperAdmin only
+highly_confidential (3) - Manager+
+role_confidential (2) - HR+
+department_confidential (1) - Employee+
+public_internal (0) - Everyone
+```
+
+**Role Override Examples**:
+```json
+// Only Admin + Employee can access (bypasses Manager/HR)
+{"sensitivity": "highly_confidential", "allowed_roles": ["SuperAdmin", "Employee"]}
+
+// Department-specific with role override
+{"sensitivity": "department_confidential", "department": "HR", "allowed_roles": ["SuperAdmin", "HR"]}
 ```
 
 ### 🚀 **Usage Examples:**
@@ -177,21 +209,26 @@ curl -X POST "/api/rag/gpt/query" -d '{"question": "What is our policy?", "use_l
 curl -X POST "/api/rag/hf/query" -d '{"question": "What is our policy?", "use_llm": true}'
 ```
 
-**Perfect for learning multi-provider RAG architectures! 🎓**ning support**
+**Perfect for learning multi-provider RAG architectures + Enterprise RBAC! 🎓**
+
+---
+
+## 6. Document Management & Versioning
+
+**Document Management** (Local service only):
+- `add_document_to_rag_local()` - Chunk, embed, store with versioning
 - `update_document_version(document_id, text, metadata, version_notes, requester_id, status)` - Create new version of existing document (non-destructive)
 - `get_document_version(document_id, version)` - Retrieve specific version with its chunks
 - `compare_document_versions(document_id, version1, version2)` - Compare two versions and return diff
 
-
 **Version Tracking** (`version_tracking.py`):
-- `init_version_db(reset_on_start)` - Initialize version tracking SQLite database.
-- `create_version_record(document_id, version, source_name, chunk_ids, created_by, parent_version, status, version_notes, metadata)` - Store version metadata.
-- `get_version_history(document_id)` - Get all versions of a document.
-- `get_version(document_id, version)` - Get specific version metadata.
-- `get_latest_version(document_id)` - Get most recent version.
-us(document_id, version, status)` - Update version status (draft/published/archived).
-- `get_documents_by_status(status)` - Filter documents by status.
-- `list_all_documents(latest_only)` - List all documents.
+- `init_version_db(reset_on_start)` - Initialize version tracking SQLite database
+- `create_version_record(document_id, version, source_name, chunk_ids, created_by, parent_version, status, version_notes, metadata)` - Store version metadata
+- `get_version_history(document_id)` - Get all versions of a document
+- `get_version(document_id, version)` - Get specific version metadata
+- `get_latest_version(document_id)` - Get most recent version
+- `update_version_status(document_id, version, status)` - Update version status (draft/published/archived)
+- `get_documents_by_status(status)` - Filter documents by status_documents(latest_only)` - List all documents.
 - `generate_next_version(document_id)` - Calculate next semantic version number.
 
 **Authentication & User Management** (`user_service.py`, `auth.py`):

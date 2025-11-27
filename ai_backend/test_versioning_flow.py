@@ -77,7 +77,7 @@ def test_rag_query(token: str):
     # Question specifically targeting the evolution of the policy
     question = "What are the new changes in the leave policy? How many days do we get now compared to before?"
     
-    url = f"{BASE_URL}/api/rag/local/query"
+    url = f"{BASE_URL}/api/rag/google/query"
     headers = {
         "Authorization": f"Bearer {token}",
         "Content-Type": "application/json"
@@ -85,7 +85,7 @@ def test_rag_query(token: str):
     payload = {
         "question": question,
         "top_k": 5,
-        "use_llm": False,
+        "use_llm": True,
         "debug": True
     }
     
