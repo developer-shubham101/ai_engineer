@@ -177,14 +177,45 @@ class GoogleRAGService(BaseRAGService):
         prompt = build_prompt_with_selected_chunks(final_prefix, context_text, query_text)
 
         try:
-            logger.info("GOOGLE_LLM_REQUEST: prompt_len=%d session=%s", len(prompt), session_id or "none")
-            logger.info("GOOGLE_FULL_PROMPT: %s", prompt)
+            from app.logging_config import log_llm_interaction, log_sensitive_debug, log_performance_metric
+            import time
+            
+            google_start_time = time.time()
+            prompt_tokens = estimate_tokens_from_text(prompt)
+            
+            log_llm_interaction(
+                logger, "GOOGLE_GEMINI", prompt_tokens, 0,  # response tokens unknown yet
+                prompt_len=len(prompt), session_id=session_id or "none",
+                model="gemini-2.5-flash"
+            )
+            
+            log_sensitive_debug(
+                logger, "Google LLM request",
+                full_prompt=prompt, prompt_len=len(prompt)
+            )
             
             answer = google_llm.invoke(prompt)
             answer_content = answer.content if answer and hasattr(answer, 'content') else str(answer)
             
-            logger.info("GOOGLE_LLM_RESPONSE: response_len=%d session=%s", len(answer_content), session_id or "none")
-            logger.info("GOOGLE_RESPONSE_TEXT: %s", answer_content)
+            google_duration = (time.time() - google_start_time) * 1000
+            response_tokens = estimate_tokens_from_text(answer_content)
+            
+            log_llm_interaction(
+                logger, "GOOGLE_GEMINI", prompt_tokens, response_tokens,
+                response_len=len(answer_content), duration_ms=google_duration,
+                session_id=session_id or "none", model="gemini-2.5-flash"
+            )
+            
+            log_performance_metric(
+                logger, "GOOGLE_LLM_GENERATION", google_duration,
+                prompt_tokens=prompt_tokens, response_tokens=response_tokens,
+                session_id=session_id
+            )
+            
+            log_sensitive_debug(
+                logger, "Google LLM response",
+                response_text=answer_content, response_len=len(answer_content)
+            )
             
             return answer_content
         except Exception as e:

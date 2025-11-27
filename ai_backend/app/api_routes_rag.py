@@ -458,9 +458,11 @@ async def add_document_json(
         validate_metadata(metadata, requester)  # Pass requester for role-based validation
     except HTTPException as e:
         # Log validation failures for audit
-        logger.warning(
-            "METADATA_VALIDATION_FAILED: user=%s role=%s attempted to create doc with invalid metadata. Error: %s",
-            requester.get("user_id"), requester.get("role"), e.detail
+        from app.logging_config import log_security_event
+        log_security_event(
+            logger, "METADATA_VALIDATION_FAILED", requester.get("user_id"),
+            role=requester.get("role"), department=requester.get("department"),
+            error=e.detail, source_name=req.source_name
         )
         raise
 
@@ -473,10 +475,12 @@ async def add_document_json(
         )
         
         # Log successful creation
-        logger.info(
-            "DOCUMENT_CREATED: user=%s role=%s dept=%s created doc=%s sensitivity=%s",
-            requester.get("user_id"), requester.get("role"), requester.get("department"),
-            result["document_id"], metadata.get("sensitivity")
+        from app.logging_config import log_user_action
+        log_user_action(
+            logger, "DOCUMENT_CREATED", requester.get("user_id"),
+            role=requester.get("role"), department=requester.get("department"),
+            document_id=result["document_id"], sensitivity=metadata.get("sensitivity"),
+            chunk_count=result["chunk_count"], version=result["version"]
         )
     except Exception as e:
         logger.exception("Failed to add document: %s", e)
@@ -530,9 +534,11 @@ async def add_document_file(
         validate_metadata(metadata, requester)  # Pass requester for role-based validation
     except HTTPException as e:
         # Log validation failures for audit
-        logger.warning(
-            "FILE_UPLOAD_VALIDATION_FAILED: user=%s role=%s file=%s. Error: %s",
-            requester.get("user_id"), requester.get("role"), file.filename, e.detail
+        from app.logging_config import log_security_event
+        log_security_event(
+            logger, "FILE_UPLOAD_VALIDATION_FAILED", requester.get("user_id"),
+            role=requester.get("role"), department=requester.get("department"),
+            filename=file.filename, error=e.detail, file_size=len(raw)
         )
         raise
 
@@ -545,10 +551,13 @@ async def add_document_file(
         )
         
         # Log successful file upload
-        logger.info(
-            "FILE_UPLOADED: user=%s role=%s dept=%s file=%s doc=%s sensitivity=%s",
-            requester.get("user_id"), requester.get("role"), requester.get("department"),
-            file.filename, result["document_id"], metadata.get("sensitivity")
+        from app.logging_config import log_user_action
+        log_user_action(
+            logger, "FILE_UPLOADED", requester.get("user_id"),
+            role=requester.get("role"), department=requester.get("department"),
+            filename=file.filename, document_id=result["document_id"], 
+            sensitivity=metadata.get("sensitivity"), chunk_count=result["chunk_count"],
+            file_size=len(raw), format=fmt.value if hasattr(fmt, 'value') else str(fmt)
         )
     except Exception as e:
         logger.exception("Failed to add file: %s", e)
@@ -671,9 +680,11 @@ async def update_document(
         user_level = ROLE_LEVELS.get(user_role, 0)
         if user_level < 2:  # Below HR level
             if current_dept != user_dept:
-                logger.warning(
-                    "RBAC_UPDATE_DENIED: user=%s role=%s dept=%s attempted to update document in dept=%s",
-                    requester.get("user_id"), user_role, user_dept, current_dept
+                from app.logging_config import log_security_event
+                log_security_event(
+                    logger, "RBAC_UPDATE_DENIED", requester.get("user_id"),
+                    role=user_role, user_dept=user_dept, document_dept=current_dept,
+                    document_id=req.document_id
                 )
                 raise HTTPException(
                     status_code=403,
@@ -688,10 +699,13 @@ async def update_document(
             
             # Log metadata changes
             if req.metadata.get("sensitivity") and req.metadata["sensitivity"] != current_metadata.get("sensitivity"):
-                logger.info(
-                    "METADATA_CHANGE: user=%s changed sensitivity of doc=%s from %s to %s",
-                    requester.get("user_id"), req.document_id,
-                    current_metadata.get("sensitivity"), req.metadata["sensitivity"]
+                from app.logging_config import log_user_action
+                log_user_action(
+                    logger, "METADATA_SENSITIVITY_CHANGED", requester.get("user_id"),
+                    document_id=req.document_id, 
+                    old_sensitivity=current_metadata.get("sensitivity"),
+                    new_sensitivity=req.metadata["sensitivity"],
+                    role=requester.get("role")
                 )
         else:
             # Use existing metadata
@@ -707,9 +721,12 @@ async def update_document(
             status=req.status
         )
         
-        logger.info(
-            "DOCUMENT_UPDATED: user=%s doc=%s new_version=%s",
-            requester.get("user_id"), req.document_id, result["version"]
+        from app.logging_config import log_user_action
+        log_user_action(
+            logger, "DOCUMENT_UPDATED", requester.get("user_id"),
+            document_id=req.document_id, new_version=result["version"],
+            parent_version=parent_version, chunk_count=result["chunk_count"],
+            status=req.status, has_notes=bool(req.version_notes)
         )
         
         return UpdateDocumentResponse(
@@ -865,11 +882,14 @@ def embedding_model_status():
     
     try:
         info = get_embedding_model_info()
-        logger.info(
-            "EMBEDDING_STATUS_CHECK: model=%s loaded=%s dimensions=%s",
-            info.get("model_key"), info.get("model_loaded"), info.get("actual_dimensions")
+        from app.logging_config import log_user_action
+        log_user_action(
+            logger, "EMBEDDING_STATUS_CHECK", "system",
+            model_key=info.get("model_key"), model_loaded=info.get("model_loaded"),
+            dimensions=info.get("actual_dimensions"), model_size=info.get("model_size", "unknown")
         )
         return {"ok": True, "embedding_model": info}
     except Exception as e:
-        logger.error("EMBEDDING_STATUS_ERROR: %s", str(e))
+        from app.logging_config import log_security_event
+        log_security_event(logger, "EMBEDDING_STATUS_ERROR", error=str(e))
         return {"ok": False, "error": str(e)}

@@ -1,847 +1,553 @@
-**Single Source of Truth for Project Context**
+# 🚀 Multi-Provider Enterprise RAG System - Technical Context
 
-> **Instructions for Copilot**: When generating code, prioritize the information in this file. Use only this file + the currently open buffer for context. Do not read the entire repository unless explicitly asked.
+**Single Source of Truth for AI Assistant Understanding**
 
----
-
-## 1. Project Summary
-
-A **clean, multi-provider enterprise RAG system** designed for learning and testing. Supports **local models** (Mistral-7B-Instruct GGUF), **Google Gemini**, **OpenAI GPT**, and **Hugging Face** through a unified base architecture. Features enterprise-grade RBAC, document versioning, session management, and consistent API across all providers.
+> **For AI Assistants**: This file contains complete system architecture, API specifications, and implementation details. Use this as primary context for code generation, debugging, and system understanding.
 
 ---
 
-## 2. High-Level Architecture
+## 1. System Overview
+
+### Purpose
+A **production-ready multi-provider RAG system** supporting both **offline-first** (local models) and **cloud-based** (API) LLM providers through a unified architecture. Designed for enterprise environments with comprehensive RBAC, document versioning, and session management.
+
+### Supported Providers
+- **Local Models**: Mistral-7B, Phi-2, Llama-3.2, Gemma-2B, Qwen2 (via llama-cpp-python)
+- **Cloud APIs**: Google Gemini, OpenAI GPT, Hugging Face Inference API
+- **Shared Components**: ChromaDB vectors, MiniLM embeddings, SQLite sessions
+
+### Key Features
+- ✅ **Multi-provider LLM support** with unified API
+- ✅ **Enterprise RBAC** with flexible role overrides
+- ✅ **Document versioning** with non-destructive updates
+- ✅ **Session-aware conversations** with profile management
+- ✅ **Offline-first architecture** with cloud integration
+- ✅ **JWT authentication** with comprehensive audit logging
+
+---
+
+## 2. Architecture Overview
 
 ```
-User → FastAPI → Provider Router → Base RAG Service → RBAC Filter → Provider LLM → Response
-                                         ↓
-                                 Shared Components:
-                                 • ChromaDB (Vector Storage)
-                                 • MiniLM (Embeddings)
-                                 • Session Management
-                                 • Document Versioning
+User Request → FastAPI Router → Provider Service → Base RAG Service → Response
+                                      ↓
+                              Shared Components:
+                              • ChromaDB (Vector Storage)
+                              • MiniLM (Embeddings)
+                              • SQLite (Sessions/Users/Versions)
+                              • RBAC Filter (Security)
 ```
 
-### Core Architecture
+### Core Components
 
-**🏗️ Base Layer:**
-- `base_rag_service.py` - Abstract base with common RAG functionality
+**🏗️ Base Layer**
+- `base_rag_service.py` - Abstract RAG service with RBAC filtering
 - `chroma_utils.py` - Vector database operations
-- `utility.py` - Shared utilities and embeddings
+- `utility.py` - Shared utilities and embedding management
 
-**🤖 Provider Layer:**
-- `rag_local_service.py` - Local Mistral-7B implementation + document management
-- `google_models.py` - Google Gemini implementation
-- `gpt_rag_service.py` - OpenAI GPT implementation  
-- `hf_rag_service.py` - Hugging Face implementation
+**🤖 Provider Layer**
+- `rag_local_service.py` - Local model implementation + document management
+- `google_models.py` - Google Gemini API integration
+- `gpt_rag_service.py` - OpenAI GPT API integration
+- `hf_rag_service.py` - Hugging Face API integration
 
-**🔐 Security & Data:**
+**🔐 Security & Data**
 - `auth.py` + `user_service.py` - JWT authentication & user management
-- `base_rag_service.py` - **Flexible RBAC**: Level-based + role override system + **Personalized AI**
 - `support_chat.py` - Session management & conversation history
 - `version_tracking.py` - Document versioning system
-- `profile_analyzer.py` - **NEW**: Smart profile analysis for personalized responses
+- `profile_analyzer.py` - User profile analysis for personalization
 
-**⚙️ Infrastructure:**
+**⚙️ Infrastructure**
 - `model_manager.py` - Local LLM loading & caching
+- `local_model_manager.py` - Multi-model support and selection
 - `prompt_builder.py` - Prompt construction & token management
 - `sentiment_classifier.py` - Sentiment analysis
 
-**🌐 API Layer:**
-- `main.py` - FastAPI app with clean startup/shutdown
+**🌐 API Layer**
+- `main.py` - FastAPI application with lifecycle management
 - `api_routes_rag.py` - Multi-provider RAG endpoints
 - `api_routes_auth.py` - Authentication endpoints
-- `dependencies.py` - Dependency injection
+- `api_routes_models.py` - Model management endpoints
+- `dependencies.py` - Dependency injection for auth and services
 
-### Clean Directory Structure
+---
+
+## 3. Directory Structure
 
 ```
-app/
-├── services/           # 🎯 Core business logic (15 clean modules)
-│   ├── base_rag_service.py      # Abstract RAG base
-│   ├── rag_local_service.py     # Local + document management
-│   ├── google_models.py         # Google Gemini
-│   ├── gpt_rag_service.py       # OpenAI GPT
-│   ├── hf_rag_service.py        # Hugging Face
-│   ├── auth.py + user_service.py # Authentication
-│   ├── support_chat.py          # Sessions
-│   ├── version_tracking.py      # Document versions
-│   └── utility.py + chroma_utils.py # Shared tools
-├── main.py             # 🚀 Clean FastAPI app
-├── api_routes_*.py     # 🌐 API endpoints
-├── dependencies.py     # 🔧 Dependency injection
-└── config.py          # ⚙️ Configuration
-
-database/              # 💾 SQLite databases
-chroma_storage/        # 🗄️ Vector database
-models/               # 🤖 Local LLM files
-data/                 # 📄 Seed documents
+ai_backend/
+├── app/
+│   ├── services/              # Core business logic
+│   │   ├── base_rag_service.py      # Abstract RAG base
+│   │   ├── rag_local_service.py     # Local models + docs
+│   │   ├── google_models.py         # Google Gemini
+│   │   ├── gpt_rag_service.py       # OpenAI GPT
+│   │   ├── hf_rag_service.py        # Hugging Face
+│   │   ├── auth.py                  # JWT token management
+│   │   ├── user_service.py          # User management
+│   │   ├── support_chat.py          # Session management
+│   │   ├── version_tracking.py      # Document versions
+│   │   ├── profile_analyzer.py      # User personalization
+│   │   ├── model_manager.py         # LLM loading
+│   │   ├── local_model_manager.py   # Multi-model support
+│   │   ├── prompt_builder.py        # Prompt construction
+│   │   ├── sentiment_classifier.py  # Sentiment analysis
+│   │   ├── utility.py               # Shared utilities
+│   │   └── chroma_utils.py          # Vector DB operations
+│   ├── utils/                 # Utility modules
+│   │   └── doc_parser/             # Document parsing
+│   ├── config/               # Configuration files
+│   │   ├── onboarding_fields.json  # User onboarding
+│   │   └── local_models.json       # Model configurations
+│   ├── main.py               # FastAPI application
+│   ├── api_routes_rag.py     # RAG endpoints
+│   ├── api_routes_auth.py    # Auth endpoints
+│   ├── api_routes_models.py  # Model endpoints
+│   ├── dependencies.py       # Dependency injection
+│   ├── config.py            # Application configuration
+│   └── logging_config.py    # Logging setup
+├── database/                # SQLite databases
+├── chroma_storage/          # Vector database
+├── models/                  # Local LLM files
+├── embeddings_models/       # Embedding models
+├── data/                   # Seed documents
+├── scripts/                # Utility scripts
+└── requirements.txt        # Python dependencies
 ```
 
 ---
 
-## 3. Key APIs / Functions
+## 4. API Endpoints
 
-### Main API Endpoints
+### Authentication (`/api/auth/`)
 
-**Authentication** (`/api/auth/*`):
-- `POST /api/auth/token` - Login with username/password, returns JWT token. **Auto-creates session using user_id. Returns user profile from user_meta table.**
-  - Request: `{"username": "string", "password": "string"}`
-  - Response: `{"access_token": "jwt_token", "token_type": "bearer", "user": {..., "profile": {...}}}`
-
-**Multi-Provider RAG** (`/api/rag/*`):
-- `POST /api/rag/{provider}/query` - Unified query interface
-  - `provider`: `local`, `google`, `gpt`, `huggingface`/`hf`
-  - Public endpoint (no auth required)
-  - Automatic RBAC filtering based on JWT token
-  - Session-aware conversation history
-
-**Document Management**:
-- `POST /api/rag/documents/add` - Add document (JSON)
-- `POST /api/rag/documents/add-file` - Upload file
-- `POST /api/rag/documents/seed` - Seed default data
-- `POST /api/rag/documents/update` - Update with versioning
-- `GET /api/rag/documents/list` - List with filtering
-- `GET /api/rag/documents/{id}/versions` - Version history
-- `POST /api/rag/documents/{id}/archive` - Archive version
-
-**Document Management with RBAC** (`/api/rag/documents/*`):
-- `POST /api/rag/documents/add` - Add document with level-based validation. **Requires**: SuperAdmin, Manager, HR, or Employee role.
-- `POST /api/rag/documents/add-file` - Upload file with sensitivity validation. **Requires**: SuperAdmin, Manager, HR, or Employee role.
-- `POST /api/rag/documents/update` - Update document (creates new version, non-destructive). **Requires**: SuperAdmin, Manager, HR, or Employee role. **Department restriction**: Users below HR level can only update their own department's documents.
-  - Request: `{"document_id": "doc_abc...", "text": "...", "version_notes": "Fixed typos", "status": "published"}`
-  - Response: `{"message": "...", "document_id": "...", "version": "2.0", "chunk_count": 5, "status": "published"}`
-- `GET /api/rag/documents/list` - List all documents with filtering. Query params: `?department=HR&status=published&latest_only=true`. **Requires**: SuperAdmin, Manager, HR, or Employee role.
-- `GET /api/rag/documents/{document_id}/versions` - Get version history for a document. **Requires**: SuperAdmin, Manager, HR, or Employee role.
-- `GET /api/rag/documents/{document_id}/versions/{version}` - Get specific version with full content. **Requires**: SuperAdmin, Manager, HR, or Employee role.
-- `GET /api/rag/documents/{document_id}/compare?version1=1.0&version2=2.0` - Compare two versions (shows diff). **Requires**: SuperAdmin, Manager, HR, or Employee role.
-- `POST /api/rag/documents/{document_id}/archive` - Archive a version (soft-delete). **Requires**: SuperAdmin, Manager, or HR role.
-
-### Core Service Functions
-
-### Key Service Functions
-
-**BaseRAGService** - Template method pattern + **Flexible RBAC**:
-```python
-async def query_rag(...):
-    # 1. Retrieve documents (shared)
-    # 2. Apply RBAC filtering (shared) - NEW: Level-based + role overrides
-    # 3. Build context (shared)
-    # 4. Generate response (provider-specific)
-    # 5. Return standardized format (shared)
-
-# NEW: Flexible RBAC + Personalized AI System
-def _allowed_by_metadata(meta, requester):
-    # 1. Personal documents: owner or HR+ level
-    # 2. Specific role override (allowed_roles) - overrides hierarchy
-    # 3. Department matching (for dept_confidential)
-    # 4. Level-based access (default hierarchy)
-
-# NEW: Enhanced personalization with profile analysis
-def inject_personalized_context(session_id, llm_prompt_prefix, query_text, requester, profile):
-    # 1. Load user profile (DB or session)
-    # 2. Analyze profile for job matching and suggestions
-    # 3. Build enhanced prompt with personalized context
-    # 4. Include tone guidance from chat history
-
-# Level-based validation in endpoints
-def validate_metadata(meta, requester):
-    user_level = ROLE_LEVELS.get(user_role, 0)
-    required_level = SENSITIVITY_LEVELS.get(sensitivity, 0)
-    if user_level < required_level:
-        raise HTTPException(f"Role '{user_role}' (level {user_level}) cannot create '{sensitivity}' (requires level {required_level}+)")
-```
-
-**Provider Services** - Implement `generate_response()`:
-- `LocalRAGService` - Mistral-7B via llama-cpp-python
-- `GoogleRAGService` - Gemini API calls
-- `GPTRAGService` - OpenAI API calls  
-- `HuggingFaceRAGService` - HF Inference API
-
-**Document Management** (Local service only):
-- `add_document_to_rag_local()` - Chunk, embed, store with versioning
-- `update_document_version()` - Non-destructive updates
-- `get_document_version()` - Retrieve specific versions
-- `compare_document_versions()` - Version diffs
-- `list_documents()` - Filtered document listing
-
----
-
-## 5. Ultra-Clean Architecture Summary
-
-### 🏆 **What Makes This Clean:**
-
-**✅ Single Responsibility**: Each service has one clear purpose
-**✅ Provider Abstraction**: Common interface, provider-specific implementation
-**✅ Shared Components**: Vector DB, embeddings, RBAC work across all providers
-**✅ No Legacy Code**: Removed all unused files and endpoints
-**✅ Consistent API**: Same `/api/rag/{provider}/query` pattern for all
-**✅ Clean Dependencies**: Minimal imports, clear separation of concerns
-
-### 🛠️ **18 Core Services** (enhanced with AI personalization + multi-model support):
-```
-🎯 Base: base_rag_service.py (+ Flexible RBAC + Personalized AI)
-🤖 Providers: rag_local_service.py, google_models.py, gpt_rag_service.py, hf_rag_service.py
-🔐 Security: auth.py, user_service.py
-📊 Data: chroma_utils.py, utility.py, version_tracking.py, support_chat.py
-⚙️ Tools: model_manager.py, prompt_builder.py, sentiment_classifier.py
-🧠 AI: profile_analyzer.py (NEW - Smart personalization)
-🤖 Models: local_model_manager.py, api_routes_models.py (NEW - Multi-model support)
-```
-
-### 🔐 **NEW: Flexible RBAC System**
-
-**Role Hierarchy** (Level-based access):
-```
-SuperAdmin (4) → Manager (3) → HR (2) → Employee (1) → Guest/PublicUser (0)
-```
-
-**Sensitivity Levels**:
-```
-super_confidential (4) - SuperAdmin only
-highly_confidential (3) - Manager+
-role_confidential (2) - HR+
-department_confidential (1) - Employee+
-public_internal (0) - Everyone
-```
-
-**RBAC Features**:
-- **Level-based validation**: Users can only create documents at their level or below
-- **Role overrides**: `allowed_roles` bypasses hierarchy (e.g., Admin+Employee only, blocks Manager/HR)
-- **Department restrictions**: Users below HR level can only update their department's documents
-- **Personal documents**: Owner access + HR+ level override
-
-**NEW: Personalized AI Features**:
-- **Profile Analysis**: Analyzes user skills/experience for job matching
-- **Smart Suggestions**: Generates personalized action recommendations
-- **Guest Onboarding**: 6-step profile collection (name, gender, job_role, age, location, department)
-- **Context-Aware Responses**: Uses profile + chat history for personalized answers
-- **Job Matching**: Matches user background to relevant job categories
-- **Proactive Assistance**: Offers cover letters, interview prep, career guidance
-
-**Examples**:
+**POST /api/auth/token** - User login
 ```json
-// RBAC: Only Admin + Employee can access (bypasses Manager/HR)
-{"sensitivity": "highly_confidential", "allowed_roles": ["SuperAdmin", "Employee"]}
-
-// Personalization: Guest user profile for job matching
-{"name": "John Smith", "job_role": "Python Developer", "location": "New York"}
-// → AI Response: "Based on your Python background, we have 2 software engineering positions. Would you like me to draft a cover letter?"
+Request: {"username": "string", "password": "string"}
+Response: {
+  "access_token": "jwt_token",
+  "token_type": "bearer",
+  "user": {
+    "user_id": "string",
+    "username": "string", 
+    "role": "string",
+    "department": "string",
+    "profile": {...}
+  }
+}
 ```
 
-### 🚀 **Usage Examples:**
-```bash
-# Local model with specific model selection
-curl -X POST "/api/rag/local/query" -d '{"question": "What is our policy?", "use_llm": true, "local_llm_model": "phi2"}'
+### Multi-Provider RAG (`/api/rag/`)
 
-# Local model with auto-selection (uses best available)
-curl -X POST "/api/rag/local/query" -d '{"question": "What is our policy?", "use_llm": true}'
+**POST /api/rag/{provider}/query** - Unified query interface
+- **Providers**: `local`, `google`, `gpt`, `huggingface`/`hf`
+- **Authentication**: Optional (Bearer token for personalization)
+- **RBAC**: Automatic filtering based on user role/department
 
-# Google Gemini
-curl -X POST "/api/rag/google/query" -d '{"question": "What is our policy?", "use_llm": true}'
-
-# OpenAI GPT
-curl -X POST "/api/rag/gpt/query" -d '{"question": "What is our policy?", "use_llm": true}'
-
-# Hugging Face
-curl -X POST "/api/rag/huggingface/query" -d '{"question": "What is our policy?", "use_llm": true}'
-
-# List available models
-curl "/api/models/list"
-
-# Get best available model
-curl "/api/models/best"
-```
-
-**Perfect for learning multi-provider RAG architectures + Enterprise RBAC + AI Personalization! 🎓**
-
----
-
-## 6. NEW: Enhanced Embedding Model Upgrade System
-
-**Enhanced Embedding Models** (recommended upgrade path):
-- **Phase 1**: `bge-small-en-v1.5` - Light upgrade from MiniLM (better accuracy, still fast)
-- **Phase 2**: `BAAI/bge-base-en-v1.5` - Best accuracy for CPU (top-ranked model)
-- **Phase 3**: `intfloat/e5-base-v2` - Multi-domain enterprise (cross-department strength)
-
-**Available Embedding Models**:
-```python
-# Current baseline
-"all-MiniLM-L6-v2" - Fast but limited accuracy (384 dimensions)
-
-# Recommended upgrades
-"bge-small-en-v1.5" - Light upgrade, better accuracy, still fast (384 dimensions)
-"bge-base-en-v1.5" - Best accuracy for CPU, top-ranked (768 dimensions) 
-"e5-base-v2" - Multi-domain enterprise, cross-language (768 dimensions)
-"all-mpnet-base-v2" - Classic upgrade, widely used in production (768 dimensions)
-```
-
-**Configuration** (`app/config.py`):
-```python
-# Set via environment variable or config
-EMBEDDING_MODEL_KEY = "bge-small-en-v1.5"  # Current active model
-EMBEDDING_MODEL_NAME = EMBEDDING_MODELS[EMBEDDING_MODEL_KEY]["name"]
-```
-
-**Enhanced Logging & Monitoring**:
-- `EMBEDDING_MODEL_INIT` - Model loading with configuration details
-- `EMBEDDING_MODEL_SUCCESS` - Successful loading with dimension verification
-- `EMBEDDING_MODEL_FALLBACK` - Automatic fallback to MiniLM on failure
-- `EMBEDDING_ENCODE_SUCCESS` - Performance metrics (chars/sec, processing time)
-- `EMBEDDING_STATUS_CHECK` - Status endpoint monitoring
-
-**Monitoring API**:
-```bash
-# Check embedding model status (SuperAdmin/Manager only)
-GET /api/rag/embedding/status
-# Returns: model info, dimensions, performance metrics, load status
-```
-
-**Benefits of Upgrade**:
-- **20-30% better retrieval accuracy** for technical documents
-- **Improved semantic understanding** of domain-specific content
-- **CPU-friendly performance** - no GPU required
-- **Automatic fallback** to MiniLM if upgrade fails
-- **Comprehensive monitoring** and debugging capabilities
-
----
-
-## 7. NEW: Multi-Model Local LLM System
-
-**LocalModelManager Service** (`local_model_manager.py`):
-- `get_available_models()` - Scan and detect downloaded models
-- `get_best_available_model()` - Auto-select best model
-- `get_model_info(model_key)` - Get model metadata and paths
-- `list_downloadable_models()` - Models available for download
-
-**Supported Local Models** (configured in `local_models.json`):
-- **"phi2"** - Phi-2 (2.7B) - Default, optimized for reasoning and math
-- **"llama32-1b"** - Llama 3.2 1B - Efficient edge model with good instruction following
-- **"llama32-3b"** - Llama 3.2 3B - Balanced performance small Llama model
-- **"gemma-2b"** - Gemma 2B - Google's safety-aligned lightweight model
-- **"qwen2-1.5b"** - Qwen2 1.5B - Multilingual with 32K context length
-- **"mistral-7b"** - Mistral 7B - Proven performance fallback model
-
-**Model Management API** (`/api/models/*`):
-- `GET /api/models/list` - List all models with availability status
-- `GET /api/models/best` - Get best available model
-- `GET /api/models/downloadable` - List models available for download
-- `POST /api/models/refresh` - Refresh model cache
-
-**Download Scripts**:
-```bash
-# List available models
-python scripts/download_hf_model.py --list
-
-# Download specific model
-python scripts/download_hf_model.py --download phi2
-
-# Scan existing models
-python scripts/download_hf_model.py --scan
-
-# Download all models
-python scripts/download_hf_model.py --all
-```
-
-**Model Selection in Queries** (local provider only):
-```bash
-# Use specific model with full payload
-POST /api/rag/local/query {
-  "question": "Give me small bullet points of the company",
+```json
+Request: {
+  "question": "string",
   "top_k": 3,
   "use_llm": true,
   "max_tokens": 256,
   "category": "string",
   "debug": false,
-  "local_llm_model": "llama32-1b"
+  "local_llm_model": "phi2"  // Local provider only
 }
 
-# Auto-select best available (local provider)
-POST /api/rag/local/query {"question": "Hello", "use_llm": true}
+Response: {
+  "answer": "string",
+  "retrieved": [{"id": "string", "text": "string", "metadata": {}, "distance": 0.5}],
+  "context": "string"
+}
+```
 
-# Other providers ignore local_llm_model parameter
-POST /api/rag/google/query {"question": "Hello", "use_llm": true}
+### Document Management (`/api/rag/documents/`)
+
+**POST /api/rag/documents/add** - Add document (JSON)
+**POST /api/rag/documents/add-file** - Upload file
+**POST /api/rag/documents/update** - Update document (creates new version)
+**POST /api/rag/documents/seed** - Seed from data folder
+**GET /api/rag/documents/list** - List documents with filtering
+**GET /api/rag/documents/{id}/versions** - Version history
+**GET /api/rag/documents/{id}/compare** - Compare versions
+**POST /api/rag/documents/{id}/archive** - Archive version
+
+### Model Management (`/api/models/`)
+
+**GET /api/models/list** - List available models
+**GET /api/models/best** - Get best available model
+**GET /api/models/downloadable** - Models available for download
+**POST /api/models/refresh** - Refresh model cache
+
+---
+
+## 5. RBAC System
+
+### Role Hierarchy
+```
+SuperAdmin (4) → Manager (3) → HR (2) → Employee (1) → Guest (0)
+```
+
+### Sensitivity Levels
+```
+super_confidential (4)    - SuperAdmin only
+highly_confidential (3)   - Manager+ level
+role_confidential (2)     - HR+ level  
+department_confidential (1) - Employee+ in same department
+public_internal (0)       - Everyone
+personal (1)              - Owner + HR+ level
+```
+
+### RBAC Features
+- **Level-based validation**: Users can only create documents at their level or below
+- **Role overrides**: `allowed_roles` bypasses hierarchy
+- **Department restrictions**: Users below HR level can only update their department
+- **Personal documents**: Owner access + HR+ level override
+- **Pre-response filtering**: Unauthorized content removed before LLM generation
+
+### Example Metadata
+```json
+{
+  "sensitivity": "highly_confidential",
+  "department": "HR", 
+  "allowed_roles": ["SuperAdmin", "Employee"],
+  "owner_id": "user123",
+  "public_summary": "HR policy summary"
+}
 ```
 
 ---
 
-## 7. NEW: Personalized AI System
+## 6. Core Service Functions
 
-**ProfileAnalyzer Service** (`profile_analyzer.py`):
-- `analyze_profile_for_jobs(profile, chat_history)` - Match user skills to job categories
-- `build_personalized_prompt(base_prompt, profile, chat_history, query, requester)` - Enhanced prompt with profile context
-- `_create_profile_summary(profile)` - Generate concise user context
-- `_get_suggested_actions(job_matches, profile)` - Proactive recommendations
+### BaseRAGService (Abstract)
+```python
+async def query_rag(question, requester, top_k, use_llm, **kwargs):
+    # 1. Retrieve documents from vector DB
+    # 2. Apply RBAC filtering
+    # 3. Build context with session history
+    # 4. Generate response (provider-specific)
+    # 5. Return standardized format
 
-**Enhanced Base RAG Service**:
-- `inject_personalized_context()` - **NEW**: Replaces inject_tone_guidance with profile analysis
-- Auto-loads user profiles from `user_meta` (internal users) or `session_profiles` (guests)
-- Combines tone guidance + profile analysis + job matching
+def _allowed_by_metadata(metadata, requester):
+    # 1. Personal documents: owner or HR+ level
+    # 2. Role override (allowed_roles) - bypasses hierarchy  
+    # 3. Department matching (for dept_confidential)
+    # 4. Level-based access (default hierarchy)
+```
 
-**Guest Onboarding Flow** (based on `onboarding_fields.json`):
-1. **Name**: "What is your name?"
-2. **Gender**: "What is your gender?"
-3. **Job Role**: "What is your job role?"
-4. **Age**: "What is your age?"
-5. **Location**: "Where are you located?"
-6. **Department**: "Which department are you trying to reach?"
-7. **Completion**: "Thank you! Your details have been saved."
-8. **Personalized Responses**: Uses collected profile for job matching
+### Provider Services
+- **LocalRAGService**: Mistral-7B/Phi-2/etc via llama-cpp-python
+- **GoogleRAGService**: Gemini API calls
+- **GPTRAGService**: OpenAI API calls
+- **HuggingFaceRAGService**: HF Inference API
 
-**Debug Logging** (NEW):
-- `RAG_QUERY_START` / `LLM_QUERY_DEBUG` - Query tracking
-- `GOOGLE_LLM_REQUEST` / `GOOGLE_LLM_RESPONSE` - Google Gemini debug
-- `LOCAL_LLM_REQUEST` / `LOCAL_LLM_RESPONSE` - Local model debug
-- `LLM_FINAL_PROMPT` / `GOOGLE_FULL_PROMPT` / `LOCAL_FULL_PROMPT` - **Complete prompts** (full text)
-- `GOOGLE_RESPONSE_TEXT` / `LOCAL_RESPONSE_TEXT` - **Complete responses** (full text)
+### Authentication Services
+```python
+# auth.py
+def create_access_token(user_data, session_id=None) -> str
+def verify_token(token) -> Optional[Dict]
 
-**Usage Examples**:
-```bash
-# Guest onboarding sequence
-POST /api/rag/google/query {"question": "Hi I want to connect with HR"}
-# → "What is your name?"
+# user_service.py  
+def authenticate_user(username, password) -> Optional[Dict]
+def get_user_meta(user_id, key) -> Any
+def set_user_meta(user_id, key, value) -> None
+```
 
-POST /api/rag/google/query {"question": "John Smith"}
-# → "What is your gender?"
+### Document Management
+```python
+# rag_local_service.py
+async def add_document_to_rag_local(text, metadata, requester_id)
+async def update_document_version(doc_id, text, metadata, notes, requester_id)
 
-# After onboarding completion
-POST /api/rag/google/query {"question": "Are there Python developer jobs?"}
-# → "Based on your profile as a Python Developer in New York, we have 2 relevant positions..."
+# version_tracking.py
+def create_version_record(doc_id, version, chunks, created_by, metadata)
+def get_version_history(doc_id) -> List[Dict]
+def compare_document_versions(doc_id, v1, v2) -> str
+```
+
+### Session Management
+```python
+# support_chat.py
+def create_session(session_id, role, department)
+def store_message(session_id, speaker, content)
+def fetch_recent_messages(session_id, limit=5) -> List[Dict]
+def build_prompt_prefix(requester, history, category) -> str
 ```
 
 ---
 
-## 8. Document Management & Versioning
+## 7. Data Models
 
-**Document Management** (Local service only):
-- `add_document_to_rag_local()` - Chunk, embed, store with versioning
-- `update_document_version(document_id, text, metadata, version_notes, requester_id, status)` - Create new version of existing document (non-destructive)
-- `get_document_version(document_id, version)` - Retrieve specific version with its chunks
-- `compare_document_versions(document_id, version1, version2)` - Compare two versions and return diff
-
-**Version Tracking** (`version_tracking.py`):
-- `init_version_db(reset_on_start)` - Initialize version tracking SQLite database
-- `create_version_record(document_id, version, source_name, chunk_ids, created_by, parent_version, status, version_notes, metadata)` - Store version metadata
-- `get_version_history(document_id)` - Get all versions of a document
-- `get_version(document_id, version)` - Get specific version metadata
-- `get_latest_version(document_id)` - Get most recent version
-- `update_version_status(document_id, version, status)` - Update version status (draft/published/archived)
-- `get_documents_by_status(status)` - Filter documents by status_documents(latest_only)` - List all documents.
-- `generate_next_version(document_id)` - Calculate next semantic version number.
-
-**Authentication & User Management** (`user_service.py`, `auth.py`):
-- `init_user_db(reset_on_start)` - Initialize user database, **create user_meta table**, and seed dummy users with profiles.
-- `authenticate_user(username, password)` - Authenticate user with credentials.
-- `get_password_hash(password)` - Hash password using bcrypt.
-- `verify_password(plain_password, hashed_password)` - Verify password.
-- `create_access_token(user_data)` - Generate JWT token with user info.
-- `verify_token(token)` - Verify and decode JWT token.
-- **`get_user_meta(user_id, key)`** - Get single user profile field.
-- **`get_all_user_meta(user_id)`** - Get all user profile fields as dict.
-- **`set_user_meta(user_id, key, value)`** - Set/update user profile field.
-- **`delete_user_meta(user_id, key)`** - Delete user profile field.
-
-**Dependency Injection** (`dependencies.py`):
-- `get_rag_service()` - Returns RAG service module for dependency injection in API routes.
-- `get_current_user(credentials)` - Extract authenticated user from Bearer token (required auth).
-- `get_current_user_optional(credentials)` - Optional authentication (returns None for Guest users).
-- `require_roles(allowed_roles)` - Factory for role-based access control dependencies.
-
-**Google RAG Service** (`google_models.py`):
-- `query_google_rag(...)` - Asynchronously query using Google's generative models.
-
-**Model Manager** (`model_manager.py`):
-- `get_llm_instance(model_key)` - Lazy-load and cache LLM instances (default: mistral-7b-instruct-v0.2.Q3_K_M.gguf).
-- `choose_model_for_task(task)` - Select model based on task type (only if `ENABLE_DYNAMIC_MODEL_SELECTION=True`).
-
-**Prompt Builder** (`prompt_builder.py`):
-- `build_prompt_with_selected_chunks(prefix, context_text, question)` - Constructs the final prompt for the LLM.
-- `select_chunks_by_token_budget(...)` - Selects document chunks to fit within the model's context window.
-- `_invoke_llm_with_chunk_budget(...)` - Asynchronously invokes the LLM with a token-budgeted prompt.
-
-**Support Chat** (`support_chat.py`):
-- `create_session(session_id, role, department)` - Create new session.
-- `store_message(session_id, speaker, content)` - Store message with sentiment analysis.
-- `fetch_recent_messages(session_id, limit)` - Get conversation history.
-- `get_full_profile(session_id)` - Get user profile data.
-- `get_next_missing_profile_key(session_id)` - Get next onboarding question.
-- `set_profile_value(session_id, key, value)` - Set profile field.
-- `build_prompt_prefix(requester, history, category)` - Build LLM prefix with context.
-
-**Utilities** (`utility.py`):
-- `get_embedding_model_instance()` - Singleton embedding model loader.
-- `embed_texts(texts)` - Asynchronously embed list of texts.
-- `chunk_text_basic(text, chunk_size, overlap)` - Text chunking.
-- `sanitize_metadata_dict(meta)` - Sanitize metadata for Chroma.
-- `normalize_tone_label(raw_tone)` - Map raw tone labels to canonical forms (angry, confused, happy, frustrated, polite, urgent, neutral).
-- `get_local_embedding_model_path()` - Get embedding model path.
-- `get_data_path(filename)`, `get_config_path(filename)` - Path helpers.
-
-**Chroma Utils** (`chroma_utils.py`):
-- `ensure_chroma_client(persist_directory, collection_name)` - Get/create Chroma client.
-- `add_documents_to_collection(collection, documents, metadatas, ids, embeddings)` - Add docs.
-- `query_collection(collection, query_embeddings, query_texts, n_results)` - Query vector DB.
-- `delete_all_documents(collection, client, collection_name)` - Clear collection.
-
-**Auth** (`auth.py`):
-- `create_access_token(user_data, session_id)` - Generate JWT token with user info and optional session ID.
-- `verify_token(token)` - Verify and decode JWT token.
-
-**Sentiment** (`sentiment_classifier.py`):
-- `get_global_sentiment()` - Get singleton classifier.
-- `SentimentToneClassifier.predict_single(text)` - Predict sentiment and tone.
-
----
-
-## 4. Coding Conventions
-
-- **Language**: Python 3.10+ (Docker uses 3.11, local dev may be 3.10)
-- **Type Hints**: Use type hints for function parameters and return types (`from __future__ import annotations`).
-- **Formatting**: Follow PEP 8; use 4 spaces for indentation.
-- **Imports**: 
-  - Use absolute imports from `app.` namespace.
-  - Group: stdlib, third-party, local.
-  - Import from `utility.py` for shared paths/constants to avoid duplication.
-- **Function Style**: 
-  - Use descriptive names, docstrings for public functions.
-  - Prefer composition over inheritance.
-  - Use dependency injection (FastAPI `Depends`) for auth/requester.
-- **Error Handling**: Use FastAPI `HTTPException` for API errors; log exceptions with context.
-- **Logging**: Use module-level loggers (`logging.getLogger(__name__)`).
-- **Constants**: Define in `app/config.py`; import rather than duplicate.
-- **Circular Imports**: Avoid by importing shared constants from `app/config.py` or `app/services/utility.py`.
-
----
-
-## 5. Important Files & Their Purpose
-
-- `app/main.py` - FastAPI app entry point, lifespan handlers, endpoint registration.
-- `app/api_routes_rag.py` - RAG API routes, request/response models, RBAC enforcement.
-- `app/config.py` - Centralized configuration for the application.
-- `app/services/rag_local_service.py` - Core RAG logic for local models: data indexing and retrieval.
-- `app/services/google_models.py` - RAG logic for Google's generative models.
-- `app/services/model_manager.py` - Handles loading and caching of local LLM instances.
-- `app/services/prompt_builder.py` - Constructs prompts and manages token budgets.
-- `app/services/support_chat.py` - SQLite session management, message storage, profile management, tone guidance.
-- `app/services/utility.py` - **Centralized utilities**: paths, constants, embedding loader, text processing, metadata sanitization.
-- `app/services/chroma_utils.py` - ChromaDB wrapper functions for client/collection operations.
-- `app/services/auth.py` - API key to user mapping (role-based access).
-- `app/services/sentiment_classifier.py` - Local sentiment/tone classification using scikit-learn.
-- `app/logging_config.py` - Logging configuration.
-- `app/config/onboarding_fields.json` - Onboarding question definitions.
-- `requirements.txt` - Python dependencies (FastAPI, ChromaDB, sentence-transformers, llama-cpp-python, etc.).
-- `Dockerfile` - Docker image definition (Python 3.11, port 5444).
-- `docker-compose.yml` - Docker Compose configuration.
-
----
-
-## 6. Data Models / Structures
-
-### Request/Response Models
-
-**QueryRequest**:
-```python
-{
-  "question": str,
-  "top_k": int = 3,
-  "use_llm": bool = False,
-  "max_tokens": int = 256,
-  "category": Optional[str] = None,
-  "debug": bool = False,
-  "local_llm_model": Optional[str] = None  # Available: "phi2", "llama32-1b", "llama32-3b", "gemma-2b", "qwen2-1.5b", "mistral-7b"
-}
-```
-
-**QueryResponse**:
-```python
-{
-  "answer": Optional[str],
-  "retrieved": List[RetrievedDoc],
-  "context": Optional[str]
-}
-```
-
-**RetrievedDoc**:
-```python
-{
-  "id": str,
-  "text": str,
-  "metadata": Optional[Dict[str, Any]],
-  "distance": Optional[float]
-}
-```
-
-**TokenRequest** (Login):
-```python
-{
-  "username": str,
-  "password": str
-}
-```
-
-**TokenResponse** (Login):
-```python
-{
-  "access_token": str,  # JWT token
-  "token_type": str,    # "bearer"
-  "user": {
-    "user_id": str,
-    "username": str,
-    "role": str,
-    "department": str,
-    "profile": {  # User profile from user_meta table
-      "name": str,
-      "gender": str,
-      "location": str,
-      # ... other dynamic fields
-    }
-  }
-}
-```
-
-**Requester (from Bearer token)**:
-The user's identity is determined from the `Authorization: Bearer <token>` header.
+### User/Requester
 ```python
 {
   "user_id": str,
-  "username": Optional[str],
-  "role": str,  # SuperAdmin, HR, Manager, Employee, Guest
-  "department": str  # Engineering, Finance, HR, Legal, IT, Executive, etc.
+  "username": Optional[str], 
+  "role": str,  # SuperAdmin, Manager, HR, Employee, Guest
+  "department": str  # HR, Finance, Engineering, IT, Legal, Executive
 }
 ```
 
-**SupportSessionStartRequest**:
-```python
-{
-    "session_id": Optional[str] = None,
-    "name": Optional[str] = None,
-    "sex": Optional[str] = None,
-    "position": Optional[str] = None,
-    "category": Optional[str] = None,
-    "notes": Optional[str] = None
-}
-```
-
-**Document Metadata**:
+### Document Metadata
 ```python
 {
   "source": str,
   "department": str,
-  "sensitivity": str,  # public_internal, department_confidential, role_confidential, highly_confidential, personal
+  "sensitivity": str,
   "allowed_roles": Optional[List[str]],
   "owner_id": Optional[str],
   "public_summary": Optional[str],
+  "document_id": str,
+  "version": str,
+  "status": str,  # draft, published, archived
   "ingested_at": str,
-  "ingested_by": Optional[str]
+  "ingested_by": str
 }
 ```
 
-**Session Message**:
+### Session Message
 ```python
 {
   "speaker": str,  # "user" or "assistant"
   "content": str,
   "created_at": str,
   "sentiment": Optional[str],
-  "tone": Optional[str],
-  "sentiment_meta": Optional[Dict]
+  "tone": Optional[str]
 }
 ```
-
-**Sentiment Result**:
-```python
-{
-  "ok": True,
-  "result": {
-    "text": str,
-    "sentiment": str,  # positive, negative, neutral, unknown (on error)
-    "tone": str,  # Canonical tones: angry, confused, happy, frustrated, polite, urgent, neutral
-    "proba": {
-      "sentiment": Dict[str, float],
-      "tone": Dict[str, float]
-    }
-  }
-}
-```
-
-**Model Selection Configuration** (`app/config.py`):
-- `ENABLE_DYNAMIC_MODEL_SELECTION = False` - Flag to enable dynamic model selection based on task.
-- `DEFAULT_MODEL_NAME = "mistral-7b-instruct-v0.2.Q3_K_M.gguf"` - Primary model to use.
-- By default, system uses only the default model.
-- If `ENABLE_DYNAMIC_MODEL_SELECTION=True` and default model not found, falls back to task-based selection:
-  - `"small"` for summarization, classification, tagging, intent detection.
-  - `"tiny"` for short chit-chat.
-  - `"mistral"` for full RAG reasoning (default).
-
-### RBAC Sensitivity Levels
-
-1. `public_internal` - All authenticated users.
-2. `department_confidential` - Same department or HR/Legal/Executive.
-3. `role_confidential` - Specific roles (from `allowed_roles`) or HR/Legal/Executive.
-4. `highly_confidential` - Legal/Executive only.
-5. `personal` - Owner or HR/Legal/Executive.
 
 ---
 
-## 7. Dev Notes
+## 8. Configuration
 
-### Setup
+### Environment Variables
+```bash
+# Optional cloud API keys
+GOOGLE_API_KEY=your_google_api_key
+OPENAI_API_KEY=your_openai_api_key
+HUGGINGFACE_API_TOKEN=your_hf_token
 
-1. **Install Dependencies**:
-   ```bash
-   pip install -r requirements.txt
-   ```
+# JWT configuration
+JWT_SECRET_KEY=your_secret_key
+JWT_ALGORITHM=HS256
+JWT_EXPIRATION_DAYS=7
 
-2. **Download Models** (if not present):
-   - Embedding model: Run `scripts/download_embeddings_models.py` or place in `embeddings_models/all-MiniLM-L6-v2/`.
-   - LLM model: Place `*.gguf` file in `models/` directory (e.g., `mistral-7b-instruct-v0.2.Q3_K_M.gguf`).
+# Model configuration
+EMBEDDING_MODEL_KEY=bge-small-en-v1.5
+ENABLE_DYNAMIC_MODEL_SELECTION=false
+DEFAULT_MODEL_NAME=mistral-7b-instruct-v0.2.Q3_K_M.gguf
+```
 
-3. **Environment Variables** (optional):
-   - `.env` file for optional cloud API keys (OpenAI, Google, HuggingFace) - not required for local-only mode.
+### Key Settings (config.py)
+```python
+# Role hierarchy
+ROLE_LEVELS = {
+    "SuperAdmin": 4, "Manager": 3, "HR": 2, 
+    "Employee": 1, "Guest": 0
+}
 
-### Running
+# Sensitivity levels
+SENSITIVITY_LEVELS = {
+    "super_confidential": 4, "highly_confidential": 3,
+    "role_confidential": 2, "department_confidential": 1,
+    "public_internal": 0, "personal": 1
+}
 
-**Development**:
+# Valid departments
+VALID_DEPARTMENTS = [
+    "HR", "Finance", "Engineering", "IT", 
+    "Legal", "Executive", "Admin", "General"
+]
+```
+
+---
+
+## 9. Local Model Support
+
+### Supported Models
+```json
+{
+  "phi2": "Phi-2 (2.7B) - Default, optimized for reasoning",
+  "llama32-1b": "Llama 3.2 1B - Efficient edge model", 
+  "llama32-3b": "Llama 3.2 3B - Balanced performance",
+  "gemma-2b": "Gemma 2B - Google safety-aligned",
+  "qwen2-1.5b": "Qwen2 1.5B - Multilingual 32K context",
+  "mistral-7b": "Mistral 7B - Proven performance fallback"
+}
+```
+
+### Model Management
+```python
+# local_model_manager.py
+def get_available_models() -> List[Dict]
+def get_best_available_model() -> Optional[str]
+def get_model_info(model_key) -> Dict
+```
+
+### Download Scripts
+```bash
+# List available models
+python scripts/download_hf_model.py --list
+
+# Download specific model  
+python scripts/download_hf_model.py --download phi2
+
+# Download all models
+python scripts/download_hf_model.py --all
+```
+
+---
+
+## 10. Logging & Monitoring
+
+### Security Events
+- `TOKEN_CREATED` - JWT token generation with context
+- `TOKEN_EXPIRED` - Expired token detection
+- `INVALID_TOKEN` - Invalid token attempts
+- `RBAC_ACCESS_DENIED` - Permission violations
+- `RBAC_UPDATE_DENIED` - Cross-department update attempts
+
+### System Events  
+- `DOCUMENT_CREATED` - Document creation with metadata
+- `DOCUMENT_UPDATED` - Version updates
+- `FILE_UPLOADED` - File upload tracking
+- `LLM_QUERY_DEBUG` - Query processing details
+- `EMBEDDING_MODEL_INIT` - Model loading status
+
+### Debug Logging
+- `LLM_FINAL_PROMPT` - Complete prompts (full text)
+- `GOOGLE_RESPONSE_TEXT` - Complete responses (full text)
+- `LOCAL_RESPONSE_TEXT` - Local model responses
+- `EMBEDDING_ENCODE_SUCCESS` - Performance metrics
+
+---
+
+## 11. Development Guidelines
+
+### Code Conventions
+- **Python 3.10+** with type hints
+- **PEP 8** formatting, 4-space indentation
+- **Absolute imports** from `app.` namespace
+- **Dependency injection** via FastAPI `Depends`
+- **Error handling** with `HTTPException`
+- **Logging** with module-level loggers
+
+### Architecture Patterns
+- **Template method pattern** in BaseRAGService
+- **Singleton pattern** for embedding models and LLM instances
+- **Factory pattern** for provider selection
+- **Dependency injection** for testability
+- **Separation of concerns** (routes/services/utilities)
+
+### Security Best Practices
+- **JWT token authentication** with expiration
+- **RBAC enforcement** at document level
+- **Input validation** and sanitization
+- **Audit logging** for all sensitive operations
+- **Token preview logging** (truncated for security)
+
+---
+
+## 12. Usage Examples
+
+### Authentication
+```bash
+# Login
+curl -X POST "/api/auth/token" \
+  -H "Content-Type: application/json" \
+  -d '{"username": "admin", "password": "admin123"}'
+```
+
+### Multi-Provider Queries
+```bash
+# Local model with specific selection
+curl -X POST "/api/rag/local/query" \
+  -H "Authorization: Bearer <token>" \
+  -d '{"question": "What is our policy?", "use_llm": true, "local_llm_model": "phi2"}'
+
+# Google Gemini
+curl -X POST "/api/rag/google/query" \
+  -H "Authorization: Bearer <token>" \
+  -d '{"question": "What is our policy?", "use_llm": true}'
+
+# OpenAI GPT
+curl -X POST "/api/rag/gpt/query" \
+  -H "Authorization: Bearer <token>" \
+  -d '{"question": "What is our policy?", "use_llm": true}'
+```
+
+### Document Management
+```bash
+# Add document
+curl -X POST "/api/rag/documents/add" \
+  -H "Authorization: Bearer <token>" \
+  -d '{"text": "Policy content", "metadata": {"sensitivity": "public_internal", "department": "HR"}}'
+
+# List documents
+curl "/api/rag/documents/list?department=HR&status=published"
+```
+
+---
+
+## 13. Deployment
+
+### Development
 ```bash
 uvicorn app.main:app --reload --port 5444
 ```
 
-**Docker**:
+### Docker
 ```bash
 docker-compose up --build
 ```
 
-**Production**:
+### Production
 ```bash
 uvicorn app.main:app --host 0.0.0.0 --port 5444
 ```
 
-### Testing
-
-- No formal test suite currently.
-- Use `api_test.md` for cURL examples.
-- Use scripts in `scripts/` for manual testing:
-  - `scripts/quick_test.py` - Quick API test.
-  - `scripts/test_sentiment.py` - Sentiment classifier test.
-  - `scripts/train_sentiment.py` - Train sentiment model.
-  - `scripts/seed_examples.py` - Seed example documents.
-
-### Key Behaviors
-
-- **Lazy Loading**: Embedding model and LLM are loaded on first use (singleton pattern).
-- **Model Selection**: By default, uses only `mistral-7b-instruct-v0.2.Q3_K_M.gguf`. Dynamic selection only if `ENABLE_DYNAMIC_MODEL_SELECTION=True` and default model not found.
-- **Sentiment/Tone Detection**: Always returns canonical tone labels (angry, confused, happy, frustrated, polite, urgent, neutral). Never fails - defaults to "unknown"/"neutral" on error.
-- **Auto-Seeding**: On startup, attempts to seed `data/companyData` if present.
-- **Session Reset**: `support_chat.init_support_chat_db(reset_on_start=True)` resets DB on app start (change for production).
-- **CORS**: Currently allows all origins (`allow_origins=["*"]`) - restrict in production.
-- **File Upload Limit**: 5MB max for `/api/rag/add-file`.
-
-### Directory Structure Requirements
-
-- `app/chroma_storage/` - Created automatically by ChromaDB.
-- `app/data/` - Created automatically for SQLite DBs.
-- `models/` - Must contain `mistral-7b-instruct-v0.2.Q3_K_M.gguf` (or `.ggml`/`.bin` variant) for default operation.
-  - If `ENABLE_DYNAMIC_MODEL_SELECTION=True`, can contain multiple models for task-based selection.
-- `embeddings_models/all-MiniLM-L6-v2/` - Embedding model (auto-downloaded if missing).
-- `sentiment/` - Created automatically for sentiment artifacts.
+### Requirements
+- **Python 3.10+**
+- **ChromaDB** for vector storage
+- **SQLite** for sessions/users/versions
+- **Local models** in `models/` directory
+- **Embedding models** in `embeddings_models/`
 
 ---
 
-## 8. Instructions For Copilot
+## 14. AI Assistant Instructions
 
 **When generating code:**
 
-1. **Prioritize this file** - Use information from this file (`APP_CONTEXT.md`) as the primary source of truth.
-2. **Use only this file + currently open buffer** - Do not read entire repository unless explicitly requested.
-3. **Import from `app/config.py`** - Always import shared constants and configurations from `app/config.py`.
-4. **Follow architecture patterns** - Maintain separation: routes in `api_routes_rag.py`, business logic in `services/`, utilities centralized. Use `model_manager.py` for LLM loading and `prompt_builder.py` for prompt construction.
-5. **Respect RBAC** - Always enforce sensitivity levels when accessing documents.
-6. **Use type hints** - Include type annotations for all function parameters and returns.
-7. **Handle errors gracefully** - Use FastAPI `HTTPException` for API errors; log with context.
-8. **Maintain singleton patterns** - Use `get_embedding_model_instance()` from `utility.py` for embeddings.
-9. **Avoid circular imports** - Import shared constants from `app/config.py` or `app/services/utility.py`.
-10. **Keep it local-first** - Prefer local solutions; cloud APIs are optional but supported.
-11. **Model selection** - The endpoint path determines the model provider (`/api/rag/{model_provider}/query`).
-12. **Tone normalization** - Always use `normalize_tone_label()` to ensure canonical tone labels (angry, confused, happy, frustrated, polite, urgent, neutral).
-13. **Error handling for sentiment** - Never fail sentiment detection; always return defaults (sentiment="unknown", tone="neutral") on error.
-14. **Dependency Injection** - Use `Depends(get_rag_service)` in API routes to inject the RAG service for better testability.
-15. **Modular Functions** - When adding new RAG functionality, create focused, single-purpose functions that can be composed together.
-16. **Authentication** - Use `Depends(get_current_user)` for protected endpoints, `Depends(get_current_user_optional)` for public endpoints with optional auth.
-17. **Role-Based Access Control** - Use `dependencies=[Depends(require_roles(["SuperAdmin", "HR"]))]` to restrict endpoints by role.
-18. **Bearer Tokens** - Authenticate with `Authorization: Bearer <jwt_token>` header.
+1. **Use this file as primary context** - All architecture and API details are here
+2. **Follow established patterns** - Use existing service structure and dependency injection
+3. **Enforce RBAC** - Always check user permissions for document access
+4. **Handle errors gracefully** - Use FastAPI `HTTPException` with proper status codes
+5. **Use type hints** - Include annotations for all parameters and returns
+6. **Import from config** - Use `app/config.py` for constants and settings
+7. **Maintain singleton patterns** - Use existing model loading utilities
+8. **Log security events** - Use structured logging for audit trails
+9. **Validate metadata** - Check sensitivity levels and department restrictions
+10. **Support multi-provider** - Ensure code works across all LLM providers
 
-**When modifying existing code:**
+**When debugging:**
+- Check RBAC filtering if documents aren't returned
+- Verify JWT token format and expiration
+- Ensure model files exist in correct directories
+- Check database initialization and seeding
+- Validate metadata format and sensitivity levels
 
-- Check `utility.py` and `config.py` first for existing utilities and configurations before creating new ones.
-- Update `APP_CONTEXT.md` if adding new major features or changing architecture.
-- Maintain backward compatibility with existing API endpoints.
+**When adding features:**
+- Update this context file with new functionality
+- Maintain backward compatibility with existing APIs
+- Add appropriate logging and error handling
+- Follow the established service layer pattern
+- Include comprehensive type hints and documentation
 
 ---
 
-**Last Updated**: 2025-11-26
+**Last Updated**: 2025-01-10
 
-## Recent Updates
-
-### 1. Code Quality Refactoring
-- Modularized functions in `rag_local_service.py` for better maintainability
-- Created dedicated functions: `retrieve_documents()`, `filter_documents_by_rbac()`, `inject_tone_guidance()`, `generate_rag_response()`
-- Implemented dependency injection pattern via `app/dependencies.py` for testability
-
-### 2. Authentication & Session Management
-- Migrated from API key to JWT token-based authentication
-- Session management now uses `session_id` embedded in JWT token (via `user_id`)
-- Login endpoint (`/api/auth/token`) returns user profile from `user_meta` table
-
-### 3. Document Parser Integration
-- Created `doc_parser` module in `app/utils/` for extensible document parsing
-- Supports Markdown, HTML, JSON, and plain text formats
-- Integrated into file upload endpoint (`/api/rag/add-file`) for automatic format detection
-
-### 4. Document Versioning System
-- Implemented comprehensive version tracking with SQLite database (`version_tracking.py`)
-- **Folder-Based Versioning**: Supports `data/{category}/v{version}/*.md` structure (e.g., `data/company/v1/policy.md`)
-- Auto-detection of versions from folder paths during seeding
-- All document additions now create version 1.0 automatically
-- Non-destructive updates create new versions (2.0, 3.0, etc.) while preserving history
-- New metadata fields: `document_id`, `version`, `version_created_at`, `version_created_by`, `parent_version`, `status`, `is_latest_version`
-- **Reorganized API Endpoints**:
-  - `POST /api/rag/documents/add` - Add document (JSON)
-  - `POST /api/rag/documents/add-file` - Add document (File)
-  - `POST /api/rag/documents/update` - Update document (creates new version)
-  - `POST /api/rag/documents/seed` - Seed from data folder
-  - `POST /api/rag/documents/clear` - Clear all documents
-  - `GET /api/rag/documents/list` - List documents with filtering
-  - `GET /api/rag/documents/{document_id}/versions` - Get version history
-  - `GET /api/rag/documents/{document_id}/versions/{version}` - Get specific version
-  - `GET /api/rag/documents/{document_id}/compare` - Compare two versions with diff
-  - `POST /api/rag/documents/{document_id}/archive` - Archive a version
-- Version comparison uses Python's `difflib` for unified diffs
-- Semantic versioning (1.0, 2.0, 3.0) with auto-increment
-- Version status support: draft, pending_approval, published, archived
-
-### 5. Enhanced RBAC (Role-Based Access Control)
-- **Metadata-Driven Access Control**: Documents use `.meta.json` companion files for permissions
-- **Sensitivity Levels**: `public_internal`, `department_confidential`, `role_confidential`, `highly_confidential`, `personal`
-- **Department Validation**: Enforces valid departments (HR, Finance, Engineering, IT, Legal, Executive, Admin, General)
-- **Role-Based Creation Restrictions**:
-  - Guest/Employee: Can only create `public_internal` documents
-  - Manager: Can create `public_internal` + `department_confidential`
-  - HR: Can create up to `personal` (except `highly_confidential`)
-  - SuperAdmin: Can create ANY sensitivity level
-- **Department Ownership**: Users can only update documents from their own department (unless SuperAdmin/HR)
-- **Metadata Validation**: Validates `sensitivity`, `department`, `allowed_roles`, and `owner_id` fields
-- **Pre-Response Filtering**: `filter_documents_by_rbac()` removes unauthorized content before LLM generation
-- **Public Summaries**: Shows fallback summaries when full content is restricted
-- **Comprehensive Audit Logging**:
-  - `RBAC_ACCESS_DENIED`: Retrieval attempts blocked by permissions
-  - `RBAC_UPDATE_DENIED`: Cross-department update attempts
-  - `METADATA_VALIDATION_FAILED`: Invalid metadata in creation attempts
-  - `DOCUMENT_CREATED`: Successful document creation with metadata
-  - `DOCUMENT_UPDATED`: Successful updates with version info
-  - `METADATA_CHANGE`: Sensitivity level changes
-  - `FILE_UPLOADED`: File upload tracking
-- **Seeding Enhancement**: `seed_from_file()` automatically loads metadata from `.meta.json` companion files
-- **Smart Versioning**: Automatically filters out older versions from search results if a newer version is accessible to the user (Version Deduplication)
-- **Cross-Department Overrides**: `department_confidential` documents can be shared with specific roles (e.g., Managers) from other departments via `allowed_roles`
-- **Expanded Role Support**: Added support for `Employee L1` and `Employee L2` roles
-
+This context file provides complete system understanding for any AI assistant to effectively work with the codebase, generate accurate code, and maintain system consistency.

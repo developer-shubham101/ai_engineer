@@ -156,13 +156,20 @@ class BaseRAGService(ABC):
 
         # Audit logging for blocked access attempts
         if filtered_out_count > 0:
-            logger.warning(
-                "RBAC_ACCESS_DENIED: user_id=%s role=%s dept=%s filtered_count=%d blocked_sources=%s",
-                requester.get("user_id", "anonymous") if requester else "anonymous",
-                requester.get("role", "none") if requester else "none",
-                requester.get("department", "none") if requester else "none",
-                filtered_out_count,
-                [d.get("source", "unknown")[:50] for d in filtered_details[:3]]
+            from app.logging_config import log_security_event
+            
+            user_id = requester.get("user_id", "anonymous") if requester else "anonymous"
+            user_role = requester.get("role", "none") if requester else "none"
+            user_dept = requester.get("department", "none") if requester else "none"
+            
+            blocked_sources = [d.get("source", "unknown")[:50] for d in filtered_details[:3]]
+            blocked_sensitivities = [d.get("sensitivity", "unknown") for d in filtered_details[:3]]
+            
+            log_security_event(
+                logger, "RBAC_ACCESS_DENIED", user_id,
+                role=user_role, department=user_dept, filtered_count=filtered_out_count,
+                blocked_sources=blocked_sources, blocked_sensitivities=blocked_sensitivities,
+                provider=self.__class__.__name__
             )
 
         # 2. Second Pass: Version Deduplication (Show only latest accessible version)
@@ -241,13 +248,17 @@ class BaseRAGService(ABC):
         Build highly optimized prompt with strict token budgeting.
         Prioritizes essential information and maintains conversation context.
         """
-        logger.info("PROMPT_OPTIMIZATION_START: session_id=%s query_len=%d max_prefix_tokens=%d", 
+        from app.logging_config import log_performance_metric
+        import time
+        start_time = time.time()
+        
+        logger.info("🛠️ PROMPT_OPTIMIZATION_START: session_id=%s query_len=%d max_prefix_tokens=%d", 
                    session_id, len(query_text or ""), max_prefix_tokens)
         
         # Get user context
         user_role = (requester or {}).get("role", "Guest")
         user_dept = (requester or {}).get("department", "General")
-        logger.debug("USER_CONTEXT: role=%s dept=%s", user_role, user_dept)
+        logger.debug("👤 USER_CONTEXT: role=%s dept=%s session=%s", user_role, user_dept, session_id or "none")
         
         # Get conversation context and tone
         chat_history = []
@@ -256,12 +267,12 @@ class BaseRAGService(ABC):
         if session_id:
             try:
                 chat_history = fetch_recent_messages(session_id, limit=2)  # Reduced for efficiency
-                logger.debug("CHAT_HISTORY: fetched %d messages", len(chat_history))
+                logger.debug("💬 CHAT_HISTORY: fetched %d messages for session=%s", len(chat_history), session_id)
                 # Find last user tone
                 for m in reversed(chat_history):
                     if m.get("speaker") == "user" and m.get("tone"):
                         last_user_tone = m["tone"]
-                        logger.debug("DETECTED_TONE: %s", last_user_tone)
+                        logger.debug("🎨 DETECTED_TONE: %s for session=%s", last_user_tone, session_id)
                         break
             except Exception as e:
                 logger.warning("History fetch failed: %s", e)
@@ -277,7 +288,7 @@ class BaseRAGService(ABC):
         if current_tokens + system_tokens <= max_prefix_tokens:
             prompt_parts.append(system_base)
             current_tokens += system_tokens
-            logger.debug("ADDED_SYSTEM: %s (%d tokens)", system_base, system_tokens)
+            logger.debug("⚙️ ADDED_SYSTEM: %s (%d tokens)", system_base, system_tokens)
         
         # 2. User context (ultra-compact)
         if user_role != "Guest" or user_dept != "General":
@@ -287,7 +298,7 @@ class BaseRAGService(ABC):
             if current_tokens + user_tokens <= max_prefix_tokens:
                 prompt_parts.append(user_context)
                 current_tokens += user_tokens
-                logger.debug("ADDED_USER_CONTEXT: %s (%d tokens)", user_context, user_tokens)
+                logger.debug("👤 ADDED_USER_CONTEXT: %s (%d tokens)", user_context, user_tokens)
         
         # 3. Critical profile info only (name/position if space allows)
         if profile and current_tokens < max_prefix_tokens - 10:  # Reserve 10 tokens
@@ -306,7 +317,7 @@ class BaseRAGService(ABC):
                 if current_tokens + profile_tokens <= max_prefix_tokens:
                     prompt_parts.append(profile_text)
                     current_tokens += profile_tokens
-                    logger.debug("ADDED_PROFILE: %s (%d tokens)", profile_text, profile_tokens)
+                    logger.debug("💼 ADDED_PROFILE: %s (%d tokens)", profile_text, profile_tokens)
         
         # 4. Tone guidance (compressed)
         if last_user_tone and current_tokens < max_prefix_tokens - 15:
@@ -318,7 +329,7 @@ class BaseRAGService(ABC):
             if current_tokens + tone_tokens <= max_prefix_tokens:
                 prompt_parts.append(tone_compressed)
                 current_tokens += tone_tokens
-                logger.debug("ADDED_TONE: %s (%d tokens)", tone_compressed, tone_tokens)
+                logger.debug("🎨 ADDED_TONE: %s (%d tokens)", tone_compressed, tone_tokens)
         
         # 5. Last exchange context (only if significant space remains)
         if chat_history and current_tokens < max_prefix_tokens - 20:
@@ -336,7 +347,7 @@ class BaseRAGService(ABC):
                         if current_tokens + context_tokens <= max_prefix_tokens:
                             prompt_parts.append(context_text)
                             current_tokens += context_tokens
-                            logger.debug("ADDED_CONTEXT: %s (%d tokens)", context_text, context_tokens)
+                            logger.debug("📝 ADDED_CONTEXT: %s (%d tokens)", context_text, context_tokens)
         
         # Build final optimized prefix
         if prompt_parts:
@@ -348,14 +359,27 @@ class BaseRAGService(ABC):
         final_tokens = estimate_tokens_from_text(optimized_prefix)
         efficiency = (final_tokens / max_prefix_tokens) * 100
         
-        logger.info("PROMPT_OPTIMIZATION_COMPLETE: prefix_len=%d tokens=%d/%d (%.1f%%) parts=%d", 
+        optimization_time = (time.time() - start_time) * 1000
+        
+        log_performance_metric(
+            logger, "PROMPT_OPTIMIZATION", optimization_time,
+            prefix_len=len(optimized_prefix), tokens_used=final_tokens, 
+            max_tokens=max_prefix_tokens, efficiency_pct=efficiency, 
+            parts_count=len(prompt_parts), session_id=session_id
+        )
+        
+        logger.info("✅ PROMPT_OPTIMIZATION_COMPLETE: prefix_len=%d tokens=%d/%d (%.1f%%) parts=%d", 
                    len(optimized_prefix), final_tokens, max_prefix_tokens, efficiency, len(prompt_parts))
         
         # Warning if still too large
         if final_tokens > max_prefix_tokens:
-            logger.warning("PREFIX_BUDGET_EXCEEDED: %d tokens > %d limit", final_tokens, max_prefix_tokens)
+            logger.warning("⚠️ PREFIX_BUDGET_EXCEEDED: %d tokens > %d limit (session=%s)", 
+                         final_tokens, max_prefix_tokens, session_id or "none")
         
-        logger.info("OPTIMIZED_PROMPT_PREFIX: %s", optimized_prefix)
+        log_sensitive_debug(
+            logger, "Final optimized prompt prefix", 
+            optimized_prefix=optimized_prefix, session_id=session_id
+        )
         return optimized_prefix
     
     def build_context_text(self, visible_docs: List[str]) -> str:
@@ -446,11 +470,24 @@ class BaseRAGService(ABC):
         Main RAG query method that orchestrates the common flow.
         Uses the template method pattern - calls abstract generate_response method.
         """
-        logger.info(
-            "RAG_QUERY_START: query_len=%d n_results=%d use_llm=%s max_tokens=%d session_id=%s user=%s",
-            len(query_text or ""), n_results, use_llm, max_tokens, session_id, (requester or {}).get("user_id", "anonymous")
+        from app.logging_config import log_user_action, log_sensitive_debug
+        
+        user_id = (requester or {}).get("user_id", "anonymous")
+        user_role = (requester or {}).get("role", "none")
+        user_dept = (requester or {}).get("department", "none")
+        
+        log_user_action(
+            logger, "RAG_QUERY_START", user_id,
+            query_len=len(query_text or ""), n_results=n_results, use_llm=use_llm, 
+            max_tokens=max_tokens, session_id=session_id, role=user_role, department=user_dept,
+            provider=self.__class__.__name__
         )
-        logger.debug("RAG_QUERY_TEXT: %s", query_text)
+        
+        # Log sensitive debug info (remove in production)
+        log_sensitive_debug(
+            logger, "RAG query details", 
+            query_text=query_text, user_context=requester
+        )
 
         if not query_text:
             raise ValueError("query_text must be provided")
@@ -505,20 +542,28 @@ class BaseRAGService(ABC):
         # Estimate total tokens before LLM call
         total_input_tokens = estimate_tokens_from_text(final_prefix + (context_text or "") + query_text)
         
-        logger.info(
-            "LLM_QUERY_DEBUG: user=%s provider=%s query_len=%d context_len=%d prefix_len=%d total_input_tokens_est=%d",
-            (requester or {}).get("user_id", "anonymous"),
-            self.__class__.__name__,
-            query_len,
-            context_len,
-            prefix_len,
-            total_input_tokens
+        from app.logging_config import log_llm_interaction, log_sensitive_debug
+        
+        user_id = (requester or {}).get("user_id", "anonymous")
+        provider_name = self.__class__.__name__
+        
+        log_llm_interaction(
+            logger, provider_name, total_input_tokens, 0,  # response tokens unknown yet
+            user_id=user_id, query_len=query_len, context_len=context_len, 
+            prefix_len=prefix_len, session_id=session_id
         )
         
-        # Log components separately for debugging
-        logger.info("LLM_FINAL_PREFIX: %s", final_prefix)
-        logger.info("LLM_CONTEXT_TEXT: %s", context_text or "[NO_CONTEXT]")
-        logger.info("LLM_QUERY_TEXT: %s", query_text)
+        logger.info(
+            "🤖 LLM_QUERY_DEBUG: user=%s provider=%s query_len=%d context_len=%d prefix_len=%d total_input_tokens_est=%d",
+            user_id, provider_name, query_len, context_len, prefix_len, total_input_tokens
+        )
+        
+        # Log components separately for debugging (sensitive data)
+        log_sensitive_debug(
+            logger, "LLM prompt components",
+            final_prefix=final_prefix, context_text=context_text or "[NO_CONTEXT]", 
+            query_text=query_text, provider=provider_name
+        )
         
         # Log token efficiency metrics
         if context_len > 0:
@@ -527,8 +572,9 @@ class BaseRAGService(ABC):
             query_tokens = estimate_tokens_from_text(query_text)
             
             logger.info(
-                "TOKEN_BREAKDOWN: prefix=%d context=%d query=%d total=%d max_gen=%d",
-                prefix_tokens, context_tokens, query_tokens, total_input_tokens, max_tokens
+                "📊 TOKEN_BREAKDOWN: prefix=%d context=%d query=%d total=%d max_gen=%d efficiency=%.2f%%",
+                prefix_tokens, context_tokens, query_tokens, total_input_tokens, max_tokens,
+                (context_tokens / max(total_input_tokens, 1)) * 100
             )
         
         answer = await self.generate_response(

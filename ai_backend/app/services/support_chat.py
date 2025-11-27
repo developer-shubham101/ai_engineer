@@ -120,7 +120,11 @@ def create_session(session_id: Optional[str], role: Optional[str], department: O
         """, (sid, role, department, timestamp, timestamp))
         conn.commit()
 
-    logger.info("Created support session %s (role=%s dept=%s)", sid, role, department)
+    from app.logging_config import log_user_action
+    log_user_action(
+        logger, "SUPPORT_SESSION_CREATED", "system",
+        session_id=sid, role=role, department=department
+    )
     return sid
 
 
@@ -150,7 +154,11 @@ def end_session(session_id: str) -> None:
             raise ValueError(f"Session '{session_id}' not found.")
         conn.commit()
 
-    logger.info("Ended support session %s", session_id)
+    from app.logging_config import log_user_action
+    log_user_action(
+        logger, "SUPPORT_SESSION_ENDED", "system",
+        session_id=session_id
+    )
 
 
 def session_exists(session_id: str) -> bool:
@@ -192,7 +200,11 @@ def store_message(session_id: str, speaker: str, content: str) -> int:
                 meta_json = json.dumps(res.get("proba", {"sentiment": {"unknown": 1.0}, "tone": {"neutral": 1.0}}))
             except Exception as e:
                 # Never fail storing a message due to classifier errors; use defaults
-                logger.warning("Sentiment classification failed for message_id=%s: %s. Using defaults.", message_id, e)
+                from app.logging_config import log_security_event
+                log_security_event(
+                    logger, "SENTIMENT_CLASSIFICATION_FAILED", "system",
+                    message_id=message_id, error=str(e), session_id=session_id
+                )
 
             # Always update with sentiment/tone/metadata (even if defaults)
             try:
@@ -202,7 +214,11 @@ def store_message(session_id: str, speaker: str, content: str) -> int:
                     WHERE id=?
                 """, (sentiment, tone, meta_json, message_id))
             except Exception as e:
-                logger.warning("Failed to update sentiment metadata for message_id=%s: %s", message_id, e)
+                from app.logging_config import log_security_event
+                log_security_event(
+                    logger, "SENTIMENT_METADATA_UPDATE_FAILED", "system",
+                    message_id=message_id, error=str(e), session_id=session_id
+                )
 
         conn.commit()
         return message_id

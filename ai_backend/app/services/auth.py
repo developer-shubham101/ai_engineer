@@ -40,7 +40,25 @@ def create_access_token(user_data: Dict[str, Any], session_id: Optional[str] = N
     # Encode token
     token = jwt.encode(payload, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
     
-    logger.info(f"Created access token for user: {user_data.get('username')} (expires in {JWT_EXPIRATION_DAYS} days)")
+    from app.logging_config import log_user_action, log_sensitive_debug
+    
+    username = user_data.get('username')
+    user_id = user_data.get('user_id')
+    role = user_data.get('role')
+    
+    log_user_action(
+        logger, "TOKEN_CREATED", user_id,
+        username=username, role=role, expires_days=JWT_EXPIRATION_DAYS,
+        session_id=session_id
+    )
+    
+    # Log sensitive token info for debugging (remove in production)
+    log_sensitive_debug(
+        logger, "JWT token created",
+        token_preview=token[:20] + "...", payload_keys=list(payload.keys()),
+        user_data=user_data
+    )
+    
     return token
 
 
@@ -59,8 +77,10 @@ def verify_token(token: str) -> Optional[Dict[str, Any]]:
         payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
         return payload
     except jwt.ExpiredSignatureError:
-        logger.warning("Token has expired")
+        from app.logging_config import log_security_event
+        log_security_event(logger, "TOKEN_EXPIRED", token_preview=token[:20] + "...")
         return None
     except jwt.InvalidTokenError as e:
-        logger.warning(f"Invalid token: {e}")
+        from app.logging_config import log_security_event
+        log_security_event(logger, "INVALID_TOKEN", error=str(e), token_preview=token[:20] + "...")
         return None

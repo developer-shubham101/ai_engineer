@@ -210,8 +210,19 @@ async def add_document_to_rag_local(
 
     metadatas = [dict(sanitized_base) for _ in chunks]
     ids = _generate_ids(prefix=f"{document_id}_v{version}", n=len(chunks))
-    logger.info("Preparing to add document to RAG: source=%s document_id=%s version=%s chunks=%d ids_sample=%s", 
-                source_name, document_id, version, len(chunks), ids[:3])
+    from app.logging_config import log_user_action, log_sensitive_debug
+    
+    log_user_action(
+        logger, "DOCUMENT_INGESTION_START", created_by,
+        source_name=source_name, document_id=document_id, version=version,
+        chunk_count=len(chunks), status=status, has_parent=bool(parent_version)
+    )
+    
+    log_sensitive_debug(
+        logger, "Document ingestion details",
+        ids_sample=ids[:3], metadata_keys=list(sanitized_base.keys()),
+        chunk_lengths=[len(c) for c in chunks[:3]]
+    )
 
     # compute embeddings locally
     try:
@@ -226,8 +237,13 @@ async def add_document_to_rag_local(
                                                   collection_name=DEFAULT_COLLECTION_NAME)
         add_documents_to_collection(collection=collection, documents=chunks, metadatas=metadatas, ids=ids,
                                     embeddings=embeddings)
-        logger.info("Added %d chunks for source %s (document_id=%s version=%s) to collection %s", 
-                   len(chunks), source_name, document_id, version, DEFAULT_COLLECTION_NAME)
+        from app.logging_config import log_performance_metric
+        
+        log_user_action(
+            logger, "DOCUMENT_INGESTION_SUCCESS", created_by,
+            source_name=source_name, document_id=document_id, version=version,
+            chunk_count=len(chunks), collection=DEFAULT_COLLECTION_NAME
+        )
     except Exception as e:
         logger.exception("Failed to add documents to Chroma collection: %s", e)
         raise
@@ -245,7 +261,7 @@ async def add_document_to_rag_local(
             version_notes=version_notes,
             metadata=sanitized_base
         )
-        logger.info("Created version record: document_id=%s version=%s", document_id, version)
+        logger.info("📝 Created version record: document_id=%s version=%s", document_id, version)
     except Exception as e:
         logger.warning("Failed to create version record (non-fatal): %s", e)
 
@@ -258,7 +274,7 @@ async def add_document_to_rag_local(
                 prev_chunk_ids = prev_version_info["chunk_ids"]
                 update_metadatas(collection=collection, ids=prev_chunk_ids, 
                                metadata={"is_latest_version": False})
-                logger.info("Marked previous version %s as not latest", parent_version)
+                logger.info("🔄 Marked previous version %s as not latest", parent_version)
         except Exception as e:
             logger.warning("Failed to update previous version metadata (non-fatal): %s", e)
 
@@ -316,7 +332,12 @@ async def update_document_version(
         created_by=requester_id
     )
     
-    logger.info("Updated document %s from version %s to %s", document_id, parent_version, next_version)
+    from app.logging_config import log_user_action
+    log_user_action(
+        logger, "DOCUMENT_VERSION_UPDATE", requester_id,
+        document_id=document_id, old_version=parent_version, new_version=next_version,
+        status=status, has_notes=bool(version_notes)
+    )
     return result
 
 
@@ -510,7 +531,11 @@ async def archive_document_version(
         update_metadatas(collection=collection, ids=chunk_ids, 
                         metadata={"status": "archived", "is_latest_version": False})
         
-        logger.info("Archived document version: %s v%s", document_id, version)
+        from app.logging_config import log_user_action
+        log_user_action(
+            logger, "DOCUMENT_VERSION_ARCHIVED", "system",
+            document_id=document_id, version=version
+        )
         return True
     except Exception as e:
         logger.exception("Failed to archive document version: %s", e)
@@ -541,10 +566,18 @@ class LocalRAGService(BaseRAGService):
         if ENABLE_DYNAMIC_MODEL_SELECTION:
             task = "reason"
             model_key = choose_model_for_task(task)
-            logger.info("Model chosen=%s for task=%s (dynamic selection enabled)", model_key, task)
+            from app.logging_config import log_user_action
+            log_user_action(
+                logger, "MODEL_SELECTION_DYNAMIC", "system",
+                chosen_model=model_key, task=task, selection_mode="dynamic"
+            )
         else:
             model_key = "default"
-            logger.info("Using default model: %s", DEFAULT_MODEL_NAME)
+            from app.logging_config import log_user_action
+            log_user_action(
+                logger, "MODEL_SELECTION_DEFAULT", "system",
+                default_model=DEFAULT_MODEL_NAME, selection_mode="static"
+            )
 
         try:
             llm_instance = get_llm_instance(model_key)
@@ -570,24 +603,42 @@ class LocalRAGService(BaseRAGService):
             prefix_tokens = estimate_tokens_from_text(final_prefix)
             query_tokens = estimate_tokens_from_text(query_text)
             
-            logger.info("LOCAL_LLM_REQUEST: prompt_len=%d prompt_tokens=%d max_tokens=%d session=%s", 
-                       len(prompt), prompt_tokens, max_tokens, session_id or "none")
+            from app.logging_config import log_llm_interaction, log_performance_metric
+            import time
+            llm_start_time = time.time()
             
-            logger.info("LOCAL_PROMPT_METRICS: prefix_tokens=%d context_tokens=%d query_tokens=%d total_tokens=%d",
+            log_llm_interaction(
+                logger, "LOCAL_MISTRAL", prompt_tokens, 0,  # response tokens unknown yet
+                model_key=model_key, prompt_len=len(prompt), max_tokens=max_tokens,
+                session_id=session_id or "none"
+            )
+            
+            logger.info("📊 LOCAL_PROMPT_METRICS: prefix_tokens=%d context_tokens=%d query_tokens=%d total_tokens=%d",
                        prefix_tokens, context_tokens, query_tokens, prompt_tokens)
             
-            logger.info("LOCAL_PROMPT_COMPONENTS:")
-            logger.info("  - FINAL_PREFIX (%d chars): %s", len(final_prefix), final_prefix)
-            logger.info("  - CONTEXT_TEXT (%d chars): %s", len(context_text or ""), context_text or "[NO_CONTEXT]")
-            logger.info("  - QUERY_TEXT (%d chars): %s", len(query_text), query_text)
+            from app.logging_config import log_sensitive_debug
+            log_sensitive_debug(
+                logger, "Local LLM prompt components",
+                final_prefix=final_prefix, context_text=context_text or "[NO_CONTEXT]",
+                query_text=query_text, model_key=model_key
+            )
             
-            logger.info("LOCAL_FULL_PROMPT (%d chars, %d tokens): %s", len(prompt), prompt_tokens, prompt)
+            log_sensitive_debug(
+                logger, "Local LLM full prompt",
+                full_prompt=prompt, prompt_len=len(prompt), prompt_tokens=prompt_tokens
+            )
             
             # Check if prompt might exceed context window
             estimated_total = prompt_tokens + max_tokens
-            if estimated_total > 2048:  # Common context window size
-                logger.warning("POTENTIAL_CONTEXT_OVERFLOW: estimated_total=%d (prompt=%d + gen=%d) > 2048",
-                             estimated_total, prompt_tokens, max_tokens)
+            context_window_limit = 2048  # Common context window size
+            if estimated_total > context_window_limit:
+                from app.logging_config import log_security_event
+                log_security_event(
+                    logger, "POTENTIAL_CONTEXT_OVERFLOW", "system",
+                    estimated_total=estimated_total, prompt_tokens=prompt_tokens,
+                    max_tokens=max_tokens, context_limit=context_window_limit,
+                    model_key=model_key, session_id=session_id
+                )
             
             answer = await _call_llm_with_retry(
                 llm_instance,
@@ -599,14 +650,32 @@ class LocalRAGService(BaseRAGService):
             response_len = len(answer or "")
             response_tokens = estimate_tokens_from_text(answer or "")
             
-            logger.info("LOCAL_LLM_RESPONSE: response_len=%d response_tokens=%d session=%s", 
-                       response_len, response_tokens, session_id or "none")
-            logger.info("LOCAL_RESPONSE_TEXT: %s", answer or "")
+            llm_duration = (time.time() - llm_start_time) * 1000
+            
+            log_llm_interaction(
+                logger, "LOCAL_MISTRAL", prompt_tokens, response_tokens,
+                model_key=model_key, response_len=response_len, 
+                duration_ms=llm_duration, session_id=session_id or "none"
+            )
+            
+            log_performance_metric(
+                logger, "LOCAL_LLM_GENERATION", llm_duration,
+                model_key=model_key, prompt_tokens=prompt_tokens, 
+                response_tokens=response_tokens, session_id=session_id
+            )
+            
+            log_sensitive_debug(
+                logger, "Local LLM response",
+                response_text=answer or "", response_len=response_len,
+                response_tokens=response_tokens
+            )
             
             # Log efficiency metrics
             efficiency_ratio = response_tokens / max(prompt_tokens, 1)
-            logger.info("LOCAL_EFFICIENCY_METRICS: input_tokens=%d output_tokens=%d efficiency_ratio=%.2f",
-                       prompt_tokens, response_tokens, efficiency_ratio)
+            tokens_per_second = response_tokens / max(llm_duration / 1000, 0.001)
+            
+            logger.info("⚡ LOCAL_EFFICIENCY_METRICS: input_tokens=%d output_tokens=%d efficiency_ratio=%.2f tokens_per_sec=%.1f",
+                       prompt_tokens, response_tokens, efficiency_ratio, tokens_per_second)
         except Exception as e:
             logger.exception("LLM call failed: %s", e)
             raise
@@ -795,8 +864,13 @@ async def seed_from_file(file_path: Optional[str] = None, source_name: Optional[
                             
                             if result and result.get("ids"):
                                 added_ids.extend(result["ids"])
-                                logger.info("Seeded %s -> v%s (%d chunks, document_id=%s, parent=%s)", 
-                                          file_path.name, version_str, result["chunk_count"], document_id, parent_version)
+                                from app.logging_config import log_user_action
+                            log_user_action(
+                                logger, "SEED_FILE_PROCESSED", "system_seed",
+                                filename=file_path.name, version=version_str, 
+                                chunk_count=result["chunk_count"], document_id=document_id,
+                                parent_version=parent_version, category=category
+                            )
                                 
                             # Update the map so the next version knows this is the parent
                             latest_versions_map[doc_base_name] = version_str
@@ -818,7 +892,12 @@ async def seed_from_file(file_path: Optional[str] = None, source_name: Optional[
                                                                metadata={"seeded": True})
                         if result and result.get("ids"):
                             added_ids.extend(result["ids"])
-                            logger.info("Seeded file %s -> %d chunks (v%s)", child.name, result["chunk_count"], result["version"])
+                            from app.logging_config import log_user_action
+                            log_user_action(
+                                logger, "SEED_FILE_LEGACY", "system_seed",
+                                filename=child.name, chunk_count=result["chunk_count"],
+                                version=result["version"]
+                            )
                     except Exception as e:
                         logger.exception("Failed to seed file %s: %s", child, e)
                         continue
@@ -836,7 +915,12 @@ async def seed_from_file(file_path: Optional[str] = None, source_name: Optional[
         result = await add_document_to_rag_local(source_name=name, text=text, chunks=None, metadata={"seeded": True})
         if result and result.get("ids"):
             added_ids.extend(result["ids"])
-            logger.info("Seeded file %s -> %d chunks (v%s)", path.name, result["chunk_count"], result["version"])
+            from app.logging_config import log_user_action
+            log_user_action(
+                logger, "SEED_SINGLE_FILE", "system_seed",
+                filename=path.name, chunk_count=result["chunk_count"],
+                version=result["version"]
+            )
     except Exception as e:
         logger.exception("Failed to seed file %s: %s", path, e)
 

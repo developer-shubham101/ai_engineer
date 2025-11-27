@@ -57,18 +57,60 @@ class GPTRAGService(BaseRAGService):
         prompt = build_prompt_with_selected_chunks(final_prefix, context_text, query_text)
 
         try:
+            from app.logging_config import log_llm_interaction, log_sensitive_debug, log_performance_metric
+            from app.services.prompt_builder import estimate_tokens_from_text
+            import time
+            
+            gpt_start_time = time.time()
+            
+            # Estimate tokens for logging
+            system_tokens = estimate_tokens_from_text(final_prefix)
+            user_content = f"Context:\n{context_text}\n\nQuestion: {query_text}"
+            user_tokens = estimate_tokens_from_text(user_content)
+            total_prompt_tokens = system_tokens + user_tokens
+            
+            log_llm_interaction(
+                logger, "OPENAI_GPT", total_prompt_tokens, 0,  # response tokens unknown yet
+                model=self.model_name, max_tokens=max_tokens, session_id=session_id or "none"
+            )
+            
+            log_sensitive_debug(
+                logger, "GPT LLM request",
+                system_content=final_prefix, user_content=user_content,
+                model=self.model_name
+            )
+            
             response = await openai.ChatCompletion.acreate(
                 model=self.model_name,
                 messages=[
                     {"role": "system", "content": final_prefix},
-                    {"role": "user", "content": f"Context:\n{context_text}\n\nQuestion: {query_text}"}
+                    {"role": "user", "content": user_content}
                 ],
                 max_tokens=max_tokens,
                 temperature=0.0
             )
             
             answer = response.choices[0].message.content
-            logger.info("GPT returned answer (length=%d) for session=%s", len(answer), session_id)
+            gpt_duration = (time.time() - gpt_start_time) * 1000
+            response_tokens = estimate_tokens_from_text(answer)
+            
+            log_llm_interaction(
+                logger, "OPENAI_GPT", total_prompt_tokens, response_tokens,
+                model=self.model_name, response_len=len(answer), 
+                duration_ms=gpt_duration, session_id=session_id or "none"
+            )
+            
+            log_performance_metric(
+                logger, "GPT_LLM_GENERATION", gpt_duration,
+                model=self.model_name, prompt_tokens=total_prompt_tokens,
+                response_tokens=response_tokens, session_id=session_id
+            )
+            
+            log_sensitive_debug(
+                logger, "GPT LLM response",
+                response_text=answer, response_len=len(answer)
+            )
+            
             return answer
             
         except Exception as e:
