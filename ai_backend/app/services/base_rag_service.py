@@ -420,10 +420,10 @@ class BaseRAGService(ABC):
             len(context_text or ""),
             len(final_prefix)
         )
-        logger.debug(
+        logger.info(
             "LLM_FINAL_PROMPT: %s\n\nCONTEXT: %s\n\nQUERY: %s",
-            final_prefix[:500] + "..." if len(final_prefix) > 500 else final_prefix,
-            context_text[:300] + "..." if len(context_text or "") > 300 else context_text,
+            final_prefix,
+            context_text or "",
             query_text
         )
         

@@ -178,13 +178,13 @@ class GoogleRAGService(BaseRAGService):
 
         try:
             logger.info("GOOGLE_LLM_REQUEST: prompt_len=%d session=%s", len(prompt), session_id or "none")
-            logger.debug("GOOGLE_FULL_PROMPT: %s", prompt[:1000] + "..." if len(prompt) > 1000 else prompt)
+            logger.info("GOOGLE_FULL_PROMPT: %s", prompt)
             
             answer = google_llm.invoke(prompt)
             answer_content = answer.content if answer and hasattr(answer, 'content') else str(answer)
             
             logger.info("GOOGLE_LLM_RESPONSE: response_len=%d session=%s", len(answer_content), session_id or "none")
-            logger.debug("GOOGLE_RESPONSE_TEXT: %s", answer_content[:500] + "..." if len(answer_content) > 500 else answer_content)
+            logger.info("GOOGLE_RESPONSE_TEXT: %s", answer_content)
             
             return answer_content
         except Exception as e:

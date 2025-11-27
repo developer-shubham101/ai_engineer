@@ -274,7 +274,8 @@ curl -X POST "/api/rag/hf/query" -d '{"question": "What is our policy?", "use_ll
 - `RAG_QUERY_START` / `LLM_QUERY_DEBUG` - Query tracking
 - `GOOGLE_LLM_REQUEST` / `GOOGLE_LLM_RESPONSE` - Google Gemini debug
 - `LOCAL_LLM_REQUEST` / `LOCAL_LLM_RESPONSE` - Local model debug
-- Full prompt and response logging (truncated for readability)
+- `LLM_FINAL_PROMPT` / `GOOGLE_FULL_PROMPT` / `LOCAL_FULL_PROMPT` - **Complete prompts** (full text)
+- `GOOGLE_RESPONSE_TEXT` / `LOCAL_RESPONSE_TEXT` - **Complete responses** (full text)
 
 **Usage Examples**:
 ```bash
