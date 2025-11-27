@@ -234,85 +234,126 @@ class BaseRAGService(ABC):
         llm_prompt_prefix: Optional[str],
         query_text: str,
         requester: Optional[Dict[str, str]],
-        profile: Optional[Dict[str, str]] = None
+        profile: Optional[Dict[str, str]] = None,
+        max_prefix_tokens: int = 80  # Token budget for system prefix
     ) -> str:
         """
-        Build optimized prompt with personalization and tone guidance.
-        Avoids duplication and creates a clean, token-efficient structure.
+        Build highly optimized prompt with strict token budgeting.
+        Prioritizes essential information and maintains conversation context.
         """
+        logger.info("PROMPT_OPTIMIZATION_START: session_id=%s query_len=%d max_prefix_tokens=%d", 
+                   session_id, len(query_text or ""), max_prefix_tokens)
+        
         # Get user context
         user_role = (requester or {}).get("role", "Guest")
         user_dept = (requester or {}).get("department", "General")
+        logger.debug("USER_CONTEXT: role=%s dept=%s", user_role, user_dept)
         
-        # Get recent conversation history (limit to 4 for last exchange + tone)
+        # Get conversation context and tone
         chat_history = []
         last_user_tone = None
         
         if session_id:
             try:
-                chat_history = fetch_recent_messages(session_id, limit=4)
-                # Find last user tone from recent messages only
+                chat_history = fetch_recent_messages(session_id, limit=2)  # Reduced for efficiency
+                logger.debug("CHAT_HISTORY: fetched %d messages", len(chat_history))
+                # Find last user tone
                 for m in reversed(chat_history):
                     if m.get("speaker") == "user" and m.get("tone"):
                         last_user_tone = m["tone"]
+                        logger.debug("DETECTED_TONE: %s", last_user_tone)
                         break
             except Exception as e:
                 logger.warning("History fetch failed: %s", e)
 
-        # Build optimized prompt structure
+        # Build ultra-compact prompt with token budgeting
         prompt_parts = []
+        current_tokens = 0
         
-        # 1. System role and instructions (clean, no duplication)
-        category = "General"  # Default category
-        if llm_prompt_prefix and "support assistant" in llm_prompt_prefix:
-            # Extract category from existing prefix if available
-            import re
-            match = re.search(r"You are a (\w+) support assistant", llm_prompt_prefix)
-            if match:
-                category = match.group(1)
+        # 1. Essential system instruction (compressed)
+        system_base = "Assistant for Saarthi Infotech"
+        system_tokens = estimate_tokens_from_text(system_base)
         
-        prompt_parts.append(f"You are a {category} support assistant for Saarthi Infotech.")
+        if current_tokens + system_tokens <= max_prefix_tokens:
+            prompt_parts.append(system_base)
+            current_tokens += system_tokens
+            logger.debug("ADDED_SYSTEM: %s (%d tokens)", system_base, system_tokens)
         
-        # 2. User context (concise)
-        prompt_parts.append(f"User: {user_role} in {user_dept} department")
+        # 2. User context (ultra-compact)
+        if user_role != "Guest" or user_dept != "General":
+            user_context = f"{user_role}/{user_dept}"
+            user_tokens = estimate_tokens_from_text(user_context)
+            
+            if current_tokens + user_tokens <= max_prefix_tokens:
+                prompt_parts.append(user_context)
+                current_tokens += user_tokens
+                logger.debug("ADDED_USER_CONTEXT: %s (%d tokens)", user_context, user_tokens)
         
-        # 3. User profile (if available, keep concise)
-        if profile:
+        # 3. Critical profile info only (name/position if space allows)
+        if profile and current_tokens < max_prefix_tokens - 10:  # Reserve 10 tokens
             profile_items = []
-            for key, value in profile.items():
-                if key in ['name', 'location', 'position'] and value:  # Only include key fields
-                    profile_items.append(f"{key}: {value}")
+            
+            # Prioritize name and position only
+            if profile.get('name'):
+                profile_items.append(profile['name'])
+            if profile.get('position') and len(profile_items) == 0:  # Only if no name
+                profile_items.append(profile['position'])
+            
             if profile_items:
-                prompt_parts.append(f"Profile: {', '.join(profile_items)}")
-        
-        # 4. Tone guidance (single, clean instruction)
-        if last_user_tone:
-            tone_guidance = build_tone_guidance(last_user_tone)
-            prompt_parts.append(f"Tone: {tone_guidance}")
-        
-        # 5. Recent conversation context (last exchange for continuity)
-        if chat_history and len(chat_history) >= 2:
-            # Include last user-assistant exchange for context
-            recent_msgs = chat_history[-2:]  # Last 2 messages (user + assistant)
-            if len(recent_msgs) == 2:
-                user_msg = recent_msgs[0] if recent_msgs[0].get("speaker") == "user" else recent_msgs[1]
-                assistant_msg = recent_msgs[1] if recent_msgs[1].get("speaker") == "assistant" else recent_msgs[0]
+                profile_text = profile_items[0]  # Take only the first item
+                profile_tokens = estimate_tokens_from_text(profile_text)
                 
-                if user_msg and assistant_msg:
-                    user_content = user_msg.get('content', '')[:80]
-                    assistant_content = assistant_msg.get('content', '')[:80]
-                    prompt_parts.append(f"Last exchange - User: {user_content} | Assistant: {assistant_content}")
-        elif chat_history and len(chat_history) == 1:
-            # Only one message available
-            last_msg = chat_history[0]
-            if last_msg.get("speaker") == "user":
-                prompt_parts.append(f"Previous: {last_msg.get('content', '')[:80]}")
+                if current_tokens + profile_tokens <= max_prefix_tokens:
+                    prompt_parts.append(profile_text)
+                    current_tokens += profile_tokens
+                    logger.debug("ADDED_PROFILE: %s (%d tokens)", profile_text, profile_tokens)
         
-        # 6. Instructions
-        prompt_parts.append("Instructions: Use the provided context to answer questions. Be helpful and accurate. If information isn't in the context, say so clearly.")
+        # 4. Tone guidance (compressed)
+        if last_user_tone and current_tokens < max_prefix_tokens - 15:
+            tone_guidance = build_tone_guidance(last_user_tone)
+            # Compress tone guidance to essential words only
+            tone_compressed = tone_guidance.split('.')[0]  # Take first sentence only
+            tone_tokens = estimate_tokens_from_text(tone_compressed)
+            
+            if current_tokens + tone_tokens <= max_prefix_tokens:
+                prompt_parts.append(tone_compressed)
+                current_tokens += tone_tokens
+                logger.debug("ADDED_TONE: %s (%d tokens)", tone_compressed, tone_tokens)
         
-        # Join with clean separators
-        optimized_prefix = "\n".join(prompt_parts)
+        # 5. Last exchange context (only if significant space remains)
+        if chat_history and current_tokens < max_prefix_tokens - 20:
+            if len(chat_history) >= 2:
+                recent_msgs = chat_history[-2:]
+                user_msg = next((m for m in recent_msgs if m.get("speaker") == "user"), None)
+                
+                if user_msg:
+                    # Ultra-compressed context
+                    prev_content = user_msg.get('content', '')[:30]  # Very short
+                    if prev_content and prev_content != query_text[:30]:  # Avoid duplication
+                        context_text = f"Prev: {prev_content}"
+                        context_tokens = estimate_tokens_from_text(context_text)
+                        
+                        if current_tokens + context_tokens <= max_prefix_tokens:
+                            prompt_parts.append(context_text)
+                            current_tokens += context_tokens
+                            logger.debug("ADDED_CONTEXT: %s (%d tokens)", context_text, context_tokens)
+        
+        # Build final optimized prefix
+        if prompt_parts:
+            optimized_prefix = " | ".join(prompt_parts)  # Use compact separator
+        else:
+            optimized_prefix = "Assistant"  # Fallback minimal prefix
+        
+        # Calculate final metrics
+        final_tokens = estimate_tokens_from_text(optimized_prefix)
+        efficiency = (final_tokens / max_prefix_tokens) * 100
+        
+        logger.info("PROMPT_OPTIMIZATION_COMPLETE: prefix_len=%d tokens=%d/%d (%.1f%%) parts=%d", 
+                   len(optimized_prefix), final_tokens, max_prefix_tokens, efficiency, len(prompt_parts))
+        
+        # Warning if still too large
+        if final_tokens > max_prefix_tokens:
+            logger.warning("PREFIX_BUDGET_EXCEEDED: %d tokens > %d limit", final_tokens, max_prefix_tokens)
         
         logger.info("OPTIMIZED_PROMPT_PREFIX: %s", optimized_prefix)
         return optimized_prefix
@@ -456,27 +497,39 @@ class BaseRAGService(ABC):
         )
 
         # 5. Generate (provider-specific)
-        # DEBUG: Log final query sent to LLM
+        # DEBUG: Log final query components sent to LLM
+        context_len = len(context_text or "")
+        prefix_len = len(final_prefix)
+        query_len = len(query_text)
+        
+        # Estimate total tokens before LLM call
+        total_input_tokens = estimate_tokens_from_text(final_prefix + (context_text or "") + query_text)
+        
         logger.info(
-            "LLM_QUERY_DEBUG: user=%s provider=%s query_len=%d context_len=%d prefix_len=%d",
+            "LLM_QUERY_DEBUG: user=%s provider=%s query_len=%d context_len=%d prefix_len=%d total_input_tokens_est=%d",
             (requester or {}).get("user_id", "anonymous"),
             self.__class__.__name__,
-            len(query_text),
-            len(context_text or ""),
-            len(final_prefix)
+            query_len,
+            context_len,
+            prefix_len,
+            total_input_tokens
         )
-        logger.info(
-            "LLM_FINAL_PREFIX: %s",
-            final_prefix
-        )
-        logger.info(
-            "LLM_CONTEXT_TEXT: %s",
-            context_text or "[NO_CONTEXT]"
-        )
-        logger.info(
-            "LLM_QUERY_TEXT: %s",
-            query_text
-        )
+        
+        # Log components separately for debugging
+        logger.info("LLM_FINAL_PREFIX: %s", final_prefix)
+        logger.info("LLM_CONTEXT_TEXT: %s", context_text or "[NO_CONTEXT]")
+        logger.info("LLM_QUERY_TEXT: %s", query_text)
+        
+        # Log token efficiency metrics
+        if context_len > 0:
+            context_tokens = estimate_tokens_from_text(context_text)
+            prefix_tokens = estimate_tokens_from_text(final_prefix)
+            query_tokens = estimate_tokens_from_text(query_text)
+            
+            logger.info(
+                "TOKEN_BREAKDOWN: prefix=%d context=%d query=%d total=%d max_gen=%d",
+                prefix_tokens, context_tokens, query_tokens, total_input_tokens, max_tokens
+            )
         
         answer = await self.generate_response(
             query_text, context_text, final_prefix, use_llm, max_tokens, session_id

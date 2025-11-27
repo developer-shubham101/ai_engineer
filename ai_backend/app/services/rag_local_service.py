@@ -552,16 +552,42 @@ class LocalRAGService(BaseRAGService):
             logger.exception("Failed to load LLM instance: %s", e)
             raise
 
-        prompt = build_prompt_with_selected_chunks(final_prefix, context_text, query_text)
+        # Calculate available tokens for prompt (reserve tokens for generation)
+        max_prompt_tokens = 2048 - max_tokens - 50  # 50 token safety margin
+        
+        prompt = build_prompt_with_selected_chunks(
+            prefix=final_prefix,
+            context_text=context_text,
+            question=query_text,
+            max_total_tokens=max_prompt_tokens,
+            context_priority=0.65  # Allocate 65% to context, 35% to system/question
+        )
 
         try:
-            logger.info("LOCAL_LLM_REQUEST: prompt_len=%d max_tokens=%d session=%s", 
-                       len(prompt), max_tokens, session_id or "none")
+            # Calculate prompt metrics
+            prompt_tokens = estimate_tokens_from_text(prompt)
+            context_tokens = estimate_tokens_from_text(context_text or "")
+            prefix_tokens = estimate_tokens_from_text(final_prefix)
+            query_tokens = estimate_tokens_from_text(query_text)
+            
+            logger.info("LOCAL_LLM_REQUEST: prompt_len=%d prompt_tokens=%d max_tokens=%d session=%s", 
+                       len(prompt), prompt_tokens, max_tokens, session_id or "none")
+            
+            logger.info("LOCAL_PROMPT_METRICS: prefix_tokens=%d context_tokens=%d query_tokens=%d total_tokens=%d",
+                       prefix_tokens, context_tokens, query_tokens, prompt_tokens)
+            
             logger.info("LOCAL_PROMPT_COMPONENTS:")
-            logger.info("  - FINAL_PREFIX: %s", final_prefix)
-            logger.info("  - CONTEXT_TEXT: %s", context_text or "[NO_CONTEXT]")
-            logger.info("  - QUERY_TEXT: %s", query_text)
-            logger.info("LOCAL_FULL_PROMPT: %s", prompt)
+            logger.info("  - FINAL_PREFIX (%d chars): %s", len(final_prefix), final_prefix)
+            logger.info("  - CONTEXT_TEXT (%d chars): %s", len(context_text or ""), context_text or "[NO_CONTEXT]")
+            logger.info("  - QUERY_TEXT (%d chars): %s", len(query_text), query_text)
+            
+            logger.info("LOCAL_FULL_PROMPT (%d chars, %d tokens): %s", len(prompt), prompt_tokens, prompt)
+            
+            # Check if prompt might exceed context window
+            estimated_total = prompt_tokens + max_tokens
+            if estimated_total > 2048:  # Common context window size
+                logger.warning("POTENTIAL_CONTEXT_OVERFLOW: estimated_total=%d (prompt=%d + gen=%d) > 2048",
+                             estimated_total, prompt_tokens, max_tokens)
             
             answer = await _call_llm_with_retry(
                 llm_instance,
@@ -570,8 +596,17 @@ class LocalRAGService(BaseRAGService):
                 temperature=0.0
             )
             
-            logger.info("LOCAL_LLM_RESPONSE: response_len=%d session=%s", len(answer or ""), session_id or "none")
+            response_len = len(answer or "")
+            response_tokens = estimate_tokens_from_text(answer or "")
+            
+            logger.info("LOCAL_LLM_RESPONSE: response_len=%d response_tokens=%d session=%s", 
+                       response_len, response_tokens, session_id or "none")
             logger.info("LOCAL_RESPONSE_TEXT: %s", answer or "")
+            
+            # Log efficiency metrics
+            efficiency_ratio = response_tokens / max(prompt_tokens, 1)
+            logger.info("LOCAL_EFFICIENCY_METRICS: input_tokens=%d output_tokens=%d efficiency_ratio=%.2f",
+                       prompt_tokens, response_tokens, efficiency_ratio)
         except Exception as e:
             logger.exception("LLM call failed: %s", e)
             raise

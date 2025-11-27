@@ -106,45 +106,147 @@ def select_chunks_by_token_budget(
     return selected, selected_text, total_used_est, available_for_context - used_context_tokens
 
 
-def build_prompt_with_selected_chunks(prefix: str, context_text: str, question: str) -> str:
+def build_prompt_with_selected_chunks(
+    prefix: str, 
+    context_text: str, 
+    question: str, 
+    max_total_tokens: int = 1800,  # Reserve space for generation
+    context_priority: float = 0.7   # 70% of tokens for context
+) -> str:
     """
-    Build an optimized prompt structure for better LLM performance.
-    Uses clear sections and efficient token usage.
+    Build an optimized prompt structure with dynamic token budgeting.
+    Automatically truncates context if needed to fit within token limits.
+    
+    Args:
+        prefix: System instructions and user context
+        context_text: Knowledge base context
+        question: User question
+        max_total_tokens: Maximum tokens for entire prompt
+        context_priority: Fraction of tokens allocated to context
     """
-    logger.info("PROMPT_BUILDER_DEBUG:")
-    logger.info("  - Input prefix length: %d", len(prefix or ""))
-    logger.info("  - Input context length: %d", len(context_text or ""))
-    logger.info("  - Input question length: %d", len(question or ""))
+    logger.info("PROMPT_BUILDER_START: Building optimized prompt with token budget %d", max_total_tokens)
+    
+    # Calculate input metrics
+    prefix_len = len(prefix or "")
+    context_len = len(context_text or "")
+    question_len = len(question or "")
+    
+    prefix_tokens = estimate_tokens_from_text(prefix or "")
+    context_tokens = estimate_tokens_from_text(context_text or "")
+    question_tokens = estimate_tokens_from_text(question or "")
+    
+    # Calculate token budget allocation
+    max_context_tokens = int(max_total_tokens * context_priority)
+    reserved_tokens = prefix_tokens + question_tokens + 10  # 10 for structure
+    available_context_tokens = max_total_tokens - reserved_tokens
+    
+    logger.info("TOKEN_BUDGET_ANALYSIS:")
+    logger.info("  - Total budget: %d tokens", max_total_tokens)
+    logger.info("  - Prefix: %d tokens", prefix_tokens)
+    logger.info("  - Question: %d tokens", question_tokens)
+    logger.info("  - Available for context: %d tokens", available_context_tokens)
+    logger.info("  - Context needs: %d tokens", context_tokens)
+    
+    # Truncate context if necessary
+    original_context = context_text
+    context_truncated = False
+    
+    if context_tokens > available_context_tokens and available_context_tokens > 20:
+        # Calculate how much context to keep
+        keep_ratio = available_context_tokens / context_tokens
+        keep_chars = int(len(context_text) * keep_ratio * 0.9)  # 90% safety margin
+        
+        # Smart truncation: keep beginning and end
+        if keep_chars < len(context_text):
+            head_chars = int(keep_chars * 0.6)
+            tail_chars = int(keep_chars * 0.4)
+            
+            context_text = (
+                context_text[:head_chars] + 
+                "\n[...content truncated...]\n" + 
+                context_text[-tail_chars:]
+            )
+            context_truncated = True
+            context_tokens = estimate_tokens_from_text(context_text)
+            
+            logger.warning("CONTEXT_TRUNCATED: %d -> %d chars, %d -> %d tokens (ratio: %.2f)", 
+                         len(original_context), len(context_text), 
+                         estimate_tokens_from_text(original_context), context_tokens, keep_ratio)
+    
+    logger.info("PROMPT_INPUT_METRICS:")
+    logger.info("  - Prefix: %d chars, %d tokens", prefix_len, prefix_tokens)
+    logger.info("  - Context: %d chars, %d tokens%s", len(context_text), context_tokens, 
+               " (TRUNCATED)" if context_truncated else "")
+    logger.info("  - Question: %d chars, %d tokens", question_len, question_tokens)
     
     # Build optimized prompt structure
     parts = []
+    section_metrics = []
     
     # System instructions (prefix)
     if prefix:
-        parts.append(prefix.rstrip())
-        logger.info("  - Added system prefix")
+        clean_prefix = prefix.rstrip()
+        parts.append(clean_prefix)
+        section_metrics.append(("system_prefix", len(clean_prefix), estimate_tokens_from_text(clean_prefix)))
+        logger.debug("ADDED_SECTION: system_prefix (%d chars, %d tokens)", len(clean_prefix), estimate_tokens_from_text(clean_prefix))
     
     # Knowledge context (if available)
     if context_text and context_text.strip():
-        parts.append("\nKnowledge Base:")
-        parts.append(context_text.rstrip())
-        logger.info("  - Added knowledge context (%d chars)", len(context_text))
+        kb_header = "\nKnowledge Base:"
+        clean_context = context_text.rstrip()
+        parts.append(kb_header)
+        parts.append(clean_context)
+        
+        kb_section_len = len(kb_header) + len(clean_context)
+        kb_section_tokens = estimate_tokens_from_text(kb_header + clean_context)
+        section_metrics.append(("knowledge_base", kb_section_len, kb_section_tokens))
+        logger.debug("ADDED_SECTION: knowledge_base (%d chars, %d tokens)", kb_section_len, kb_section_tokens)
     else:
-        parts.append("\nKnowledge Base: No relevant information found.")
-        logger.info("  - Added empty knowledge base notice")
+        empty_kb = "\nKnowledge Base: No relevant information found."
+        parts.append(empty_kb)
+        section_metrics.append(("empty_kb", len(empty_kb), estimate_tokens_from_text(empty_kb)))
+        logger.debug("ADDED_SECTION: empty_kb (%d chars, %d tokens)", len(empty_kb), estimate_tokens_from_text(empty_kb))
     
     # User question
-    parts.append("\nUser Question:")
-    parts.append(question.rstrip())
-    logger.info("  - Added user question: %s", question.rstrip())
+    question_header = "\nUser Question:"
+    clean_question = question.rstrip()
+    parts.append(question_header)
+    parts.append(clean_question)
+    
+    question_section_len = len(question_header) + len(clean_question)
+    question_section_tokens = estimate_tokens_from_text(question_header + clean_question)
+    section_metrics.append(("user_question", question_section_len, question_section_tokens))
+    logger.debug("ADDED_SECTION: user_question (%d chars, %d tokens)", question_section_len, question_section_tokens)
     
     # Response instruction
-    parts.append("\nResponse:")
+    response_prompt = "\nResponse:"
+    parts.append(response_prompt)
+    section_metrics.append(("response_prompt", len(response_prompt), estimate_tokens_from_text(response_prompt)))
+    logger.debug("ADDED_SECTION: response_prompt (%d chars, %d tokens)", len(response_prompt), estimate_tokens_from_text(response_prompt))
     
+    # Build final prompt
     final_prompt = "\n".join(parts)
-    logger.info("OPTIMIZED_PROMPT_FINAL: length=%d tokens_est=%d", 
-                len(final_prompt), len(final_prompt) // 4)
+    final_len = len(final_prompt)
+    final_tokens = estimate_tokens_from_text(final_prompt)
+    
+    # Log section breakdown
+    logger.info("PROMPT_SECTION_BREAKDOWN:")
+    for section_name, chars, tokens in section_metrics:
+        percentage = (tokens / max(final_tokens, 1)) * 100
+        logger.info("  - %s: %d chars, %d tokens (%.1f%%)", section_name, chars, tokens, percentage)
+    
+    logger.info("PROMPT_FINAL_METRICS: total_chars=%d total_tokens=%d sections=%d", 
+                final_len, final_tokens, len(section_metrics))
+    
+    # Log efficiency warnings
+    if final_tokens > 1500:
+        logger.warning("PROMPT_SIZE_WARNING: Final prompt is %d tokens (may be too large for some models)", final_tokens)
+    
+    if context_tokens > (final_tokens * 0.7):
+        logger.warning("CONTEXT_DOMINANCE_WARNING: Context takes %.1f%% of prompt tokens", (context_tokens/final_tokens)*100)
+    
     logger.info("FINAL_PROMPT_STRUCTURE:\n%s", final_prompt)
+    logger.info("PROMPT_BUILDER_COMPLETE: Generated optimized prompt with %d tokens", final_tokens)
     
     return final_prompt
 
