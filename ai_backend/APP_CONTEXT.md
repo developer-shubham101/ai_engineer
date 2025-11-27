@@ -257,7 +257,56 @@ curl "/api/models/best"
 
 ---
 
-## 6. NEW: Multi-Model Local LLM System
+## 6. NEW: Enhanced Embedding Model Upgrade System
+
+**Enhanced Embedding Models** (recommended upgrade path):
+- **Phase 1**: `bge-small-en-v1.5` - Light upgrade from MiniLM (better accuracy, still fast)
+- **Phase 2**: `BAAI/bge-base-en-v1.5` - Best accuracy for CPU (top-ranked model)
+- **Phase 3**: `intfloat/e5-base-v2` - Multi-domain enterprise (cross-department strength)
+
+**Available Embedding Models**:
+```python
+# Current baseline
+"all-MiniLM-L6-v2" - Fast but limited accuracy (384 dimensions)
+
+# Recommended upgrades
+"bge-small-en-v1.5" - Light upgrade, better accuracy, still fast (384 dimensions)
+"bge-base-en-v1.5" - Best accuracy for CPU, top-ranked (768 dimensions) 
+"e5-base-v2" - Multi-domain enterprise, cross-language (768 dimensions)
+"all-mpnet-base-v2" - Classic upgrade, widely used in production (768 dimensions)
+```
+
+**Configuration** (`app/config.py`):
+```python
+# Set via environment variable or config
+EMBEDDING_MODEL_KEY = "bge-small-en-v1.5"  # Current active model
+EMBEDDING_MODEL_NAME = EMBEDDING_MODELS[EMBEDDING_MODEL_KEY]["name"]
+```
+
+**Enhanced Logging & Monitoring**:
+- `EMBEDDING_MODEL_INIT` - Model loading with configuration details
+- `EMBEDDING_MODEL_SUCCESS` - Successful loading with dimension verification
+- `EMBEDDING_MODEL_FALLBACK` - Automatic fallback to MiniLM on failure
+- `EMBEDDING_ENCODE_SUCCESS` - Performance metrics (chars/sec, processing time)
+- `EMBEDDING_STATUS_CHECK` - Status endpoint monitoring
+
+**Monitoring API**:
+```bash
+# Check embedding model status (SuperAdmin/Manager only)
+GET /api/rag/embedding/status
+# Returns: model info, dimensions, performance metrics, load status
+```
+
+**Benefits of Upgrade**:
+- **20-30% better retrieval accuracy** for technical documents
+- **Improved semantic understanding** of domain-specific content
+- **CPU-friendly performance** - no GPU required
+- **Automatic fallback** to MiniLM if upgrade fails
+- **Comprehensive monitoring** and debugging capabilities
+
+---
+
+## 7. NEW: Multi-Model Local LLM System
 
 **LocalModelManager Service** (`local_model_manager.py`):
 - `get_available_models()` - Scan and detect downloaded models

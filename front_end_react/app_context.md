@@ -19,6 +19,7 @@
 - Interacts with backend via REST endpoints at configurable `BASE_API_URL` (default `http://192.168.1.2:8000`).
   - API paths include `/api/rag/{model_provider}/query` for queries and `/api/rag/documents/*` for document management.
   - `X-Session-ID` is extracted from JWT token and included in request headers automatically.
+  - Local LLM model selection available for local provider queries.
 - Backend responsibilities (outside repo scope but assumed):
   - Auth: JWT token generation via `/api/auth/token`, validate Bearer tokens, embed user info and session_id in token.
   - RAG: query vector DB (ChromaDB) with multi-provider LLM support (Local/Google/OpenAI/HuggingFace).
@@ -40,8 +41,9 @@
 - `POST /api/auth/token` — `{ username, password }` → `{ access_token, token_type, user: { user_id, username, role, department, profile } }`
 
 **RAG Operations (require Bearer token):**
-- `POST /api/rag/{model_provider}/query` — `{ question, top_k, use_llm, max_tokens?, category? }` → `{ answer, retrieved[], context, filtered_out_count?, public_summaries?, filtered_details? }`
+- `POST /api/rag/{model_provider}/query` — `{ question, top_k, use_llm, max_tokens?, category?, local_llm_model? }` → `{ answer, retrieved[], context, filtered_out_count?, public_summaries?, filtered_details? }`
   - `model_provider`: `local`, `google`, `gpt`, `hf` (huggingface)
+  - `local_llm_model`: Optional parameter for local provider (e.g., "llama32-1b", "llama32-3b", "llama31-8b", "phi3-mini", "gemma2-2b")
 
 **Document Management (require Bearer token):**
 - `POST /api/rag/documents/add` — `{ source_name, text, metadata }` → add JSON doc with versioning
@@ -59,7 +61,7 @@
 
 **Client-side functions:**
 - `Login.handleLogin(username, password)` — authenticate and store JWT token
-- `RAGChat.sendQuery(question)` — client-side wrapper for network call to `/api/rag/{model_provider}/query`
+- `RAGChat.sendQuery(question)` — client-side wrapper for network call to `/api/rag/{model_provider}/query` (includes local_llm_model when provider is 'local')
 - `RAGChat.postAddJson(payload)` — client-side wrapper for `/api/rag/documents/add`
 - `RAGChat.postUploadFile(formData)` — client-side wrapper for `/api/rag/documents/add-file`
 - `RAGChat.listDocuments(filters)` — client-side wrapper for `/api/rag/documents/list`
@@ -95,7 +97,7 @@
 - `src/main.jsx` — application bootstrap, mounts React tree.
 - `src/App.jsx` — top-level app container with authentication routing (shows Login or RAGChat based on auth state).
 - `src/components/Login.jsx` — login form with username/password fields and "Login with Guest" button (auto-fills guest/guest123), calls `/api/auth/token` and stores JWT.
-- `src/components/RAGChat.jsx` — core chat UI and main network wrappers. Uses Bearer token authentication. Displays user info and logout button.
+- `src/components/RAGChat.jsx` — core chat UI and main network wrappers. Uses Bearer token authentication. Displays user info and logout button. Includes local LLM model selection for local provider.
 - `src/components/AddJsonForm.jsx` — enhanced modal form to POST `/api/rag/documents/add` with RBAC metadata fields.
 - `src/components/UploadFileForm.jsx` — modal form to POST `/api/rag/documents/add-file` (multipart).
 - `src/components/UpdateMetadataForm.jsx` — modal to update chunk metadata.
@@ -127,7 +129,13 @@
 - Advanced mode: Raw JSON metadata editing
 - RBAC validation: Real-time field validation
 - Personal document support: Owner ID field for personal docs
-- Public summary: Fallback content for restricted access
+- Public summary field for restricted documents
+
+**Local LLM Model Selection:**
+- Dropdown appears when "Local" provider is selected
+- Supports multiple local models: Llama 3.2 1B/3B, Llama 3.1 8B, Phi-3 Mini, Gemma 2 2B
+- Model selection persisted in localStorage
+- Automatically included in query payload for local providerblic summary: Fallback content for restricted access
 
 ## 7. Data Models / Structures
 

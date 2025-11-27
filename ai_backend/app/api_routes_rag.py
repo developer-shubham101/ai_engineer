@@ -860,3 +860,27 @@ def api_sentiment(req: SentimentRequest):
 @router.get("/sentiment/stats", dependencies=[Depends(require_roles(["SuperAdmin"]))])
 def sentiment_stats_api():
     return get_sentiment_stats()
+
+
+# ---------------------------
+# Embedding Model Status Endpoint
+# ---------------------------
+
+@router.get("/embedding/status", dependencies=[Depends(require_roles(["SuperAdmin", "Manager"]))])
+def embedding_model_status():
+    """
+    Get current embedding model status and configuration.
+    Endpoint for monitoring embedding model performance.
+    """
+    from app.services.utility import get_embedding_model_info
+    
+    try:
+        info = get_embedding_model_info()
+        logger.info(
+            "EMBEDDING_STATUS_CHECK: model=%s loaded=%s dimensions=%s",
+            info.get("model_key"), info.get("model_loaded"), info.get("actual_dimensions")
+        )
+        return {"ok": True, "embedding_model": info}
+    except Exception as e:
+        logger.error("EMBEDDING_STATUS_ERROR: %s", str(e))
+        return {"ok": False, "error": str(e)}

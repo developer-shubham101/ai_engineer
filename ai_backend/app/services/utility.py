@@ -24,7 +24,7 @@ BASE_DIR = PROJECT_ROOT / "app/"
 # ============================================================================
 # MODEL CONSTANTS
 # ============================================================================
-from app.config import EMBEDDING_MODEL_NAME
+from app.config import EMBEDDING_MODEL_NAME, EMBEDDING_MODEL_KEY, EMBEDDING_MODELS
 
 # ============================================================================
 # DIRECTORY PATHS
@@ -51,7 +51,8 @@ from app.config import DEFAULT_PERSIST_DIR, DEFAULT_COLLECTION_NAME
 # ============================================================================
 def get_local_embedding_model_path() -> Path:
     """Get the path to the local embedding model directory."""
-    return EMBEDDINGS_MODELS_DIR / EMBEDDING_MODEL_NAME
+    # Use model key for local path to avoid issues with special characters in model names
+    return EMBEDDINGS_MODELS_DIR / EMBEDDING_MODEL_KEY
 
 
 def get_config_path(filename: str) -> Path:
@@ -83,40 +84,150 @@ _embedding_model_instance = None
 def get_embedding_model_instance():
     """
     Get or create a singleton SentenceTransformer instance.
-    This prevents loading the same model multiple times.
+    Enhanced embedding model with improved logging and error handling.
     """
     global _embedding_model_instance
 
     if _embedding_model_instance is not None:
+        logger.debug("EMBEDDING_MODEL_REUSE: Using cached model instance")
         return _embedding_model_instance
 
     try:
         from sentence_transformers import SentenceTransformer
     except ImportError:
+        logger.error("EMBEDDING_MODEL_ERROR: sentence_transformers not installed")
         raise ImportError(
             "sentence_transformers not installed. "
             "Install sentence-transformers to compute local embeddings."
         )
 
+    # Log model selection details
+    model_config = EMBEDDING_MODELS.get(EMBEDDING_MODEL_KEY, {})
+    logger.info(
+        "EMBEDDING_MODEL_INIT: Loading model '%s' (key: %s)", 
+        EMBEDDING_MODEL_NAME, EMBEDDING_MODEL_KEY
+    )
+    logger.info(
+        "EMBEDDING_MODEL_CONFIG: %s | Dimensions: %s | Performance: %s | Accuracy: %s",
+        model_config.get("description", "Unknown"),
+        model_config.get("dimensions", "Unknown"),
+        model_config.get("performance", "Unknown"), 
+        model_config.get("accuracy", "Unknown")
+    )
+
     local_path = get_local_embedding_model_path()
-    if local_path.exists():
-        logger.info("Loading embedding model from local path: %s", local_path)
-        _embedding_model_instance = SentenceTransformer(str(local_path))
-    else:
+    
+    try:
+        if local_path.exists():
+            logger.info("EMBEDDING_MODEL_LOCAL: Loading from local path: %s", local_path)
+            _embedding_model_instance = SentenceTransformer(str(local_path))
+        else:
+            logger.info(
+                "EMBEDDING_MODEL_DOWNLOAD: Loading by name (may download): %s",
+                EMBEDDING_MODEL_NAME
+            )
+            _embedding_model_instance = SentenceTransformer(EMBEDDING_MODEL_NAME)
+            
+        # Log successful loading
+        model_info = _embedding_model_instance.get_sentence_embedding_dimension()
         logger.info(
-            "Loading embedding model by name (may download if not cached): %s",
-            EMBEDDING_MODEL_NAME
+            "EMBEDDING_MODEL_SUCCESS: Model loaded successfully | Actual dimensions: %d", 
+            model_info
         )
-        _embedding_model_instance = SentenceTransformer(EMBEDDING_MODEL_NAME)
+        
+        # Verify dimensions match config
+        expected_dims = model_config.get("dimensions")
+        if expected_dims and model_info != expected_dims:
+            logger.warning(
+                "EMBEDDING_MODEL_DIMENSION_MISMATCH: Expected %d dimensions, got %d",
+                expected_dims, model_info
+            )
+            
+    except Exception as e:
+        logger.error(
+            "EMBEDDING_MODEL_LOAD_FAILED: Failed to load model '%s': %s", 
+            EMBEDDING_MODEL_NAME, str(e)
+        )
+        # Fallback to MiniLM if configured model fails
+        if EMBEDDING_MODEL_KEY != "all-MiniLM-L6-v2":
+            logger.warning("EMBEDDING_MODEL_FALLBACK: Attempting fallback to MiniLM")
+            try:
+                _embedding_model_instance = SentenceTransformer("all-MiniLM-L6-v2")
+                logger.info("EMBEDDING_MODEL_FALLBACK_SUCCESS: Using MiniLM as fallback")
+            except Exception as fallback_error:
+                logger.error("EMBEDDING_MODEL_FALLBACK_FAILED: %s", str(fallback_error))
+                raise
+        else:
+            raise
 
     return _embedding_model_instance
 
 
 async def embed_texts(texts: List[str]) -> List[List[float]]:
-    """Embed a list of texts using the shared embedding model."""
+    """Embed a list of texts using the shared embedding model with performance logging."""
+    import time
+    
     model = get_embedding_model_instance()
-    vectors = await run_in_threadpool(model.encode, texts, convert_to_numpy=True)
-    return vectors.tolist()
+    
+    # Performance monitoring
+    start_time = time.time()
+    text_count = len(texts)
+    total_chars = sum(len(text) for text in texts)
+    
+    logger.debug(
+        "EMBEDDING_ENCODE_START: Processing %d texts, %d total characters", 
+        text_count, total_chars
+    )
+    
+    try:
+        vectors = await run_in_threadpool(model.encode, texts, convert_to_numpy=True)
+        
+        # Log performance metrics
+        elapsed = time.time() - start_time
+        chars_per_sec = total_chars / elapsed if elapsed > 0 else 0
+        
+        logger.debug(
+            "EMBEDDING_ENCODE_SUCCESS: %d vectors generated in %.2fs (%.0f chars/sec)",
+            len(vectors), elapsed, chars_per_sec
+        )
+        
+        return vectors.tolist()
+        
+    except Exception as e:
+        logger.error(
+            "EMBEDDING_ENCODE_FAILED: Error encoding %d texts: %s", 
+            text_count, str(e)
+        )
+        raise
+
+
+def get_embedding_model_info() -> Dict[str, Any]:
+    """Get current embedding model information for debugging and monitoring."""
+    model_config = EMBEDDING_MODELS.get(EMBEDDING_MODEL_KEY, {})
+    
+    info = {
+        "model_key": EMBEDDING_MODEL_KEY,
+        "model_name": EMBEDDING_MODEL_NAME,
+        "description": model_config.get("description", "Unknown"),
+        "dimensions": model_config.get("dimensions", "Unknown"),
+        "performance": model_config.get("performance", "Unknown"),
+        "accuracy": model_config.get("accuracy", "Unknown"),
+        "local_path": str(get_local_embedding_model_path()),
+        "local_exists": get_local_embedding_model_path().exists()
+    }
+    
+    # Add actual model info if loaded
+    if _embedding_model_instance is not None:
+        try:
+            info["actual_dimensions"] = _embedding_model_instance.get_sentence_embedding_dimension()
+            info["model_loaded"] = True
+        except Exception as e:
+            info["model_loaded"] = False
+            info["load_error"] = str(e)
+    else:
+        info["model_loaded"] = False
+        
+    return info
 
 
 # ============================================================================

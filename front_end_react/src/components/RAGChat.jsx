@@ -25,12 +25,14 @@ export default function RAGChat({ onLogout }){
   const [fileMeta, setFileMeta] = useState({ department:'', sensitivity:'public_internal', tags:'' })
   const [toasts, setToasts] = useState([])
   const [modelProvider, setModelProvider] = useState(localStorage.getItem('model_provider') || 'local')
+  const [localLlmModel, setLocalLlmModel] = useState(localStorage.getItem('local_llm_model') || 'llama32-1b')
   const [theme, setTheme] = useState(localStorage.getItem('theme') || 'system')
   const [showAdminPanel, setShowAdminPanel] = useState(false)
   const messagesRef = useRef(null)
 
   useEffect(()=> { localStorage.setItem('chat_history_v1', JSON.stringify(messages)) }, [messages])
   useEffect(()=> { localStorage.setItem('model_provider', modelProvider) }, [modelProvider])
+  useEffect(()=> { localStorage.setItem('local_llm_model', localLlmModel) }, [localLlmModel])
   useEffect(()=>{
     localStorage.setItem('theme', theme)
     if (theme === 'system') {
@@ -74,6 +76,9 @@ export default function RAGChat({ onLogout }){
     setComposer('')
 
     const payload = { question: composer, top_k: Number(topK||3), use_llm: !!useLlm }
+    if (modelProvider === 'local' && localLlmModel) {
+      payload.local_llm_model = localLlmModel
+    }
 
     try {
       const headers = { "Content-Type": "application/json", "Authorization": `Bearer ${token}` };
@@ -275,6 +280,20 @@ export default function RAGChat({ onLogout }){
             <option value="gpt">OpenAI GPT</option>
             <option value="hf">Hugging Face</option>
           </select>
+          {modelProvider === 'local' && (
+            <select
+              className="form-select form-select-sm"
+              style={{ width: 140 }}
+              value={localLlmModel}
+              onChange={(e) => setLocalLlmModel(e.target.value)}
+            >
+              <option value="llama32-1b">Llama 3.2 1B</option>
+              <option value="llama32-3b">Llama 3.2 3B</option>
+              <option value="llama31-8b">Llama 3.1 8B</option>
+              <option value="phi3-mini">Phi-3 Mini</option>
+              <option value="gemma2-2b">Gemma 2 2B</option>
+            </select>
+          )}
           <select
             className="form-select form-select-sm"
             style={{ width: 120 }}
@@ -552,6 +571,7 @@ export default function RAGChat({ onLogout }){
                     </div>
                     <div className="small text-muted">
                       Top K: {topK} • Use LLM: {useLlm ? "on" : "off"}
+                      {modelProvider === 'local' && ` • Model: ${localLlmModel}`}
                     </div>
                   </div>
                 </div>
