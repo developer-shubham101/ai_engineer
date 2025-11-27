@@ -48,6 +48,7 @@ class QueryRequest(BaseModel):
     max_tokens: int = 256
     category: Optional[str] = None
     debug: bool = False
+    local_llm_model: Optional[str] = None  # NEW: Model selection (only for local provider)
 
 class QueryResponse(BaseModel):
     answer: Optional[str] = None
@@ -370,6 +371,7 @@ async def query_rag(
                 use_llm=req.use_llm,
                 max_tokens=req.max_tokens,
                 session_id=session_id,
+                model_key=req.local_llm_model,  # NEW: Pass model selection (local only)
             )
         elif model_provider == "google":
             res = await query_google_rag(

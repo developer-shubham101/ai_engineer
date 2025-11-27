@@ -586,7 +586,8 @@ async def query_local_rag(
         llm_prompt_prefix: Optional[str] = None,
         use_llm: bool = True,
         max_tokens: int = 256,
-        session_id: Optional[str] = None
+        session_id: Optional[str] = None,
+        model_key: Optional[str] = None
 ) -> Dict[str, Any]:
     """
     Query the local RAG service using the base RAG functionality.

@@ -178,7 +178,7 @@ def validate_metadata(meta, requester):
 **✅ Consistent API**: Same `/api/rag/{provider}/query` pattern for all
 **✅ Clean Dependencies**: Minimal imports, clear separation of concerns
 
-### 🛠️ **16 Core Services** (enhanced with AI personalization):
+### 🛠️ **18 Core Services** (enhanced with AI personalization + multi-model support):
 ```
 🎯 Base: base_rag_service.py (+ Flexible RBAC + Personalized AI)
 🤖 Providers: rag_local_service.py, google_models.py, gpt_rag_service.py, hf_rag_service.py
@@ -186,6 +186,7 @@ def validate_metadata(meta, requester):
 📊 Data: chroma_utils.py, utility.py, version_tracking.py, support_chat.py
 ⚙️ Tools: model_manager.py, prompt_builder.py, sentiment_classifier.py
 🧠 AI: profile_analyzer.py (NEW - Smart personalization)
+🤖 Models: local_model_manager.py, api_routes_models.py (NEW - Multi-model support)
 ```
 
 ### 🔐 **NEW: Flexible RBAC System**
@@ -230,7 +231,10 @@ public_internal (0) - Everyone
 
 ### 🚀 **Usage Examples:**
 ```bash
-# Local offline model
+# Local model with specific model selection
+curl -X POST "/api/rag/local/query" -d '{"question": "What is our policy?", "use_llm": true, "local_llm_model": "phi2"}'
+
+# Local model with auto-selection (uses best available)
 curl -X POST "/api/rag/local/query" -d '{"question": "What is our policy?", "use_llm": true}'
 
 # Google Gemini
@@ -240,14 +244,79 @@ curl -X POST "/api/rag/google/query" -d '{"question": "What is our policy?", "us
 curl -X POST "/api/rag/gpt/query" -d '{"question": "What is our policy?", "use_llm": true}'
 
 # Hugging Face
-curl -X POST "/api/rag/hf/query" -d '{"question": "What is our policy?", "use_llm": true}'
+curl -X POST "/api/rag/huggingface/query" -d '{"question": "What is our policy?", "use_llm": true}'
+
+# List available models
+curl "/api/models/list"
+
+# Get best available model
+curl "/api/models/best"
 ```
 
 **Perfect for learning multi-provider RAG architectures + Enterprise RBAC + AI Personalization! 🎓**
 
 ---
 
-## 6. NEW: Personalized AI System
+## 6. NEW: Multi-Model Local LLM System
+
+**LocalModelManager Service** (`local_model_manager.py`):
+- `get_available_models()` - Scan and detect downloaded models
+- `get_best_available_model()` - Auto-select best model
+- `get_model_info(model_key)` - Get model metadata and paths
+- `list_downloadable_models()` - Models available for download
+
+**Supported Local Models** (configured in `local_models.json`):
+- **"phi2"** - Phi-2 (2.7B) - Default, optimized for reasoning and math
+- **"llama32-1b"** - Llama 3.2 1B - Efficient edge model with good instruction following
+- **"llama32-3b"** - Llama 3.2 3B - Balanced performance small Llama model
+- **"gemma-2b"** - Gemma 2B - Google's safety-aligned lightweight model
+- **"qwen2-1.5b"** - Qwen2 1.5B - Multilingual with 32K context length
+- **"mistral-7b"** - Mistral 7B - Proven performance fallback model
+
+**Model Management API** (`/api/models/*`):
+- `GET /api/models/list` - List all models with availability status
+- `GET /api/models/best` - Get best available model
+- `GET /api/models/downloadable` - List models available for download
+- `POST /api/models/refresh` - Refresh model cache
+
+**Download Scripts**:
+```bash
+# List available models
+python scripts/download_hf_model.py --list
+
+# Download specific model
+python scripts/download_hf_model.py --download phi2
+
+# Scan existing models
+python scripts/download_hf_model.py --scan
+
+# Download all models
+python scripts/download_hf_model.py --all
+```
+
+**Model Selection in Queries** (local provider only):
+```bash
+# Use specific model with full payload
+POST /api/rag/local/query {
+  "question": "Give me small bullet points of the company",
+  "top_k": 3,
+  "use_llm": true,
+  "max_tokens": 256,
+  "category": "string",
+  "debug": false,
+  "local_llm_model": "llama32-1b"
+}
+
+# Auto-select best available (local provider)
+POST /api/rag/local/query {"question": "Hello", "use_llm": true}
+
+# Other providers ignore local_llm_model parameter
+POST /api/rag/google/query {"question": "Hello", "use_llm": true}
+```
+
+---
+
+## 7. NEW: Personalized AI System
 
 **ProfileAnalyzer Service** (`profile_analyzer.py`):
 - `analyze_profile_for_jobs(profile, chat_history)` - Match user skills to job categories
@@ -293,7 +362,7 @@ POST /api/rag/google/query {"question": "Are there Python developer jobs?"}
 
 ---
 
-## 7. Document Management & Versioning
+## 8. Document Management & Versioning
 
 **Document Management** (Local service only):
 - `add_document_to_rag_local()` - Chunk, embed, store with versioning
@@ -428,7 +497,9 @@ POST /api/rag/google/query {"question": "Are there Python developer jobs?"}
   "top_k": int = 3,
   "use_llm": bool = False,
   "max_tokens": int = 256,
-  "category": Optional[str] = None
+  "category": Optional[str] = None,
+  "debug": bool = False,
+  "local_llm_model": Optional[str] = None  # Available: "phi2", "llama32-1b", "llama32-3b", "gemma-2b", "qwen2-1.5b", "mistral-7b"
 }
 ```
 
