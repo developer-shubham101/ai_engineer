@@ -75,43 +75,45 @@ class BaseRAGService(ABC):
     
     def _allowed_by_metadata(self, meta: Optional[Dict[str, Any]], requester: Optional[Dict[str, str]]) -> bool:
         """
-        Check if a document is accessible based on its metadata and the requester's role/department.
-        Common RBAC logic across all RAG providers.
+        Flexible RBAC: Level-based access + specific role overrides.
         """
+        if not requester:
+            return meta.get("sensitivity", "public_internal") == "public_internal"
+        
         sens = meta.get("sensitivity", "public_internal") if meta else "public_internal"
-
-        # personal
+        user_role = requester.get("role")
+        user_level = self._get_role_level(user_role)
+        
+        # Personal documents: owner or high-level roles
         if sens == "personal":
             owner = meta.get("owner_id")
-            if requester and owner == requester.get("user_id"):
+            if owner == requester.get("user_id"):
                 return True
-            return requester and requester.get("role") in ("HR", "Legal", "Executive")
-
-        # highly_confidential
-        if sens == "highly_confidential":
-            return requester and requester.get("role") in ("Legal", "Executive")
-
-        # role_confidential
-        if sens == "role_confidential":
-            allowed_roles = meta.get("allowed_roles") or []
-            if requester and requester.get("role") in allowed_roles:
-                return True
-            return requester and requester.get("role") in ("HR", "Legal", "Executive")
-
-        # department_confidential
+            return user_level >= 2  # HR+
+        
+        # Specific role restrictions override level hierarchy
+        allowed_roles = meta.get("allowed_roles")
+        if allowed_roles:
+            return user_role in allowed_roles
+        
+        # Department restrictions
         if sens == "department_confidential":
-            # Check department match
-            if requester and requester.get("department") == meta.get("department"):
+            if requester.get("department") == meta.get("department"):
                 return True
-            # Check allowed_roles override
-            allowed_roles = meta.get("allowed_roles") or []
-            if requester and requester.get("role") in allowed_roles:
-                return True
-            # Check super roles
-            return requester and requester.get("role") in ("HR", "Legal", "Executive")
-
-        # public_internal
-        return True
+        
+        # Default: Level-based access
+        required_level = self._get_sensitivity_level(sens)
+        return user_level >= required_level
+    
+    def _get_role_level(self, role: str) -> int:
+        """Get numerical level for role."""
+        levels = {"SuperAdmin": 4, "Manager": 3, "HR": 2, "Employee": 1, "PublicUser": 0, "Guest": 0}
+        return levels.get(role, 0)
+    
+    def _get_sensitivity_level(self, sensitivity: str) -> int:
+        """Get required level for sensitivity."""
+        levels = {"public_internal": 0, "department_confidential": 1, "role_confidential": 2, "highly_confidential": 3, "super_confidential": 4}
+        return levels.get(sensitivity, 0)
     
     def filter_documents_by_rbac(
         self,

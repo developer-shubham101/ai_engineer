@@ -95,6 +95,7 @@ ALLOWED_SENSITIVITY = {
     "department_confidential",
     "role_confidential",
     "highly_confidential",
+    "super_confidential",
     "personal",
 }
 
@@ -109,25 +110,34 @@ ALLOWED_DEPARTMENTS = {
     "Admin",
 }
 
+# Flexible Role System: Level-based + Specific Role Overrides
 ALLOWED_ROLES = {
-    "SuperAdmin",
-    "HR",
-    "Manager",
-    "Employee",
-    "Employee L1",
-    "Employee L2",
-    "Guest",
+    "SuperAdmin",     # Level 4
+    "Manager",       # Level 3
+    "HR",            # Level 2  
+    "Employee",      # Level 1
+    "PublicUser",    # Level 0
+    "Guest",         # Level 0
 }
 
-# Role-based sensitivity permissions
-SENSITIVITY_PERMISSIONS = {
-    "Guest": ["public_internal"],
-    "Employee": ["public_internal"],
-    "Employee L1": ["public_internal"],
-    "Employee L2": ["public_internal"],
-    "Manager": ["public_internal", "department_confidential"],
-    "HR": ["public_internal", "department_confidential", "role_confidential", "personal"],
-    "SuperAdmin": ["public_internal", "department_confidential", "role_confidential", "highly_confidential", "personal"],
+# Role hierarchy levels - higher numbers = more access
+ROLE_LEVELS = {
+    "SuperAdmin": 4,    # Level 4 - Full access
+    "Manager": 3,      # Level 3 - Management access
+    "HR": 2,           # Level 2 - HR access
+    "Employee": 1,     # Level 1 - Employee access
+    "PublicUser": 0,   # Level 0 - Public only
+    "Guest": 0,        # Level 0 - Public only
+}
+
+# Sensitivity level requirements
+SENSITIVITY_LEVELS = {
+    "public_internal": 0,        # Anyone
+    "department_confidential": 1, # Employee+
+    "role_confidential": 2,      # HR+
+    "highly_confidential": 3,    # Manager+
+    "super_confidential": 4,     # SuperAdmin only
+    "personal": 1,               # Employee+ (with ownership check)
 }
 
 
@@ -356,13 +366,13 @@ async def query_rag(
         prefix_extra = "\n".join(prefix_extra_lines) + "\n\n"
         llm_prefix = prefix_extra + llm_prefix
 
-    # Execute RAG query
+    # Execute RAG query (Business Requirement Step 2 & 3: Query + Role Check)
     try:
         if model_provider == "local":
             res = await rag_service.query_local_rag(
                 query_text=req.question,
                 n_results=req.top_k,
-                requester=requester,
+                requester=requester,  # Step 3: Role evaluation happens in base service
                 llm_prompt_prefix=llm_prefix,
                 use_llm=req.use_llm,
                 max_tokens=req.max_tokens,
