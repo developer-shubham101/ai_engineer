@@ -3,7 +3,7 @@ import React, { useState } from 'react'
 export default function UploadFileForm({ onSubmit }){
   const [file, setFile] = useState(null)
   const [department, setDepartment] = useState('')
-  const [sensitivity, setSensitivity] = useState('public')
+  const [sensitivity, setSensitivity] = useState('public_internal')
   const [tags, setTags] = useState('')
   const [publicSummary, setPublicSummary] = useState('')
   const [ownerId, setOwnerId] = useState('')
@@ -27,7 +27,7 @@ export default function UploadFileForm({ onSubmit }){
       <div className="modal-body">
         <div className="mb-2"><label className="form-label">Select File</label><input type="file" className="form-control" onChange={e=>setFile(e.target.files[0])} required /></div>
         <div className="mb-2"><label className="form-label">Department</label><input className="form-control" value={department} onChange={e=>setDepartment(e.target.value)} /></div>
-        <div className="mb-2"><label className="form-label">Sensitivity</label><select className="form-select" value={sensitivity} onChange={e=>setSensitivity(e.target.value)}><option value="public">public</option><option value="internal">internal</option><option value="restricted">restricted</option><option value="confidential">confidential</option></select></div>
+        <div className="mb-2"><label className="form-label">Sensitivity</label><select className="form-select" value={sensitivity} onChange={e=>setSensitivity(e.target.value)}><option value="public_internal">Public Internal</option><option value="department_confidential">Department Confidential</option><option value="role_confidential">Role Confidential</option><option value="highly_confidential">Highly Confidential</option><option value="personal">Personal</option></select></div>
         <div className="mb-2"><label className="form-label">Tags</label><input className="form-control" value={tags} onChange={e=>setTags(e.target.value)} /></div>
         <div className="mb-2"><label className="form-label">Public Summary</label><textarea className="form-control" rows={3} value={publicSummary} onChange={e=>setPublicSummary(e.target.value)} /></div>
         <div className="mb-2"><label className="form-label">Owner ID</label><input className="form-control" value={ownerId} onChange={e=>setOwnerId(e.target.value)} /></div>

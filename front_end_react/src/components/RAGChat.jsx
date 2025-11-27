@@ -2,6 +2,8 @@ import React, { useEffect, useRef, useState } from 'react'
 import AddJsonForm from './AddJsonForm.jsx'
 import UploadFileForm from './UploadFileForm.jsx'
 import UpdateMetadataForm from './UpdateMetadataForm.jsx'
+import DocumentVersionModal from './DocumentVersionModal.jsx'
+import PersonalizedTestModal from './PersonalizedTestModal.jsx'
 import ToastList from './ToastList.jsx'
 import { BASE_API_URL } from '../utility/const.js'
 import { getStoredToken, getStoredUser, getSessionIdFromToken, clearAuth } from '../utility/auth.js'
@@ -20,7 +22,7 @@ export default function RAGChat({ onLogout }){
   const [messages, setMessages] = useState(()=> JSON.parse(localStorage.getItem('chat_history_v1') || '[]'))
   const [inFlight, setInFlight] = useState(false)
   const [selectedFile, setSelectedFile] = useState(null)
-  const [fileMeta, setFileMeta] = useState({ department:'', sensitivity:'public', tags:'' })
+  const [fileMeta, setFileMeta] = useState({ department:'', sensitivity:'public_internal', tags:'' })
   const [toasts, setToasts] = useState([])
   const [modelProvider, setModelProvider] = useState(localStorage.getItem('model_provider') || 'local')
   const [theme, setTheme] = useState(localStorage.getItem('theme') || 'system')
@@ -55,6 +57,8 @@ export default function RAGChat({ onLogout }){
 
   function handleLogout() {
     clearAuth();
+    setMessages([]);
+    localStorage.removeItem('chat_history_v1');
     if (onLogout) onLogout();
   }
 
@@ -98,7 +102,7 @@ export default function RAGChat({ onLogout }){
     const headers = { 'Content-Type':'application/json', 'Authorization': `Bearer ${token}` };
     if (sessionId) headers['X-Session-ID'] = sessionId;
     try {
-      const res = await fetch(BASE_API_URL + `/api/rag/${modelProvider}/add`, { method:'POST', headers: headers, body: JSON.stringify({ source_name, text, metadata }) })
+      const res = await fetch(BASE_API_URL + `/api/rag/documents/add`, { method:'POST', headers: headers, body: JSON.stringify({ source_name, text, metadata }) })
       if (!res.ok){ const txt = await res.text().catch(()=>res.statusText); throw new Error(txt || 'Server error') }
       const data = await res.json(); addToast('Document added', 'success'); return data
     } catch(err){ addToast(err.message || 'Add error','danger'); throw err }
@@ -109,7 +113,7 @@ export default function RAGChat({ onLogout }){
     const headers = { 'Authorization': `Bearer ${token}` };
     if (sessionId) headers['X-Session-ID'] = sessionId;
     try {
-      const res = await fetch(BASE_API_URL + `/api/rag/${modelProvider}/add-file`, { method:'POST', headers: headers, body: formData })
+      const res = await fetch(BASE_API_URL + `/api/rag/documents/add-file`, { method:'POST', headers: headers, body: formData })
       if (!res.ok){ const txt = await res.text().catch(()=>res.statusText); throw new Error(txt || 'Upload error') }
       const data = await res.json(); addToast('File uploaded', 'success'); return data
     } catch(err){ addToast(err.message || 'Upload error','danger'); throw err }
@@ -134,6 +138,97 @@ export default function RAGChat({ onLogout }){
       const res = await fetch(BASE_API_URL + '/access-requests', { headers: headers })
       if (!res.ok) throw new Error('Failed to fetch'); const data = await res.json(); return data
     } catch(err){ addToast(err.message || 'Fetch error','danger'); return [] }
+  }
+
+  async function listDocuments(filters = {}){
+    if (!token) return addToast('Please login first', 'warning', 'Auth')
+    const headers = { 'Authorization': `Bearer ${token}` };
+    if (sessionId) headers['X-Session-ID'] = sessionId;
+    const params = new URLSearchParams(filters).toString();
+    try {
+      const res = await fetch(BASE_API_URL + `/api/rag/documents/list${params ? '?' + params : ''}`, { headers: headers })
+      if (!res.ok) throw new Error('Failed to fetch documents'); const data = await res.json(); return data
+    } catch(err){ addToast(err.message || 'List error','danger'); return [] }
+  }
+
+  async function getDocumentVersions(documentId){
+    if (!token) return addToast('Please login first', 'warning', 'Auth')
+    const headers = { 'Authorization': `Bearer ${token}` };
+    if (sessionId) headers['X-Session-ID'] = sessionId;
+    try {
+      const res = await fetch(BASE_API_URL + `/api/rag/documents/${documentId}/versions`, { headers: headers })
+      if (!res.ok) throw new Error('Failed to fetch versions'); const data = await res.json(); return data
+    } catch(err){ addToast(err.message || 'Versions error','danger'); return [] }
+  }
+
+  async function updateDocument({ document_id, text, version_notes, status = 'published' }){
+    if (!token) return addToast('Please login first', 'warning', 'Auth')
+    const headers = { 'Content-Type':'application/json', 'Authorization': `Bearer ${token}` };
+    if (sessionId) headers['X-Session-ID'] = sessionId;
+    try {
+      const res = await fetch(BASE_API_URL + `/api/rag/documents/update`, { method:'POST', headers: headers, body: JSON.stringify({ document_id, text, version_notes, status }) })
+      if (!res.ok){ const txt = await res.text().catch(()=>res.statusText); throw new Error(txt || 'Update error') }
+      const data = await res.json(); addToast('Document updated', 'success'); return data
+    } catch(err){ addToast(err.message || 'Update error','danger'); throw err }
+  }
+
+  async function seedDocuments(){
+    if (!token) return addToast('Please login first', 'warning', 'Auth')
+    const headers = { 'Authorization': `Bearer ${token}` };
+    if (sessionId) headers['X-Session-ID'] = sessionId;
+    try {
+      const res = await fetch(BASE_API_URL + `/api/rag/documents/seed`, { method:'POST', headers: headers })
+      if (!res.ok){ const txt = await res.text().catch(()=>res.statusText); throw new Error(txt || 'Seed error') }
+      const data = await res.json(); addToast('Documents seeded', 'success'); return data
+    } catch(err){ addToast(err.message || 'Seed error','danger'); throw err }
+  }
+
+  async function compareDocumentVersions(documentId, version1, version2){
+    if (!token) return addToast('Please login first', 'warning', 'Auth')
+    const headers = { 'Authorization': `Bearer ${token}` };
+    if (sessionId) headers['X-Session-ID'] = sessionId;
+    const params = new URLSearchParams({ version1, version2 }).toString();
+    try {
+      const res = await fetch(BASE_API_URL + `/api/rag/documents/${documentId}/compare?${params}`, { headers: headers })
+      if (!res.ok) throw new Error('Failed to compare versions'); const data = await res.json(); return data
+    } catch(err){ addToast(err.message || 'Compare error','danger'); return null }
+  }
+
+  async function archiveDocumentVersion(documentId, version){
+    if (!token) return addToast('Please login first', 'warning', 'Auth')
+    const headers = { 'Authorization': `Bearer ${token}` };
+    if (sessionId) headers['X-Session-ID'] = sessionId;
+    const params = new URLSearchParams({ version }).toString();
+    try {
+      const res = await fetch(BASE_API_URL + `/api/rag/documents/${documentId}/archive?${params}`, { method:'POST', headers: headers })
+      if (!res.ok){ const txt = await res.text().catch(()=>res.statusText); throw new Error(txt || 'Archive error') }
+      const data = await res.json(); addToast('Version archived', 'success'); return data
+    } catch(err){ addToast(err.message || 'Archive error','danger'); throw err }
+  }
+
+  async function testRBACAccess(){
+    if (!token) return addToast('Please login first', 'warning', 'Auth')
+    try {
+      // Test creating a highly confidential document
+      const testDoc = {
+        source_name: 'rbac_test.md',
+        text: 'This is a test document for RBAC validation',
+        metadata: {
+          department: 'Engineering',
+          sensitivity: 'highly_confidential'
+        }
+      };
+      const result = await postAddJson(testDoc);
+      addToast('RBAC Test: Document created successfully', 'success');
+      return result;
+    } catch(err) {
+      if (err.message.includes('403') || err.message.includes('forbidden')) {
+        addToast('RBAC Test: Access denied (expected for non-admin users)', 'warning');
+      } else {
+        addToast('RBAC Test: ' + err.message, 'danger');
+      }
+      return null;
+    }
   }
 
   function truncate(text, n=200){ if (!text) return ''; return text.length<=n?text:text.slice(0,n)+'...' }
@@ -176,6 +271,8 @@ export default function RAGChat({ onLogout }){
           >
             <option value="local">Local</option>
             <option value="google">Google</option>
+            <option value="gpt">OpenAI GPT</option>
+            <option value="hf">Hugging Face</option>
           </select>
           <select
             className="form-select form-select-sm"
@@ -399,10 +496,11 @@ export default function RAGChat({ onLogout }){
                           })
                         }
                       >
-                        <option value="public">public</option>
-                        <option value="internal">internal</option>
-                        <option value="restricted">restricted</option>
-                        <option value="confidential">confidential</option>
+                        <option value="public_internal">Public Internal</option>
+                        <option value="department_confidential">Department Confidential</option>
+                        <option value="role_confidential">Role Confidential</option>
+                        <option value="highly_confidential">Highly Confidential</option>
+                        <option value="personal">Personal</option>
                       </select>
                       <input
                         className="form-control form-control-sm"
@@ -428,20 +526,30 @@ export default function RAGChat({ onLogout }){
                 <button
                   className="btn btn-outline-primary"
                   onClick={async () => {
-                    const list = await fetchAccessRequests();
-                    console.log("Access requests:", list);
-                    addToast("Fetched access requests (console)", "info");
+                    const list = await listDocuments();
+                    console.log("Documents:", list);
+                    addToast("Documents listed (console)", "info");
                   }}
                 >
-                  Fetch Access Requests
+                  List Documents
                 </button>
                 <button
-                  className="btn btn-outline-secondary"
-                  onClick={() =>
-                    addToast("Local requests shown in console", "info")
-                  }
+                  className="btn btn-outline-success"
+                  onClick={async () => {
+                    await seedDocuments();
+                  }}
                 >
-                  Show Local Requests
+                  Seed Documents
+                </button>
+                <button
+                  className="btn btn-outline-info"
+                  onClick={async () => {
+                    const list = await fetchAccessRequests();
+                    console.log("Access requests:", list);
+                    addToast("Access requests (console)", "info");
+                  }}
+                >
+                  Access Requests
                 </button>
                 <button
                   className="btn btn-outline-warning"
@@ -449,6 +557,26 @@ export default function RAGChat({ onLogout }){
                   data-bs-target="#updateMetadataModal"
                 >
                   Update Metadata
+                </button>
+                <button
+                  className="btn btn-outline-danger"
+                  onClick={testRBACAccess}
+                >
+                  Test RBAC
+                </button>
+                <button
+                  className="btn btn-outline-secondary"
+                  data-bs-toggle="modal"
+                  data-bs-target="#documentVersionModal"
+                >
+                  Version Manager
+                </button>
+                <button
+                  className="btn btn-outline-primary"
+                  data-bs-toggle="modal"
+                  data-bs-target="#personalizedTestModal"
+                >
+                  Test Personalization
                 </button>
               </div>
               <hr />
@@ -545,6 +673,73 @@ export default function RAGChat({ onLogout }){
               ></button>
             </div>
             <UpdateMetadataForm />
+          </div>
+        </div>
+      </div>
+      <div
+        className="modal fade"
+        id="documentVersionModal"
+        tabIndex={-1}
+        aria-hidden="true"
+      >
+        <div className="modal-dialog modal-xl">
+          <div className="modal-content">
+            <div className="modal-header">
+              <h5 className="modal-title">Document Version Manager</h5>
+              <button
+                type="button"
+                className="btn-close"
+                data-bs-dismiss="modal"
+                aria-label="Close"
+              ></button>
+            </div>
+            <DocumentVersionModal
+              onGetVersions={getDocumentVersions}
+              onCompareVersions={compareDocumentVersions}
+              onArchiveVersion={archiveDocumentVersion}
+            />
+            <div className="modal-footer">
+              <button
+                type="button"
+                className="btn btn-secondary"
+                data-bs-dismiss="modal"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div
+        className="modal fade"
+        id="personalizedTestModal"
+        tabIndex={-1}
+        aria-hidden="true"
+      >
+        <div className="modal-dialog modal-lg">
+          <div className="modal-content">
+            <div className="modal-header">
+              <h5 className="modal-title">Personalized AI Response Test</h5>
+              <button
+                type="button"
+                className="btn-close"
+                data-bs-dismiss="modal"
+                aria-label="Close"
+              ></button>
+            </div>
+            <PersonalizedTestModal
+              onSendQuery={sendQuery}
+              modelProvider={modelProvider}
+            />
+            <div className="modal-footer">
+              <button
+                type="button"
+                className="btn btn-secondary"
+                data-bs-dismiss="modal"
+              >
+                Close
+              </button>
+            </div>
           </div>
         </div>
       </div>

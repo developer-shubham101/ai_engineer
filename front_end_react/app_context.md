@@ -17,13 +17,13 @@
   - `utility/const.js` - Defines constants like `BASE_API_URL`.
   - `utility/auth.js` - JWT token management utilities (encode/decode, localStorage operations).
 - Interacts with backend via REST endpoints at configurable `BASE_API_URL` (default `http://192.168.1.2:8000`).
-  - API paths now include `/api/rag/{model_provider}/` (e.g., `/api/rag/local/query`).
+  - API paths include `/api/rag/{model_provider}/query` for queries and `/api/rag/documents/*` for document management.
   - `X-Session-ID` is extracted from JWT token and included in request headers automatically.
 - Backend responsibilities (outside repo scope but assumed):
   - Auth: JWT token generation via `/api/auth/token`, validate Bearer tokens, embed user info and session_id in token.
-  - RAG: query vector DB (Chroma/FAISS/Pinecone) and optionally a LLM.
-  - Document ingestion: accept `/add`, `/add-file`.
-  - Access workflow: `/request-access`, `/access-requests`, `/update-metadata`.
+  - RAG: query vector DB (ChromaDB) with multi-provider LLM support (Local/Google/OpenAI/HuggingFace).
+  - Document management: comprehensive CRUD with versioning, RBAC filtering, and metadata validation.
+  - Access workflow: `/request-access`, `/access-requests`, role-based document filtering.
   - Session management: automatic via JWT token (session_id embedded in token payload).
 - Libraries & tools:
   - React 18, Vite, Bootstrap 5 (CDN), Tailwind (optional utilities CDN).
@@ -40,9 +40,19 @@
 - `POST /api/auth/token` — `{ username, password }` → `{ access_token, token_type, user: { user_id, username, role, department, profile } }`
 
 **RAG Operations (require Bearer token):**
-- `POST /api/rag/{model_provider}/query` — `{ question, top_k, use_llm }` → `{ answer, retrieved[], context, filtered_out_count?, public_summaries?, filtered_details? }`
-- `POST /api/rag/{model_provider}/add` — `{ source_name, text, metadata }` → add JSON doc, returns status / ids
-- `POST /api/rag/{model_provider}/add-file` — multipart/form-data (file, department, sensitivity, tags, public_summary, owner_id) → upload + chunking result
+- `POST /api/rag/{model_provider}/query` — `{ question, top_k, use_llm, max_tokens?, category? }` → `{ answer, retrieved[], context, filtered_out_count?, public_summaries?, filtered_details? }`
+  - `model_provider`: `local`, `google`, `gpt`, `hf` (huggingface)
+
+**Document Management (require Bearer token):**
+- `POST /api/rag/documents/add` — `{ source_name, text, metadata }` → add JSON doc with versioning
+- `POST /api/rag/documents/add-file` — multipart/form-data (file, department, sensitivity, tags, public_summary, owner_id) → upload + chunking with versioning
+- `POST /api/rag/documents/update` — `{ document_id, text, version_notes?, status? }` → create new version (non-destructive)
+- `POST /api/rag/documents/seed` — seed documents from data folder
+- `GET /api/rag/documents/list` — list documents with filtering (department, status, latest_only)
+- `GET /api/rag/documents/{document_id}/versions` — get version history
+- `GET /api/rag/documents/{document_id}/versions/{version}` — get specific version
+- `GET /api/rag/documents/{document_id}/compare?version1=1.0&version2=2.0` — compare versions
+- `POST /api/rag/documents/{document_id}/archive` — archive version
 - `POST /request-access` — `{ document_id?, source_name?, reason? }` → submit access request
 - `GET /access-requests` — admin list of pending access requests
 - `POST /update-metadata` — `{ ids: [...], metadata: {...} }` → update chunk metadata
@@ -50,10 +60,17 @@
 **Client-side functions:**
 - `Login.handleLogin(username, password)` — authenticate and store JWT token
 - `RAGChat.sendQuery(question)` — client-side wrapper for network call to `/api/rag/{model_provider}/query`
-- `RAGChat.postAddJson(payload)` — client-side wrapper for `/api/rag/{model_provider}/add`
-- `RAGChat.postUploadFile(formData)` — client-side wrapper for `/api/rag/{model_provider}/add-file`
+- `RAGChat.postAddJson(payload)` — client-side wrapper for `/api/rag/documents/add`
+- `RAGChat.postUploadFile(formData)` — client-side wrapper for `/api/rag/documents/add-file`
+- `RAGChat.listDocuments(filters)` — client-side wrapper for `/api/rag/documents/list`
+- `RAGChat.getDocumentVersions(documentId)` — client-side wrapper for version history
+- `RAGChat.updateDocument(payload)` — client-side wrapper for `/api/rag/documents/update`
+- `RAGChat.seedDocuments()` — client-side wrapper for `/api/rag/documents/seed`
+- `RAGChat.compareDocumentVersions(documentId, version1, version2)` — client-side wrapper for version comparison
+- `RAGChat.archiveDocumentVersion(documentId, version)` — client-side wrapper for version archiving
+- `RAGChat.testRBACAccess()` — test RBAC restrictions by attempting to create highly confidential document
 - `RAGChat.requestAccess(payload)` — client-side wrapper for `/request-access`
-- `RAGChat.handleLogout()` — clear authentication and return to login
+- `RAGChat.handleLogout()` — clear authentication, chat history, and return to login
 
 ## 4. Coding Conventions
 - Languages & versions:
@@ -79,16 +96,40 @@
 - `src/App.jsx` — top-level app container with authentication routing (shows Login or RAGChat based on auth state).
 - `src/components/Login.jsx` — login form with username/password fields and "Login with Guest" button (auto-fills guest/guest123), calls `/api/auth/token` and stores JWT.
 - `src/components/RAGChat.jsx` — core chat UI and main network wrappers. Uses Bearer token authentication. Displays user info and logout button.
-- `src/components/AddJsonForm.jsx` — modal form to POST `/add`.
-- `src/components/UploadFileForm.jsx` — modal form to post `/add-file` (multipart).
+- `src/components/AddJsonForm.jsx` — enhanced modal form to POST `/api/rag/documents/add` with RBAC metadata fields.
+- `src/components/UploadFileForm.jsx` — modal form to POST `/api/rag/documents/add-file` (multipart).
 - `src/components/UpdateMetadataForm.jsx` — modal to update chunk metadata.
+- `src/components/DocumentVersionModal.jsx` — modal for document version management (history, comparison, archiving).
+- `src/components/PersonalizedTestModal.jsx` — modal for testing personalized AI responses with different scenarios.
 - `src/components/ToastList.jsx` — transient UI toasts for errors / notifications.
 - `src/styles.css` — small custom styles used across components.
 - `src/utility/const.js` — Defines constants such as `BASE_API_URL`.
 - `src/utility/auth.js` — JWT token utilities (decode, expiration check, localStorage management).
 - `README.md` — run/build instructions; dev notes and backend expectations.
 
-## 6. Data Models / Structures
+## 6. Enhanced UI Components
+
+**DocumentVersionModal Features:**
+- Get version history for any document ID
+- Compare two versions with unified diff
+- Archive specific versions
+- Console logging for detailed results
+
+**PersonalizedTestModal Scenarios:**
+- Guest Job Inquiry: Tests job matching for external users
+- Career Guidance: Tests internal employee support
+- HR Recruitment: Tests role-specific assistance
+- Profile Analysis: Tests skill-based job matching
+- Onboarding Flow: Tests guest user profile collection
+
+**Enhanced AddJsonForm:**
+- Simple mode: Dropdown fields for department, sensitivity, roles
+- Advanced mode: Raw JSON metadata editing
+- RBAC validation: Real-time field validation
+- Personal document support: Owner ID field for personal docs
+- Public summary: Fallback content for restricted access
+
+## 7. Data Models / Structures
 
 **Login request:**
 ```json
@@ -147,3 +188,77 @@
   "X-Session-ID": "sess_d41a5bf69cd2474a84bf9e7853e27678"
 }
 ```
+
+**Document Metadata:**
+```json
+{
+  "source": "string",
+  "department": "string",
+  "sensitivity": "string",
+  "allowed_roles": ["string"],
+  "owner_id": "string",
+  "public_summary": "string",
+  "document_id": "string",
+  "version": "string",
+  "version_created_at": "string",
+  "version_created_by": "string",
+  "parent_version": "string",
+  "status": "string",
+  "is_latest_version": true
+}
+```
+
+**Sensitivity Levels (RBAC):**
+- `public_internal` - All authenticated users
+- `department_confidential` - Same department or HR/Legal/Executive
+- `role_confidential` - Specific roles or HR/Legal/Executive
+- `highly_confidential` - Legal/Executive only
+- `personal` - Owner or HR/Legal/Executive
+
+**Document Status:**
+- `draft` - Work in progress
+- `pending_approval` - Awaiting review
+- `published` - Active and searchable
+- `archived` - Soft deleted
+
+**Model Providers:**
+- `local` - Local Mistral-7B model
+- `google` - Google Gemini API
+- `gpt` - OpenAI GPT API
+- `hf` - Hugging Face Inference API
+
+**New UI Features:**
+
+**Enhanced Document Management:**
+- Document version history viewing
+- Version comparison with diff display
+- Version archiving functionality
+- Advanced metadata editor with RBAC fields
+- Document listing with filtering
+- Seed documents from backend data folder
+
+**RBAC Testing:**
+- Test role-based access control restrictions
+- Validate metadata requirements
+- Test sensitivity level permissions
+- Department ownership validation
+
+**Personalized AI Testing:**
+- Guest user job inquiry scenarios
+- Internal employee career guidance
+- HR manager recruitment assistance
+- Profile analysis and job matching
+- Guest onboarding flow testing
+
+**Enhanced Authentication:**
+- Chat history cleared on logout
+- Session management with JWT tokens
+- Multi-role user support
+
+**Admin Panel Features:**
+- List all documents with metadata
+- Seed documents from backend
+- Access request management
+- RBAC permission testing
+- Version management tools
+- Personalized response testing
