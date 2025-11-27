@@ -37,9 +37,10 @@ User → FastAPI → Provider Router → Base RAG Service → RBAC Filter → Pr
 
 **🔐 Security & Data:**
 - `auth.py` + `user_service.py` - JWT authentication & user management
-- `base_rag_service.py` - **Flexible RBAC**: Level-based + role override system
+- `base_rag_service.py` - **Flexible RBAC**: Level-based + role override system + **Personalized AI**
 - `support_chat.py` - Session management & conversation history
 - `version_tracking.py` - Document versioning system
+- `profile_analyzer.py` - **NEW**: Smart profile analysis for personalized responses
 
 **⚙️ Infrastructure:**
 - `model_manager.py` - Local LLM loading & caching
@@ -104,15 +105,17 @@ data/                 # 📄 Seed documents
 - `GET /api/rag/documents/{id}/versions` - Version history
 - `POST /api/rag/documents/{id}/archive` - Archive version
 
-**Document Versioning** (`/api/rag/documents/*`):
-- `POST /api/rag/documents/update` - Update document (creates new version, non-destructive). **Requires**: SuperAdmin, HR, Manager, or Employee role.
+**Document Management with RBAC** (`/api/rag/documents/*`):
+- `POST /api/rag/documents/add` - Add document with level-based validation. **Requires**: SuperAdmin, Manager, HR, or Employee role.
+- `POST /api/rag/documents/add-file` - Upload file with sensitivity validation. **Requires**: SuperAdmin, Manager, HR, or Employee role.
+- `POST /api/rag/documents/update` - Update document (creates new version, non-destructive). **Requires**: SuperAdmin, Manager, HR, or Employee role. **Department restriction**: Users below HR level can only update their own department's documents.
   - Request: `{"document_id": "doc_abc...", "text": "...", "version_notes": "Fixed typos", "status": "published"}`
   - Response: `{"message": "...", "document_id": "...", "version": "2.0", "chunk_count": 5, "status": "published"}`
-- `GET /api/rag/documents/list` - List all documents with filtering. Query params: `?department=HR&status=published&latest_only=true`. **Requires**: SuperAdmin, HR, Manager, or Employee role.
-- `GET /api/rag/documents/{document_id}/versions` - Get version history for a document. **Requires**: SuperAdmin, HR, Manager, or Employee role.
-- `GET /api/rag/documents/{document_id}/versions/{version}` - Get specific version with full content. **Requires**: SuperAdmin, HR, Manager, or Employee role.
-- `GET /api/rag/documents/{document_id}/compare?version1=1.0&version2=2.0` - Compare two versions (shows diff). **Requires**: SuperAdmin, HR, Manager, or Employee role.
-- `POST /api/rag/documents/{document_id}/archive` - Archive a version (soft-delete). **Requires**: SuperAdmin, HR, or Manager role.
+- `GET /api/rag/documents/list` - List all documents with filtering. Query params: `?department=HR&status=published&latest_only=true`. **Requires**: SuperAdmin, Manager, HR, or Employee role.
+- `GET /api/rag/documents/{document_id}/versions` - Get version history for a document. **Requires**: SuperAdmin, Manager, HR, or Employee role.
+- `GET /api/rag/documents/{document_id}/versions/{version}` - Get specific version with full content. **Requires**: SuperAdmin, Manager, HR, or Employee role.
+- `GET /api/rag/documents/{document_id}/compare?version1=1.0&version2=2.0` - Compare two versions (shows diff). **Requires**: SuperAdmin, Manager, HR, or Employee role.
+- `POST /api/rag/documents/{document_id}/archive` - Archive a version (soft-delete). **Requires**: SuperAdmin, Manager, or HR role.
 
 ### Core Service Functions
 
@@ -127,11 +130,26 @@ async def query_rag(...):
     # 4. Generate response (provider-specific)
     # 5. Return standardized format (shared)
 
-# NEW: Flexible RBAC System
+# NEW: Flexible RBAC + Personalized AI System
 def _allowed_by_metadata(meta, requester):
-    # 1. Specific role override (allowed_roles) - overrides hierarchy
-    # 2. Department matching (for dept_confidential)
-    # 3. Level-based access (default hierarchy)
+    # 1. Personal documents: owner or HR+ level
+    # 2. Specific role override (allowed_roles) - overrides hierarchy
+    # 3. Department matching (for dept_confidential)
+    # 4. Level-based access (default hierarchy)
+
+# NEW: Enhanced personalization with profile analysis
+def inject_personalized_context(session_id, llm_prompt_prefix, query_text, requester, profile):
+    # 1. Load user profile (DB or session)
+    # 2. Analyze profile for job matching and suggestions
+    # 3. Build enhanced prompt with personalized context
+    # 4. Include tone guidance from chat history
+
+# Level-based validation in endpoints
+def validate_metadata(meta, requester):
+    user_level = ROLE_LEVELS.get(user_role, 0)
+    required_level = SENSITIVITY_LEVELS.get(sensitivity, 0)
+    if user_level < required_level:
+        raise HTTPException(f"Role '{user_role}' (level {user_level}) cannot create '{sensitivity}' (requires level {required_level}+)")
 ```
 
 **Provider Services** - Implement `generate_response()`:
@@ -160,13 +178,14 @@ def _allowed_by_metadata(meta, requester):
 **✅ Consistent API**: Same `/api/rag/{provider}/query` pattern for all
 **✅ Clean Dependencies**: Minimal imports, clear separation of concerns
 
-### 🛠️ **15 Core Services** (down from 20+ files):
+### 🛠️ **16 Core Services** (enhanced with AI personalization):
 ```
-🎯 Base: base_rag_service.py (+ Flexible RBAC)
+🎯 Base: base_rag_service.py (+ Flexible RBAC + Personalized AI)
 🤖 Providers: rag_local_service.py, google_models.py, gpt_rag_service.py, hf_rag_service.py
 🔐 Security: auth.py, user_service.py
 📊 Data: chroma_utils.py, utility.py, version_tracking.py, support_chat.py
 ⚙️ Tools: model_manager.py, prompt_builder.py, sentiment_classifier.py
+🧠 AI: profile_analyzer.py (NEW - Smart personalization)
 ```
 
 ### 🔐 **NEW: Flexible RBAC System**
@@ -185,13 +204,28 @@ department_confidential (1) - Employee+
 public_internal (0) - Everyone
 ```
 
-**Role Override Examples**:
+**RBAC Features**:
+- **Level-based validation**: Users can only create documents at their level or below
+- **Role overrides**: `allowed_roles` bypasses hierarchy (e.g., Admin+Employee only, blocks Manager/HR)
+- **Department restrictions**: Users below HR level can only update their department's documents
+- **Personal documents**: Owner access + HR+ level override
+
+**NEW: Personalized AI Features**:
+- **Profile Analysis**: Analyzes user skills/experience for job matching
+- **Smart Suggestions**: Generates personalized action recommendations
+- **Guest Onboarding**: 6-step profile collection (name, gender, job_role, age, location, department)
+- **Context-Aware Responses**: Uses profile + chat history for personalized answers
+- **Job Matching**: Matches user background to relevant job categories
+- **Proactive Assistance**: Offers cover letters, interview prep, career guidance
+
+**Examples**:
 ```json
-// Only Admin + Employee can access (bypasses Manager/HR)
+// RBAC: Only Admin + Employee can access (bypasses Manager/HR)
 {"sensitivity": "highly_confidential", "allowed_roles": ["SuperAdmin", "Employee"]}
 
-// Department-specific with role override
-{"sensitivity": "department_confidential", "department": "HR", "allowed_roles": ["SuperAdmin", "HR"]}
+// Personalization: Guest user profile for job matching
+{"name": "John Smith", "job_role": "Python Developer", "location": "New York"}
+// → AI Response: "Based on your Python background, we have 2 software engineering positions. Would you like me to draft a cover letter?"
 ```
 
 ### 🚀 **Usage Examples:**
@@ -209,11 +243,56 @@ curl -X POST "/api/rag/gpt/query" -d '{"question": "What is our policy?", "use_l
 curl -X POST "/api/rag/hf/query" -d '{"question": "What is our policy?", "use_llm": true}'
 ```
 
-**Perfect for learning multi-provider RAG architectures + Enterprise RBAC! 🎓**
+**Perfect for learning multi-provider RAG architectures + Enterprise RBAC + AI Personalization! 🎓**
 
 ---
 
-## 6. Document Management & Versioning
+## 6. NEW: Personalized AI System
+
+**ProfileAnalyzer Service** (`profile_analyzer.py`):
+- `analyze_profile_for_jobs(profile, chat_history)` - Match user skills to job categories
+- `build_personalized_prompt(base_prompt, profile, chat_history, query, requester)` - Enhanced prompt with profile context
+- `_create_profile_summary(profile)` - Generate concise user context
+- `_get_suggested_actions(job_matches, profile)` - Proactive recommendations
+
+**Enhanced Base RAG Service**:
+- `inject_personalized_context()` - **NEW**: Replaces inject_tone_guidance with profile analysis
+- Auto-loads user profiles from `user_meta` (internal users) or `session_profiles` (guests)
+- Combines tone guidance + profile analysis + job matching
+
+**Guest Onboarding Flow** (based on `onboarding_fields.json`):
+1. **Name**: "What is your name?"
+2. **Gender**: "What is your gender?"
+3. **Job Role**: "What is your job role?"
+4. **Age**: "What is your age?"
+5. **Location**: "Where are you located?"
+6. **Department**: "Which department are you trying to reach?"
+7. **Completion**: "Thank you! Your details have been saved."
+8. **Personalized Responses**: Uses collected profile for job matching
+
+**Debug Logging** (NEW):
+- `RAG_QUERY_START` / `LLM_QUERY_DEBUG` - Query tracking
+- `GOOGLE_LLM_REQUEST` / `GOOGLE_LLM_RESPONSE` - Google Gemini debug
+- `LOCAL_LLM_REQUEST` / `LOCAL_LLM_RESPONSE` - Local model debug
+- Full prompt and response logging (truncated for readability)
+
+**Usage Examples**:
+```bash
+# Guest onboarding sequence
+POST /api/rag/google/query {"question": "Hi I want to connect with HR"}
+# → "What is your name?"
+
+POST /api/rag/google/query {"question": "John Smith"}
+# → "What is your gender?"
+
+# After onboarding completion
+POST /api/rag/google/query {"question": "Are there Python developer jobs?"}
+# → "Based on your profile as a Python Developer in New York, we have 2 relevant positions..."
+```
+
+---
+
+## 7. Document Management & Versioning
 
 **Document Management** (Local service only):
 - `add_document_to_rag_local()` - Chunk, embed, store with versioning

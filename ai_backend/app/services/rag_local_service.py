@@ -555,12 +555,19 @@ class LocalRAGService(BaseRAGService):
         prompt = build_prompt_with_selected_chunks(final_prefix, context_text, query_text)
 
         try:
+            logger.info("LOCAL_LLM_REQUEST: prompt_len=%d max_tokens=%d session=%s", 
+                       len(prompt), max_tokens, session_id or "none")
+            logger.debug("LOCAL_FULL_PROMPT: %s", prompt[:1000] + "..." if len(prompt) > 1000 else prompt)
+            
             answer = await _call_llm_with_retry(
                 llm_instance,
                 prompt,
                 max_tokens=max_tokens,
                 temperature=0.0
             )
+            
+            logger.info("LOCAL_LLM_RESPONSE: response_len=%d session=%s", len(answer or ""), session_id or "none")
+            logger.debug("LOCAL_RESPONSE_TEXT: %s", (answer or "")[:500] + "..." if len(answer or "") > 500 else answer)
         except Exception as e:
             logger.exception("LLM call failed: %s", e)
             raise

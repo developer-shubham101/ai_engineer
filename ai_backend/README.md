@@ -16,7 +16,7 @@ Common components across all providers:
 * **Local embeddings (MiniLM)** - shared vector space
 * **Local Chroma vector DB** - unified document storage
 * **FastAPI backend** - single API interface
-* **Custom RBAC (Role-Based Access Control)** - consistent security
+* **Flexible RBAC (Role-Based Access Control)** - level-based + role overrides
 * **Session-aware Support Chat System (SQLite)** - persistent conversations
 
 This README describes the project **from an AI / system-architecture perspective**, so any LLM can easily understand how the system works and give accurate help.
@@ -33,10 +33,13 @@ The system can:
 
 (Policies, workflows, HR, Finance, IT, Legal, etc.)
 
-### ✅ Enforce strict RBAC
+### ✅ Enforce flexible RBAC
 
-Five sensitivity levels:
-`public_internal`, `department_confidential`, `role_confidential`, `highly_confidential`, `personal`
+**Level-based hierarchy**: SuperAdmin (4) → Manager (3) → HR (2) → Employee (1) → Guest (0)
+
+**Six sensitivity levels**: `public_internal`, `department_confidential`, `role_confidential`, `highly_confidential`, `super_confidential`, `personal`
+
+**Role overrides**: `allowed_roles` can bypass hierarchy (e.g., Admin+Employee only, blocks Manager/HR)
 
 ### ✅ Perform RAG queries locally
 
@@ -82,28 +85,42 @@ User → FastAPI → RAG Pipeline → RBAC Filter → LLM Provider → Response
 
 ---
 
-# 🔐 **3. Role & Sensitivity Model**
+# 🔐 **3. Flexible RBAC System**
 
-### **Roles**
+### **Role Hierarchy** (Level-based access)
 
-* Employee
-* Manager
-* HR
-* Finance
-* IT Support
-* Legal
-* Executive
-* Guest
+* **SuperAdmin (4)** - Full system access
+* **Manager (3)** - Management + below
+* **HR (2)** - HR functions + below  
+* **Employee (1)** - Standard access + public
+* **Guest/PublicUser (0)** - Public content only
 
-### **Sensitivity Levels**
+### **Sensitivity Levels** (Required access level)
 
-* `public_internal` – visible to all
-* `department_confidential` – only same department
-* `role_confidential` – HR / Managers / Legal
-* `highly_confidential` – Legal + Executives only
-* `personal` – owner only (or HR/Legal/Exec)
+* `public_internal` (0) – Everyone
+* `department_confidential` (1) – Employee+ in same department
+* `role_confidential` (2) – HR+ level
+* `highly_confidential` (3) – Manager+ level
+* `super_confidential` (4) – SuperAdmin only
+* `personal` (1) – Owner + HR+ level
 
-This metadata is stored per document chunk and enforced after retrieval.
+### **Advanced Features**
+
+* **Role Override**: `allowed_roles` bypasses hierarchy
+* **Department Restrictions**: Users below HR level can only update their department
+* **Level Validation**: Users can only create documents at their level or below
+
+### **Examples**
+
+```json
+// Only Admin + Employee access (blocks Manager/HR)
+{"sensitivity": "highly_confidential", "allowed_roles": ["SuperAdmin", "Employee"]}
+
+// Department-specific with override
+{"sensitivity": "department_confidential", "department": "HR", "allowed_roles": ["SuperAdmin", "HR"]}
+```
+
+This metadata is stored per document chunk and enforced during retrieval and creation.
 
 ---
 
@@ -121,23 +138,25 @@ Using **SentenceTransformers / MiniLM**.
 
 But these chunks may include restricted content.
 
-### 4. **RBAC Filtering Happens**
+### 4. **Flexible RBAC Filtering**
 
 Each chunk is checked by:
 
-```
-sensitivity
-department
-role
-owner_id
-allowed_roles
-public_summary
+1. **Personal documents**: Owner or HR+ level
+2. **Role overrides**: `allowed_roles` bypasses hierarchy
+3. **Department matching**: For `department_confidential`
+4. **Level-based access**: User level ≥ required level
+
+```python
+user_level = ROLE_LEVELS.get(user_role, 0)
+required_level = SENSITIVITY_LEVELS.get(sensitivity, 0)
+access_granted = user_level >= required_level
 ```
 
 Unauthorized chunks:
 
-* Are removed
-* But public summaries may be shown
+* Are removed with audit logging
+* Public summaries may be shown as fallback
 * Count of filtered items is recorded
 
 ### 5. AI Prompt is built (optional session prefix)
@@ -276,10 +295,10 @@ It simulates what a **real company AI assistant** would look like.
 * **Multi-provider architecture** - unified interface for local and cloud LLMs
 * **Offline-first design** - works without internet using local models
 * **Cloud integration** - seamless API integration when needed
-* **Shared RBAC** - consistent security across all providers
+* **Flexible RBAC** - level-based hierarchy with role overrides across all providers
 * **Common vector space** - same embeddings and documents for all providers
 * **Provider abstraction** - easy to add new LLM providers
-* **Enterprise-grade** - realistic role-based access control
+* **Enterprise-grade** - flexible RBAC with level validation and role overrides
 * **Session continuity** - conversation history works across providers
 
 ---
@@ -290,7 +309,7 @@ This project is a **complete multi-provider enterprise RAG system**, combining:
 
 * **Multiple LLM providers** (Local, Google, OpenAI, Hugging Face)
 * **Unified RAG architecture** with shared document retrieval
-* **Consistent RBAC** across all providers
+* **Flexible RBAC** with level-based access and role overrides across all providers
 * **Session memory** and conversation continuity
 * **Document versioning** and metadata management
 * **JWT authentication** with role-based access

@@ -13,6 +13,7 @@ from app.services.chroma_utils import ensure_chroma_client, query_collection
 from app.services.support_chat import fetch_recent_messages
 from app.services.prompt_builder import build_tone_guidance, estimate_tokens_from_text
 from app.services.utility import embed_texts, DEFAULT_PERSIST_DIR, DEFAULT_COLLECTION_NAME
+from app.services.profile_analyzer import build_personalized_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -227,31 +228,49 @@ class BaseRAGService(ABC):
             "filtered_details": filtered_details
         }
     
-    def inject_tone_guidance(self, session_id: Optional[str], llm_prompt_prefix: Optional[str]) -> str:
+    def inject_personalized_context(
+        self, 
+        session_id: Optional[str], 
+        llm_prompt_prefix: Optional[str],
+        query_text: str,
+        requester: Optional[Dict[str, str]],
+        profile: Optional[Dict[str, str]] = None
+    ) -> str:
         """
-        Inject tone guidance into the LLM prompt prefix based on session history.
-        Common across all RAG providers.
+        Inject personalized context including tone guidance and profile analysis.
+        Enhanced version of inject_tone_guidance with profile support.
         """
+        chat_history = []
         last_user_tone = None
+        
         if session_id:
             try:
-                history = fetch_recent_messages(session_id, limit=10)
-                for m in reversed(history):
+                chat_history = fetch_recent_messages(session_id, limit=10)
+                for m in reversed(chat_history):
                     if m.get("speaker") == "user" and m.get("tone"):
                         last_user_tone = m["tone"]
                         break
             except Exception as e:
-                logger.warning("Tone fetch failed: %s", e)
+                logger.warning("History fetch failed: %s", e)
 
         logger.debug("Last user tone detected: %s", last_user_tone)
         tone_note = build_tone_guidance(last_user_tone)
 
-        system_prefix = llm_prompt_prefix or (
+        base_system_prefix = llm_prompt_prefix or (
             "You are a helpful assistant. Use the provided context to answer the question. "
             "If the answer is not present in the context, say you don't know."
         )
-
-        return f"Conversation Tone Guidance:\n{tone_note}\n\n{system_prefix}"
+        
+        # Add tone guidance
+        enhanced_prefix = f"Conversation Tone Guidance:\n{tone_note}\n\n{base_system_prefix}"
+        
+        # Add personalization if profile available
+        if profile or (requester and requester.get("role") != "Guest"):
+            enhanced_prefix = build_personalized_prompt(
+                enhanced_prefix, profile or {}, chat_history, query_text, requester or {}
+            )
+        
+        return enhanced_prefix
     
     def build_context_text(self, visible_docs: List[str]) -> str:
         """
@@ -341,9 +360,11 @@ class BaseRAGService(ABC):
         Main RAG query method that orchestrates the common flow.
         Uses the template method pattern - calls abstract generate_response method.
         """
-        logger.debug(
-            "BaseRAG query called: query_text_len=%d n_results=%d use_llm=%s max_tokens=%d session_id=%s requester=%s",
-            len(query_text or ""), n_results, use_llm, max_tokens, session_id, (requester or {}).get("user_id"))
+        logger.info(
+            "RAG_QUERY_START: query_len=%d n_results=%d use_llm=%s max_tokens=%d session_id=%s user=%s",
+            len(query_text or ""), n_results, use_llm, max_tokens, session_id, (requester or {}).get("user_id", "anonymous")
+        )
+        logger.debug("RAG_QUERY_TEXT: %s", query_text)
 
         if not query_text:
             raise ValueError("query_text must be provided")
@@ -369,10 +390,43 @@ class BaseRAGService(ABC):
         # 3. Build context
         context_text = self.build_context_text(visible_docs)
 
-        # 4. Tone Guidance
-        final_prefix = self.inject_tone_guidance(session_id, llm_prompt_prefix)
+        # 4. Enhanced Personalization (Tone + Profile Analysis)
+        # Get user profile if available
+        user_profile = None
+        if requester and requester.get("user_id"):
+            try:
+                from app.services.user_service import get_all_user_meta
+                user_profile = get_all_user_meta(requester["user_id"])
+            except Exception as e:
+                logger.warning("Failed to load user profile: %s", e)
+        elif session_id:
+            try:
+                from app.services.support_chat import get_full_profile
+                user_profile = get_full_profile(session_id)
+            except Exception as e:
+                logger.warning("Failed to load session profile: %s", e)
+        
+        final_prefix = self.inject_personalized_context(
+            session_id, llm_prompt_prefix, query_text, requester, user_profile
+        )
 
         # 5. Generate (provider-specific)
+        # DEBUG: Log final query sent to LLM
+        logger.info(
+            "LLM_QUERY_DEBUG: user=%s provider=%s query_len=%d context_len=%d prefix_len=%d",
+            (requester or {}).get("user_id", "anonymous"),
+            self.__class__.__name__,
+            len(query_text),
+            len(context_text or ""),
+            len(final_prefix)
+        )
+        logger.debug(
+            "LLM_FINAL_PROMPT: %s\n\nCONTEXT: %s\n\nQUERY: %s",
+            final_prefix[:500] + "..." if len(final_prefix) > 500 else final_prefix,
+            context_text[:300] + "..." if len(context_text or "") > 300 else context_text,
+            query_text
+        )
+        
         answer = await self.generate_response(
             query_text, context_text, final_prefix, use_llm, max_tokens, session_id
         )
