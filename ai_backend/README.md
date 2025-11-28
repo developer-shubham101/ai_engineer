@@ -1,364 +1,322 @@
-# 🚀 **Multi-Provider Enterprise RAG System**
+# 🚀 Multi-Provider Enterprise RAG System
 
-**AI-First Project Summary — For LLM Understanding**
+[![Python](https://img.shields.io/badge/Python-3.8+-blue.svg)](https://python.org)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.104+-green.svg)](https://fastapi.tiangolo.com)
+[![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
-This project is a **versatile enterprise RAG system** designed for **learning, experimentation, and testing** with support for multiple LLM providers through a unified architecture. The system can run **fully offline** with local models or integrate with **cloud APIs** through a common interface.
+> **Enterprise-grade RAG system with multi-provider LLM support, advanced RBAC, and offline-first architecture**
 
-Supported providers:
+A production-ready **Retrieval-Augmented Generation (RAG) system** that works with multiple LLM providers through a unified API. Supports both **offline operation** with local models and **cloud integration** with major AI providers.
 
-* **Local Models**: Mistral-7B-Instruct-v0.2.Q3_K_M.gguf (CPU-only, offline)
-* **Google Gemini API**: gemini-2.5-flash, gemini-2.5-pro
-* **OpenAI GPT API**: gpt-3.5-turbo, gpt-4
-* **Hugging Face Inference API**: Various models
+## ✨ Key Features
 
-Common components across all providers:
+- 🤖 **Multi-Provider Support** - Local models, OpenAI GPT, Google Gemini, Hugging Face
+- 🔒 **Enterprise RBAC** - Role-based access control with flexible overrides
+- 📚 **Document Versioning** - Non-destructive updates with full history
+- 💬 **Session Management** - Persistent conversations with context
+- 🚀 **Offline-First** - Works without internet using local LLMs
+- ⚡ **Optimized Prompts** - Smart token budgeting and context truncation
+- 🔍 **Debug Tools** - Complete prompt/response logging
+- 🛡️ **Security** - JWT authentication with audit trails
 
-* **Local embeddings (BGE-Small-EN-v1.5)** - shared vector space
-* **Local Chroma vector DB** - unified document storage
-* **FastAPI backend** - single API interface
-* **Flexible RBAC (Role-Based Access Control)** - level-based + role overrides
-* **Session-aware Support Chat System (SQLite)** - persistent conversations
+## 🏗️ Architecture
 
-This README describes the project **from an AI / system-architecture perspective**, so any LLM can easily understand how the system works and give accurate help.
-
----
-
-# 🧠 **1. High-Level Purpose**
-
-This project simulates a **real enterprise AI assistant** inside a fictional company *Saarthi Infotech Pvt. Ltd.*
-
-The system can:
-
-### ✅ Answer role-specific questions
-
-(Policies, workflows, HR, Finance, IT, Legal, etc.)
-
-### ✅ Enforce flexible RBAC
-
-**Level-based hierarchy**: SuperAdmin (4) → Manager (3) → HR (2) → Employee (1) → Guest (0)
-
-**Six sensitivity levels**: `public_internal`, `department_confidential`, `role_confidential`, `highly_confidential`, `super_confidential`, `personal`
-
-**Role overrides**: `allowed_roles` can bypass hierarchy (e.g., Admin+Employee only, blocks Manager/HR)
-
-### ✅ Perform RAG queries locally
-
-Using BGE embeddings + Chroma
-
-### ✅ Support multiple LLM providers
-
-Local (Mistral-7B-Instruct GGUF), Google Gemini, OpenAI GPT, Hugging Face
-
-### ✅ Maintain multi-turn support chat sessions
-
-Stored in SQLite for short-term memory
-
-### ✅ Provide natural-language AI responses
-
-Built from allowed document chunks only
-
-The system supports **offline-first** operation with local models, plus **cloud integration** for enhanced capabilities, designed for **learning and testing**.
-
----
-
-# 🏗 **2. System Architecture Overview**
-
-```
-User → FastAPI → RAG Pipeline → RBAC Filter → LLM Provider → Response
-                          ↓                      ↓
-                   Chroma Vector DB        [Local|Google|GPT|HF]
-                          ↓
-                Local Embeddings (MiniLM)
+```mermaid
+graph TB
+    A[User Request] --> B[FastAPI Router]
+    B --> C[Provider Service]
+    C --> D[Base RAG Service]
+    D --> E[Response]
+    
+    D --> F[ChromaDB]
+    D --> G[RBAC Filter]
+    D --> H[Session Manager]
+    
+    C --> I[Local LLM]
+    C --> J[OpenAI GPT]
+    C --> K[Google Gemini]
+    C --> L[Hugging Face]
 ```
 
-### Components:
+### Supported Providers
 
-| Component                    | Purpose                                                     |
-| ---------------------------- | ----------------------------------------------------------- |
-| **FastAPI Server**           | Provides REST endpoints for query, add, seed, chat sessions |
-| **Base RAG Service**         | Common functionality: retrieval, RBAC filtering, sessions   |
-| **Provider Services**        | Local (Mistral), Google (Gemini), GPT, Hugging Face        |
-| **ChromaDB**                 | Stores vector embeddings + metadata (`chroma_storage/`)     |
-| **SQLite Databases**         | User auth, chat sessions, document versions (`database/`)   |
-| **Auth Layer**               | JWT-based authentication with role management               |
-| **Role & Department System** | Controls document visibility across all providers           |
+| Provider | Models | Status |
+|----------|--------|---------|
+| **Local** | Mistral-7B, Phi-2, Llama-3.2, Gemma-2B | ✅ Offline |
+| **OpenAI** | GPT-3.5, GPT-4 | ✅ API |
+| **Google** | Gemini-2.5-Flash, Gemini-2.5-Pro | ✅ API |
+| **Hugging Face** | Various models | ✅ API |
 
----
+## 🚀 Quick Start
 
-# 🔐 **3. Flexible RBAC System**
+### Prerequisites
+- Python 3.8+
+- 8GB+ RAM (for local models)
+- Git
 
-### **Role Hierarchy** (Level-based access)
+### Installation
 
-* **SuperAdmin (4)** - Full system access
-* **Manager (3)** - Management + below
-* **HR (2)** - HR functions + below  
-* **Employee (1)** - Standard access + public
-* **Guest/PublicUser (0)** - Public content only
+```bash
+# Clone the repository
+git clone https://github.com/your-username/ai_backend.git
+cd ai_backend
 
-### **Sensitivity Levels** (Required access level)
+# Install dependencies
+pip install -r requirements.txt
 
-* `public_internal` (0) – Everyone
-* `department_confidential` (1) – Employee+ in same department
-* `role_confidential` (2) – HR+ level
-* `highly_confidential` (3) – Manager+ level
-* `super_confidential` (4) – SuperAdmin only
-* `personal` (1) – Owner + HR+ level
+# Set up environment variables (optional for cloud providers)
+cp .env.example .env
+# Edit .env with your API keys
 
-### **Advanced Features**
+# Start the server
+python -m app.main
+```
 
-* **Role Override**: `allowed_roles` bypasses hierarchy
-* **Department Restrictions**: Users below HR level can only update their department
-* **Level Validation**: Users can only create documents at their level or below
+### First Query
 
-### **Examples**
+```bash
+# Test with local model (no API key needed)
+curl -X POST "http://localhost:8000/api/rag/local/query" \
+  -H "Content-Type: application/json" \
+  -d '{"question": "What are the company policies?", "use_llm": true}'
+```
+
+## 📖 Use Cases
+
+This system is perfect for:
+
+- 🏢 **Enterprise Knowledge Management** - Centralized company information with role-based access
+- 🎓 **Learning RAG Systems** - Complete implementation with multiple providers
+- 🔬 **AI Research** - Experiment with different LLM providers and prompt strategies
+- 🛠️ **Prototyping** - Quick setup for AI-powered applications
+- 📚 **Document Q&A** - Intelligent search and retrieval from document collections
+
+## 🔧 Configuration
+
+### Environment Variables
+
+```bash
+# Optional: Cloud provider API keys
+OPENAI_API_KEY=your_openai_key
+GOOGLE_API_KEY=your_google_key
+HUGGINGFACE_API_TOKEN=your_hf_token
+
+# Server configuration
+HOST=0.0.0.0
+PORT=8000
+DEBUG=false
+
+# Model settings
+DEFAULT_MODEL_NAME=mistral-7b-instruct-v0.2
+EMBEDDING_MODEL_NAME=bge-small-en-v1.5
+```
+
+### Local Models
+
+Place GGUF model files in the `models/` directory:
+
+```
+models/
+├── mistral-7b-instruct-v0.2.Q3_K_M.gguf
+├── phi-2-q4_k_m.gguf
+├── llama-3.2-1b-instruct-q4_k_m.gguf
+└── ...
+```
+
+Models are auto-detected and available via the API.
+
+## 🔐 Security & RBAC
+
+### Role Hierarchy
+
+```
+SuperAdmin (Level 4) ──┐
+                       ├── Full system access
+Manager (Level 3) ─────┤
+                       ├── Department management
+HR (Level 2) ──────────┤
+                       ├── Employee data access
+Employee (Level 1) ────┤
+                       ├── Standard documents
+Guest (Level 0) ───────┘
+                       └── Public content only
+```
+
+### Document Security
+
+- **Automatic Filtering**: Documents filtered by user role before LLM processing
+- **Metadata-Based**: Each document chunk has sensitivity and access rules
+- **Audit Logging**: All access attempts logged for compliance
+- **Role Overrides**: Flexible `allowed_roles` bypass standard hierarchy
+
+### Example Document Metadata
 
 ```json
-// Only Admin + Employee access (blocks Manager/HR)
-{"sensitivity": "highly_confidential", "allowed_roles": ["SuperAdmin", "Employee"]}
-
-// Department-specific with override
-{"sensitivity": "department_confidential", "department": "HR", "allowed_roles": ["SuperAdmin", "HR"]}
-```
-
-This metadata is stored per document chunk and enforced during retrieval and creation.
-
----
-
-# 🆕 **Recent Updates (Latest Commits)**
-
-## Prompt Optimization & Debug System
-- **Token Budgeting**: Dynamic allocation between system instructions (60-80 tokens), context (65%), and user query
-- **Smart Context Truncation**: Automatic truncation when content exceeds model limits with head/tail preservation
-- **Debug Exposure**: New `final_prompt` field in API responses for optimization analysis
-- **Performance Metrics**: Complete token usage tracking and efficiency monitoring
-
-## Enhanced Document Management
-- **Versioned Company Data**: Structured v1/v2 document hierarchy with comprehensive metadata
-- **BGE Embeddings**: Upgraded to 'bge-small-en-v1.5' for improved semantic understanding
-- **Archive System**: Clean separation of current vs archived documents
-
-## Improved Logging & Monitoring
-- **RBAC Audit Trails**: Detailed logging of all access control decisions
-- **LLM Interaction Logs**: Complete prompt/response tracking for debugging
-- **Performance Monitoring**: Response times, token efficiency, and usage patterns
-
----
-
-# 📚 **4. RAG Flow (AI-Focused Explanation)**
-
-### 1. User asks a question
-
-→ API receives: question, role, department, optional session.
-
-### 2. Query text is embedded locally
-
-Using **SentenceTransformers / BGE-Small-EN-v1.5**.
-
-### 3. Chroma returns top-k chunks
-
-But these chunks may include restricted content.
-
-### 4. **Flexible RBAC Filtering**
-
-Each chunk is checked by:
-
-1. **Personal documents**: Owner or HR+ level
-2. **Role overrides**: `allowed_roles` bypasses hierarchy
-3. **Department matching**: For `department_confidential`
-4. **Level-based access**: User level ≥ required level
-
-```python
-user_level = ROLE_LEVELS.get(user_role, 0)
-required_level = SENSITIVITY_LEVELS.get(sensitivity, 0)
-access_granted = user_level >= required_level
-```
-
-Unauthorized chunks:
-
-* Are removed with audit logging
-* Public summaries may be shown as fallback
-* Count of filtered items is recorded
-
-### 5. AI Prompt is built (optional session prefix)
-
-Including:
-
-* Support category (HR/IT/etc)
-* Last 5 messages (history)
-* User role / department context
-* Allowed chunks only
-
-### 6. Provider-specific LLM generates answer
-
-Local Mistral, Google Gemini, OpenAI GPT, or Hugging Face - using only the allowed visible context.
-
----
-
-# 💬 **5. Support Chat Subsystem**
-
-A lightweight chat system stores:
-
-* Session metadata
-* User & assistant messages
-* Timestamped history
-* Conversation memory (last 5 turns)
-
-This is used to build a dynamic prefix for the LLM.
-
-### Example generated prompt prefix:
-
-```
-You are an HR support assistant.
-User role: Employee, Department: Engineering
-Conversation history:
-[2025-01-10] USER: How do I apply for leave?
-[2025-01-10] ASSISTANT: …
-```
-
-This allows local multi-turn AI behavior **without external APIs**.
-
----
-
-# 🗂 **6. Document Ingestion**
-
-### Two methods:
-
-1. `/api/rag/documents/add` – JSON text
-2. `/api/rag/documents/add-file` – Upload `.txt`
-
-### Metadata includes:
-
-```
-department
-sensitivity
-allowed_roles
-owner_id
-public_summary
-ingested_at
-ingested_by
-```
-
-### Chunking:
-
-* 512 chars
-* 64 overlap
-* Embedded locally
-
-Chunks are then stored in ChromaDB.
-
----
-
-# 🧪 **7. Multi-Provider LLM Support**
-
-### **Local Provider** (Offline)
-**mistral-7b-instruct-v0.2.Q3_K_M.gguf** via llama.cpp:
-* CPU-only, no internet required
-* Lazy loaded at first query
-* Auto-detected from `/models/*.gguf`
-
-### **Cloud Providers** (API-based)
-* **Google Gemini**: gemini-2.5-flash (default), gemini-2.5-pro
-* **OpenAI GPT**: gpt-3.5-turbo (default), gpt-4
-* **Hugging Face**: Various models via Inference API
-
-### **Environment Variables**
-```bash
-GOOGLE_API_KEY=your_google_api_key
-OPENAI_API_KEY=your_openai_api_key  
-HUGGINGFACE_API_TOKEN=your_hf_token
+{
+  "sensitivity": "department_confidential",
+  "department": "HR",
+  "allowed_roles": ["SuperAdmin", "HR"],
+  "owner_id": "user123"
+}
 ```
 
 ---
 
-# 🔌 **8. API Endpoints (Simplified)**
+## 📊 Performance & Monitoring
 
-### **Multi-Provider RAG**
+### Built-in Analytics
 
-* `POST /api/rag/local/query` - Local Mistral-7B
-* `POST /api/rag/google/query` - Google Gemini
-* `POST /api/rag/gpt/query` - OpenAI GPT
-* `POST /api/rag/huggingface/query` - Hugging Face
-* `POST /api/rag/hf/query` - Hugging Face (alias)
+- **Token Usage Tracking** - Monitor prompt efficiency and costs
+- **Response Time Metrics** - Track performance across providers
+- **RBAC Audit Logs** - Security compliance and access monitoring
+- **Debug Mode** - Complete prompt/response logging for optimization
 
-### **Document Management**
+### Optimization Features
 
-* `POST /api/rag/documents/add` - Add document (JSON)
-* `POST /api/rag/documents/add-file` - Upload file
-* `POST /api/rag/documents/seed` - Seed default data
-* `POST /api/rag/documents/update` - Update with versioning
-* `GET /api/rag/documents/list` - List with filtering
+- **Smart Context Truncation** - Automatic handling of long documents
+- **Token Budgeting** - Dynamic allocation between system/context/query
+- **Compressed Prompts** - Efficient system instructions (60-80 tokens)
+- **Provider Fallbacks** - Automatic switching on failures
 
-### **Authentication**
+## 🔌 API Reference
 
-* `POST /api/auth/token` - JWT login
+### Query Endpoints
 
----
+```http
+POST /api/rag/{provider}/query
+```
 
-# 🧩 **9. Project Goals**
+**Providers**: `local`, `google`, `gpt`, `huggingface`
 
-This project is built for **AI engineers learning**:
+**Request**:
+```json
+{
+  "question": "What are the leave policies?",
+  "top_k": 3,
+  "use_llm": true,
+  "max_tokens": 256
+}
+```
 
-* RAG pipelines
-* RBAC security enforcement
-* Local LLM inference
-* Chat memory handling
-* Metadata-aware document retrieval
-* Enterprise knowledge systems
-* End-to-end offline AI stack
+**Response**:
+```json
+{
+  "answer": "Annual leave is 20 days per year...",
+  "retrieved": [
+    {
+      "id": "doc_123",
+      "text": "Leave policy document...",
+      "metadata": {...},
+      "distance": 0.85
+    }
+  ],
+  "context": "Combined context from retrieved documents",
+  "final_prompt": "System: You are an HR assistant..." // Debug mode
+}
+```
 
-It simulates what a **real company AI assistant** would look like.
+### Authentication
 
----
+```http
+POST /api/auth/token
+```
 
-# ⚙️ **10. What Makes This Project Unique**
+```json
+{
+  "username": "employee1",
+  "password": "password123"
+}
+```
 
-* **Multi-provider architecture** - unified interface for local and cloud LLMs
-* **Offline-first design** - works without internet using local models
-* **Cloud integration** - seamless API integration when needed
-* **Flexible RBAC** - level-based hierarchy with role overrides across all providers
-* **Common vector space** - same embeddings and documents for all providers
-* **Provider abstraction** - easy to add new LLM providers
-* **Enterprise-grade** - flexible RBAC with level validation and role overrides
-* **Session continuity** - conversation history works across providers
-* **Prompt optimization** - token budgeting with smart context truncation
-* **Debug capabilities** - complete prompt/response logging for optimization
+### Document Management
 
----
+```http
+POST /api/rag/documents/add     # Add document
+POST /api/rag/documents/seed    # Load sample data
+GET  /api/rag/documents/list    # List documents
+```
 
-# ✔️ **Summary**
+## 🛠️ Development
 
-This project is a **complete multi-provider enterprise RAG system**, combining:
+### Project Structure
 
-* **Multiple LLM providers** (Local, Google, OpenAI, Hugging Face)
-* **Unified RAG architecture** with shared document retrieval
-* **Flexible RBAC** with level-based access and role overrides across all providers
-* **Session memory** and conversation continuity
-* **Document versioning** and metadata management
-* **JWT authentication** with role-based access
-* **FastAPI integration** with clean provider abstraction
-* **Optimized prompt engineering** with token budgeting and debug exposure
-* **Enhanced logging** with performance metrics and audit trails
+```
+ai_backend/
+├── app/
+│   ├── services/           # Core business logic
+│   ├── api_routes_*.py     # API endpoints
+│   ├── main.py            # FastAPI app
+│   └── config.py          # Configuration
+├── models/                # Local LLM files
+├── data/                  # Sample documents
+├── database/              # SQLite databases
+└── requirements.txt       # Dependencies
+```
 
-### **Usage Examples**
+### Adding New Providers
+
+1. Create service class inheriting from `BaseRAGService`
+2. Implement `generate_response()` method
+3. Add route in `api_routes_rag.py`
+4. Update provider list in documentation
+
+### Running Tests
 
 ```bash
-# Local offline model
-curl -X POST "/api/rag/local/query" \
-  -H "Content-Type: application/json" \
-  -d '{"question": "What is our company policy?", "use_llm": true}'
+# Run optimization tests
+python test_optimized_prompt.py
 
-# Google Gemini
-curl -X POST "/api/rag/google/query" \
+# Test specific provider
+curl -X POST "http://localhost:8000/api/rag/local/query" \
   -H "Content-Type: application/json" \
-  -d '{"question": "What is our company policy?", "use_llm": true}'
-
-# OpenAI GPT  
-curl -X POST "/api/rag/gpt/query" \
-  -H "Content-Type: application/json" \
-  -d '{"question": "What is our company policy?", "use_llm": true}'
+  -d '{"question": "test", "use_llm": false}'
 ```
 
-Designed specifically for **learning AI engineering** and **multi-provider RAG architectures**.
+## 📚 Documentation
+
+- **[API Documentation](http://localhost:8000/docs)** - Interactive Swagger UI
+- **[Technical Context](APP_CONTEXT.md)** - Detailed system architecture
+- **[Data Format Guide](data/README.md)** - Document structure and metadata
+- **[Contributing Guide](CONTRIBUTING.md)** - Development guidelines
+
+## 🤝 Contributing
+
+We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
+
+### Quick Contribution Steps
+
+1. Fork the repository
+2. Create a feature branch: `git checkout -b feature/amazing-feature`
+3. Commit changes: `git commit -m 'Add amazing feature'`
+4. Push to branch: `git push origin feature/amazing-feature`
+5. Open a Pull Request
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## 🙏 Acknowledgments
+
+- **ChromaDB** - Vector database
+- **FastAPI** - Web framework
+- **Sentence Transformers** - Embedding models
+- **llama-cpp-python** - Local LLM inference
+- **OpenAI, Google, Hugging Face** - Cloud AI providers
+
+## ⭐ Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=your-username/ai_backend&type=Date)](https://star-history.com/#your-username/ai_backend&Date)
+
+---
+
+<div align="center">
+
+**Built with ❤️ for the AI community**
+
+[Report Bug](https://github.com/your-username/ai_backend/issues) • [Request Feature](https://github.com/your-username/ai_backend/issues) • [Discussions](https://github.com/your-username/ai_backend/discussions)
+
+</div>
 
 
 
