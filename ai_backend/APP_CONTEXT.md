@@ -23,6 +23,8 @@ A **production-ready multi-provider RAG system** supporting both **offline-first
 - ✅ **Session-aware conversations** with profile management
 - ✅ **Offline-first architecture** with cloud integration
 - ✅ **JWT authentication** with comprehensive audit logging
+- ✅ **Prompt optimization** with token budgeting and context truncation
+- ✅ **Debug capabilities** with final_prompt exposure for optimization
 
 ---
 
@@ -60,8 +62,9 @@ User Request → FastAPI Router → Provider Service → Base RAG Service → Re
 **⚙️ Infrastructure**
 - `model_manager.py` - Simplified local LLM loading & caching
 - `local_model_manager.py` - Multi-model detection and auto-selection
-- `prompt_builder.py` - Prompt construction & token management
+- `prompt_builder.py` - **Optimized prompt construction** with token budgeting & context truncation
 - `sentiment_classifier.py` - Sentiment analysis
+- `logging_config.py` - **Enhanced logging** with performance metrics & debug output
 
 **🌐 API Layer**
 - `main.py` - FastAPI application with lifecycle management
@@ -158,7 +161,8 @@ Request: {
 Response: {
   "answer": "string",
   "retrieved": [{"id": "string", "text": "string", "metadata": {}, "distance": 0.5}],
-  "context": "string"
+  "context": "string",
+  "final_prompt": "string"  // Debug: actual prompt sent to LLM
 }
 ```
 
@@ -219,7 +223,33 @@ personal (1)              - Owner + HR+ level
 
 ---
 
-## 6. Core Service Functions
+## 6. Recent Enhancements (Latest Commits)
+
+### Prompt Optimization System
+- **Token Budgeting**: Dynamic allocation between system instructions, context, and user query
+- **Context Truncation**: Smart truncation when content exceeds model limits
+- **Compressed Prefixes**: Ultra-compact system instructions (60-80 tokens vs 200+ previously)
+- **Debug Exposure**: `final_prompt` field in API responses for optimization analysis
+
+### Enhanced Logging & Debugging
+- **Performance Metrics**: Token usage, response times, efficiency ratios
+- **RBAC Audit Trails**: Detailed logging of access control decisions
+- **LLM Interaction Logs**: Complete prompt/response tracking for debugging
+- **Sensitive Data Handling**: Secure logging with data classification
+
+### Document Management Improvements
+- **Versioned Company Data**: Structured v1/v2 document hierarchy with metadata
+- **Enhanced Metadata Schema**: Comprehensive tagging and classification system
+- **Archive Management**: Clean separation of current vs archived documents
+
+### Model Management Updates
+- **BGE Embeddings**: Switched to 'bge-small-en-v1.5' for better performance
+- **Multi-Model Support**: Enhanced local model detection and selection
+- **Improved Caching**: Better LLM instance management and reuse
+
+---
+
+## 7. Core Service Functions
 
 ### BaseRAGService (Abstract)
 ```python

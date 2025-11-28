@@ -13,7 +13,7 @@ Supported providers:
 
 Common components across all providers:
 
-* **Local embeddings (MiniLM)** - shared vector space
+* **Local embeddings (BGE-Small-EN-v1.5)** - shared vector space
 * **Local Chroma vector DB** - unified document storage
 * **FastAPI backend** - single API interface
 * **Flexible RBAC (Role-Based Access Control)** - level-based + role overrides
@@ -43,7 +43,7 @@ The system can:
 
 ### ✅ Perform RAG queries locally
 
-Using MiniLM embeddings + Chroma
+Using BGE embeddings + Chroma
 
 ### ✅ Support multiple LLM providers
 
@@ -124,6 +124,26 @@ This metadata is stored per document chunk and enforced during retrieval and cre
 
 ---
 
+# 🆕 **Recent Updates (Latest Commits)**
+
+## Prompt Optimization & Debug System
+- **Token Budgeting**: Dynamic allocation between system instructions (60-80 tokens), context (65%), and user query
+- **Smart Context Truncation**: Automatic truncation when content exceeds model limits with head/tail preservation
+- **Debug Exposure**: New `final_prompt` field in API responses for optimization analysis
+- **Performance Metrics**: Complete token usage tracking and efficiency monitoring
+
+## Enhanced Document Management
+- **Versioned Company Data**: Structured v1/v2 document hierarchy with comprehensive metadata
+- **BGE Embeddings**: Upgraded to 'bge-small-en-v1.5' for improved semantic understanding
+- **Archive System**: Clean separation of current vs archived documents
+
+## Improved Logging & Monitoring
+- **RBAC Audit Trails**: Detailed logging of all access control decisions
+- **LLM Interaction Logs**: Complete prompt/response tracking for debugging
+- **Performance Monitoring**: Response times, token efficiency, and usage patterns
+
+---
+
 # 📚 **4. RAG Flow (AI-Focused Explanation)**
 
 ### 1. User asks a question
@@ -132,7 +152,7 @@ This metadata is stored per document chunk and enforced during retrieval and cre
 
 ### 2. Query text is embedded locally
 
-Using **SentenceTransformers / MiniLM**.
+Using **SentenceTransformers / BGE-Small-EN-v1.5**.
 
 ### 3. Chroma returns top-k chunks
 
@@ -300,6 +320,8 @@ It simulates what a **real company AI assistant** would look like.
 * **Provider abstraction** - easy to add new LLM providers
 * **Enterprise-grade** - flexible RBAC with level validation and role overrides
 * **Session continuity** - conversation history works across providers
+* **Prompt optimization** - token budgeting with smart context truncation
+* **Debug capabilities** - complete prompt/response logging for optimization
 
 ---
 
@@ -314,6 +336,8 @@ This project is a **complete multi-provider enterprise RAG system**, combining:
 * **Document versioning** and metadata management
 * **JWT authentication** with role-based access
 * **FastAPI integration** with clean provider abstraction
+* **Optimized prompt engineering** with token budgeting and debug exposure
+* **Enhanced logging** with performance metrics and audit trails
 
 ### **Usage Examples**
 
