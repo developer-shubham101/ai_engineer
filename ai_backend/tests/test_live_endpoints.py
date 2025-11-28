@@ -93,12 +93,12 @@ def test_guest_onboarding_flow(tokens):
                     if any(keyword in answer.lower() for keyword in ['what is', 'which department', 'thank you']):
                         print("🎯 Onboarding question detected")
                     else:
-                        print("⚠️  Expected onboarding question")
+                        print("Expected onboarding question")
                 else:  # Post-onboarding
                     if len(answer) > 50:  # Substantial response
                         print("🎯 Personalized response with profile context")
                     else:
-                        print("⚠️  Expected detailed personalized response")
+                        print("Expected detailed personalized response")
 
             else:
                 print(f"❌ Request failed: {response.status_code}")
@@ -253,7 +253,7 @@ def test_rbac_enforcement(tokens):
 
                 # Check if response indicates filtered content
                 if "permission" in data.get('answer', '').lower():
-                    print("🔒 Access restriction detected in response")
+                    print("Access restriction detected in response")
 
             else:
                 print(f"❌ RBAC Query failed: {response.status_code}")

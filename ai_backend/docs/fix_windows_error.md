@@ -118,7 +118,7 @@ uvicorn app.main:app --reload --port 8000
 
 ---
 
-# 🚨 7. If you STILL get errors — tell me which one:
+# 7. If you STILL get errors — tell me which one:
 
 I need to see:
 

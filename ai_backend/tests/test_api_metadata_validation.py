@@ -42,7 +42,7 @@ def test_add_document(token, doc_data, expected_status=200):
     return response.status_code == expected_status
 
 def main():
-    print("🔒 API Metadata Validation Test Suite")
+    print("API Metadata Validation Test Suite")
     
     # Login as different users
     employee_token = login("employee", "emp123")

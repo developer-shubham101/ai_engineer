@@ -44,21 +44,21 @@ class StructuredFormatter(logging.Formatter):
         
         # Format for readability
         if record.levelname in ['ERROR', 'CRITICAL']:
-            return f"🚨 [{log_entry['timestamp']}] {log_entry['level']} | {log_entry['logger']} | {log_entry['message']}" + \
+            return f"[{log_entry['timestamp']}] {log_entry['level']} | {log_entry['logger']} | {log_entry['message']}" + \
                    (f" | Exception: {log_entry.get('exception', '')}" if 'exception' in log_entry else "")
         elif record.levelname == 'WARNING':
-            return f"⚠️  [{log_entry['timestamp']}] {log_entry['level']} | {log_entry['logger']} | {log_entry['message']}"
+            return f"[{log_entry['timestamp']}] {log_entry['level']} | {log_entry['logger']} | {log_entry['message']}"
         elif record.levelname == 'INFO':
-            return f"ℹ️  [{log_entry['timestamp']}] {log_entry['level']} | {log_entry['logger']} | {log_entry['message']}"
+            return f"[{log_entry['timestamp']}] {log_entry['level']} | {log_entry['logger']} | {log_entry['message']}"
         else:
-            return f"🔍 [{log_entry['timestamp']}] {log_entry['level']} | {log_entry['logger']} | {log_entry['message']}"
+            return f"[{log_entry['timestamp']}] {log_entry['level']} | {log_entry['logger']} | {log_entry['message']}"
 
 class SecurityFormatter(logging.Formatter):
     """Special formatter for security-related logs"""
     
     def format(self, record):
         timestamp = datetime.utcnow().isoformat() + "Z"
-        return f"🔒 [{timestamp}] SECURITY | {record.getMessage()}"
+        return f"[{timestamp}] SECURITY | {record.getMessage()}"
 
 def setup_logging():
     """Setup enhanced logging with multiple handlers and formatters"""
@@ -111,7 +111,7 @@ def setup_logging():
         logger.addHandler(console_handler)
         
         # Log startup message
-        logger.info("🚀 RAG Application logging initialized - Main: %s, Debug: %s, Security: %s", 
+        logger.info("RAG Application logging initialized - Main: %s, Debug: %s, Security: %s",
                    LOG_FILE, DEBUG_LOG_FILE, SECURITY_LOG_FILE)
 
     return logger
@@ -141,4 +141,4 @@ def log_sensitive_debug(logger, message: str, **sensitive_data):
     """Log sensitive information for debugging (to be removed in production)"""
     # WARNING: This logs sensitive data - remove in production
     sensitive_info = " | ".join([f"{k}={v}" for k, v in sensitive_data.items()])
-    logger.debug(f"🔓 SENSITIVE_DEBUG: {message} | {sensitive_info} | [REMOVE_IN_PRODUCTION]")
+    logger.debug(f"SENSITIVE_DEBUG: {message} | {sensitive_info} | [REMOVE_IN_PRODUCTION]")

@@ -79,7 +79,7 @@ def test_rbac_for_user(user_config):
         
         print(f"   Retrieved {len(retrieved)} documents")
         if "permission" in answer.lower() or "access" in answer.lower():
-            print(f"   ⚠️  Access denied (expected for non-HR roles)")
+            print(f"   Access denied (expected for non-HR roles)")
             print(f"   Answer: {answer[:100]}...")
         else:
             print(f"   ✅ Access granted")
@@ -97,7 +97,7 @@ def test_rbac_for_user(user_config):
         
         print(f"   Retrieved {len(retrieved)} documents")
         if "permission" in answer.lower():
-            print(f"   ⚠️  Unexpected access denial for public_internal content")
+            print(f"   Unexpected access denial for public_internal content")
         else:
             print(f"   ✅ Access granted (expected for all roles)")
             if retrieved:

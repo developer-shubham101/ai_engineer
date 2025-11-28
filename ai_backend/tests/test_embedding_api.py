@@ -42,7 +42,7 @@ class EmbeddingModelTester:
     
     def test_embedding_status(self) -> Dict[str, Any]:
         """Test embedding model status endpoint."""
-        print("\n🔍 Testing Embedding Model Status...")
+        print("\nTesting Embedding Model Status...")
         
         try:
             response = self.session.get(f"{BASE_URL}/api/rag/embedding/status")
@@ -153,11 +153,11 @@ class EmbeddingModelTester:
             print("✅ Primary model loaded successfully")
             
             # Test with invalid model configuration (would require restart)
-            print("ℹ️  Fallback testing requires configuration change and restart")
-            print("ℹ️  Current model is working - fallback not triggered")
+            print("Fallback testing requires configuration change and restart")
+            print("Current model is working - fallback not triggered")
             return True
         else:
-            print("⚠️  Primary model not loaded - fallback may be active")
+            print("Primary model not loaded - fallback may be active")
             return False
     
     def test_embedding_upgrade_scenarios(self) -> bool:
@@ -207,9 +207,9 @@ class EmbeddingModelTester:
                     if expected_dims == actual_dims:
                         print(f"   ✅ Dimensions match: {actual_dims}")
                     else:
-                        print(f"   ⚠️  Dimension mismatch: expected {expected_dims}, got {actual_dims}")
+                        print(f"   Dimension mismatch: expected {expected_dims}, got {actual_dims}")
                 else:
-                    print("   ℹ️  Dimension info not available")
+                    print("   Dimension info not available")
         
         return True
     
@@ -261,7 +261,7 @@ class EmbeddingModelTester:
             print("🎉 All embedding model tests passed!")
             return True
         else:
-            print("⚠️  Some tests failed - check logs for details")
+            print("Some tests failed - check logs for details")
             return False
 
 

@@ -87,7 +87,7 @@ def main():
     files_in_folder = [f for f in os.listdir(INPUT_FOLDER) if f.endswith(".md")]
 
     if not files_in_folder:
-        print(f"⚠️  No .md files found in {INPUT_FOLDER}.")
+        print(f"No .md files found in {INPUT_FOLDER}.")
         return
 
     print(f"📂 Found {len(files_in_folder)} documents. Processing...")
@@ -101,7 +101,7 @@ def main():
             # Print status for specific key files you mentioned
             print(f"   ├── Parsed: {filename} \t({len(data)} examples)")
         except Exception as e:
-            print(f"   ⚠️  Error reading {filename}: {e}")
+            print(f"   Error reading {filename}: {e}")
 
     # 3. Save to JSONL
     if all_training_data:
@@ -114,7 +114,7 @@ def main():
         print(f"✅ Done! Created {len(all_training_data)} training pairs.")
         print(f"   Ready to upload '{OUTPUT_FILE}' to Colab.")
     else:
-        print("\n⚠️  Warning: No valid data extracted. Check file content.")
+        print("\nWarning: No valid data extracted. Check file content.")
 
 
 if __name__ == "__main__":

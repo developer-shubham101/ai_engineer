@@ -9,6 +9,7 @@ import logging
 from typing import Dict, Any, List, Optional, Tuple
 from abc import ABC, abstractmethod
 
+from app.logging_config import log_sensitive_debug
 from app.services.chroma_utils import ensure_chroma_client, query_collection
 from app.services.support_chat import fetch_recent_messages
 from app.services.prompt_builder import build_tone_guidance, estimate_tokens_from_text
