@@ -1,0 +1,9 @@
+{
+  "document_type": "memo",
+  "department": "HR",
+  "sensitivity": "highly_confidential",
+  "tags": ["strategy", "vision", "CEO", "memo"],
+  "public_summary": "Meta-data for CEO_memo_strategic_vision.md",
+  "allowed_roles": ["Manager", "SuperAdmin"],
+  "effective_date": ""
+}

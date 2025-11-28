@@ -1,0 +1,9 @@
+{
+  "document_type": "summary",
+  "department": "Finance",
+  "sensitivity": "highly_confidential",
+  "tags": ["financial", "summary", "Q3", "2023"],
+  "public_summary": "Meta-data for financial_summary_q3_2023.md",
+  "allowed_roles": ["Manager", "SuperAdmin"],
+  "effective_date": ""
+}

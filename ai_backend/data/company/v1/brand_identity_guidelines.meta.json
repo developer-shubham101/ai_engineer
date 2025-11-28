@@ -1,0 +1,9 @@
+{
+  "document_type": "guidelines",
+  "department": "Marketing",
+  "sensitivity": "public_internal",
+  "tags": ["brand", "identity", "guidelines"],
+  "public_summary": "Meta-data for brand_identity_guidelines.md",
+  "allowed_roles": ["Employee", "Manager"],
+  "effective_date": ""
+}

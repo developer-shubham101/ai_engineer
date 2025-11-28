@@ -1,0 +1,12 @@
+{
+  "document_type": "memo",
+  "department": "Executive",
+  "sensitivity": "highly_confidential",
+  "tags": ["strategy", "AI", "CEO", "memo", "multi-provider"],
+  "public_summary": "CEO memo outlining Saarthi Infotech's AI strategy and multi-provider RAG system implementation",
+  "allowed_roles": ["SuperAdmin", "Manager"],
+  "effective_date": "2025-01-15",
+  "owner_id": "aisha_sharma_ceo",
+  "ingested_at": "2025-01-15T10:00:00Z",
+  "ingested_by": "executive_assistant"
+}

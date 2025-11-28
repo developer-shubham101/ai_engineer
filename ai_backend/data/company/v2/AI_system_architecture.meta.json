@@ -1,0 +1,12 @@
+{
+  "document_type": "technical_specification",
+  "department": "Engineering",
+  "sensitivity": "role_confidential",
+  "tags": ["AI", "RAG", "architecture", "multi-provider", "system"],
+  "public_summary": "Technical architecture documentation for Saarthi Infotech's multi-provider enterprise RAG system",
+  "allowed_roles": ["SuperAdmin", "Manager"],
+  "effective_date": "2025-01-15",
+  "owner_id": "engineering_team",
+  "ingested_at": "2025-01-15T10:00:00Z",
+  "ingested_by": "system_admin"
+}

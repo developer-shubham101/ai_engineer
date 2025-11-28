@@ -1,0 +1,9 @@
+{
+  "document_type": "plan",
+  "department": "Operations",
+  "sensitivity": "public_internal",
+  "tags": ["crisis", "response", "plan", "operations"],
+  "public_summary": "Meta-data for crisis_response_plan.md",
+  "allowed_roles": ["Employee", "Manager", "Operations", "HR"],
+  "effective_date": ""
+}

@@ -1,0 +1,9 @@
+{
+  "document_type": "minutes",
+  "department": "HR",
+  "sensitivity": "super_confidential",
+  "tags": ["meeting", "minutes", "board"],
+  "public_summary": "Meta-data for meeting_minutes_board.md",
+  "allowed_roles": ["SuperAdmin"],
+  "effective_date": ""
+}

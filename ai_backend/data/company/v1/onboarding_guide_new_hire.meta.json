@@ -1,0 +1,9 @@
+{
+  "document_type": "guide",
+  "department": "HR",
+  "sensitivity": "public_internal",
+  "tags": ["onboarding", "new hire", "guide", "HR"],
+  "public_summary": "Meta-data for onboarding_guide_new_hire.md",
+  "allowed_roles": ["Employee", "Manager", "HR"],
+  "effective_date": ""
+}

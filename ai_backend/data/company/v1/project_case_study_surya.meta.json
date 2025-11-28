@@ -1,0 +1,9 @@
+{
+  "document_type": "case_study",
+  "department": "HR",
+  "sensitivity": "public_internal",
+  "tags": ["project", "case study", "Surya"],
+  "public_summary": "Meta-data for project_case_study_surya.md",
+  "allowed_roles": ["Employee", "Manager"],
+  "effective_date": ""
+}

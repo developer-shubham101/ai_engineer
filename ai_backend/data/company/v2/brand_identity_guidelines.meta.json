@@ -1,0 +1,12 @@
+{
+  "document_type": "guidelines",
+  "department": "Marketing",
+  "sensitivity": "public_internal",
+  "tags": ["brand", "identity", "guidelines", "saarthi", "agni"],
+  "public_summary": "Saarthi Infotech brand identity guidelines including colors, typography, and voice for the AI-powered enterprise RAG system",
+  "allowed_roles": ["Employee", "Manager", "SuperAdmin"],
+  "effective_date": "2025-01-15",
+  "owner_id": "nectar_marketing_team",
+  "ingested_at": "2025-01-15T10:00:00Z",
+  "ingested_by": "system_admin"
+}

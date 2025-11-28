@@ -1,0 +1,9 @@
+{
+  "document_type": "agreement",
+  "department": "Finance",
+  "sensitivity": "role_confidential",
+  "tags": ["vendor", "agreement", "ocean freight"],
+  "public_summary": "Meta-data for vendor_agreement_ocean_freight.md",
+  "allowed_roles": ["Manager", "HR"],
+  "effective_date": ""
+}

@@ -1,0 +1,9 @@
+{
+  "document_type": "biography",
+  "department": "HR",
+  "sensitivity": "public_internal",
+  "tags": ["executive", "bio", "Kenji Sato"],
+  "public_summary": "Meta-data for executive_bio_kenji_sato.md",
+  "allowed_roles": ["Employee", "Manager", "HR"],
+  "effective_date": ""
+}

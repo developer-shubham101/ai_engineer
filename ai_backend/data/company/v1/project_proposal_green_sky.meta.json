@@ -1,0 +1,9 @@
+{
+  "document_type": "proposal",
+  "department": "Operations",
+  "sensitivity": "public_internal",
+  "tags": ["project", "proposal", "Green Sky"],
+  "public_summary": "Meta-data for project_proposal_green_sky.md",
+  "allowed_roles": ["Employee", "Manager"],
+  "effective_date": ""
+}

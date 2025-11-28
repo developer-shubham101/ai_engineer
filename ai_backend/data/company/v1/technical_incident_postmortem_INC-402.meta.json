@@ -1,0 +1,9 @@
+{
+  "document_type": "postmortem",
+  "department": "IT",
+  "sensitivity": "public_internal",
+  "tags": ["technical", "incident", "postmortem", "INC-402"],
+  "public_summary": "Meta-data for technical_incident_postmortem_INC-402.md",
+  "allowed_roles": ["Employee", "Manager", "IT"],
+  "effective_date": ""
+}

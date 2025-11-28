@@ -1,0 +1,9 @@
+{
+  "document_type": "policy",
+  "department": "Finance",
+  "sensitivity": "public_internal",
+  "tags": ["expense", "reimbursement", "policy", "finance"],
+  "public_summary": "Meta-data for expense_reimbursement_policy.md",
+  "allowed_roles": ["Employee", "Manager", "HR"],
+  "effective_date": ""
+}

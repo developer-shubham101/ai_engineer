@@ -1,0 +1,9 @@
+{
+  "document_type": "spec",
+  "department": "IT",
+  "sensitivity": "public_internal",
+  "tags": ["product", "specification", "Vajrascope"],
+  "public_summary": "Meta-data for product_spec_vajrascope.md",
+  "allowed_roles": ["Employee", "Manager"],
+  "effective_date": ""
+}

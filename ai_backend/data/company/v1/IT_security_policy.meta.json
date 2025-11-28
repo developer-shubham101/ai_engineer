@@ -1,0 +1,9 @@
+{
+  "document_type": "policy",
+  "department": "IT",
+  "sensitivity": "public_internal",
+  "tags": ["IT", "security", "policy"],
+  "public_summary": "Meta-data for IT_security_policy.md",
+  "allowed_roles": ["Employee", "Manager", "IT"],
+  "effective_date": ""
+}

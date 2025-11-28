@@ -1,0 +1,9 @@
+{
+  "document_type": "memo",
+  "department": "IT",
+  "sensitivity": "public_internal",
+  "tags": ["IT", "legacy", "retirement", "memo"],
+  "public_summary": "Meta-data for IT_legacy_retirement_memo.md",
+  "allowed_roles": ["Employee", "Manager", "IT"],
+  "effective_date": ""
+}

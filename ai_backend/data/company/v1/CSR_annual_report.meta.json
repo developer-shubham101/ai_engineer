@@ -1,0 +1,9 @@
+{
+  "document_type": "report",
+  "department": "HR",
+  "sensitivity": "public_internal",
+  "tags": ["CSR", "annual report", "sustainability"],
+  "public_summary": "Meta-data for CSR_annual_report.md",
+  "allowed_roles": ["Employee", "Manager"],
+  "effective_date": ""
+}

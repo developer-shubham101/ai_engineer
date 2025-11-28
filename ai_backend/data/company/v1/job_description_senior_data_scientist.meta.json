@@ -1,0 +1,9 @@
+{
+  "document_type": "job_description",
+  "department": "HR",
+  "sensitivity": "public_internal",
+  "tags": ["job", "description", "senior data scientist", "recruitment"],
+  "public_summary": "Meta-data for job_description_senior_data_scientist.md",
+  "allowed_roles": ["Employee", "Manager", "HR"],
+  "effective_date": ""
+}
