@@ -1,0 +1,81 @@
+{
+    "answer": " The company policy states that \"Wellness Days\" are mandatory for all employees. These days must be taken once per quarter, and they can be carried forward up to 4 weeks.\n\nAgni Pharma's Employee Handbook is available on the company intranet. It provides detailed information about company policies, benefits, and procedures.\n\n---\n\nPlease note that this response is based on publicly available information and may not reflect any changes or updates made by Agni Pharma after the publication of this response.",
+    "retrieved": [
+        {
+            "id": "doc_c55ab6b4911e8e2f_v1.0_9a0b0730021749238954e3f1176c02e3",
+            "text": "or \"Remote-First\" work. Employees at Agni Pharma (Lab staff) and Praxis (Logistics on-site) must adhere to the \"3-days-in-office\" hybrid policy.\n2. Leave Policy (Global Standard)\nPrivilege Leave (PL): 21 days annually (accrued monthly). Can be carried forward up to 45 days.\nCasual/Sick Leave (CL/SL): 12 days annually. Cannot be carried forward.\nWellness Days: 4 \"Unplug\" days per year, mandated by CEO Aisha Sharma to prevent burnout. These must be taken once per quarter.\nParental Leave: 26 weeks for primary ",
+            "metadata": {
+                "allowed_roles": "Employee,Manager,HR",
+                "category": "company",
+                "department": "HR",
+                "document_id": "doc_c55ab6b4911e8e2f",
+                "document_type": "handbook",
+                "effective_date": "",
+                "ingested_at": "2025-11-28T18:06:46.496219Z",
+                "is_latest_version": true,
+                "parent_version": "",
+                "public_summary": "Meta-data for HR_policies_handbook.md",
+                "seeded": true,
+                "sensitivity": "public_internal",
+                "source": "company/v1/HR_policies_handbook.md",
+                "status": "published",
+                "tags": "HR,policies,handbook",
+                "version": "1.0",
+                "version_created_at": "2025-11-28T18:06:46.495221Z",
+                "version_created_by": "system_seed"
+            },
+            "distance": 0.5706275295566302
+        },
+        {
+            "id": "doc_c55ab6b4911e8e2f_v1.0_5c7051d103e64976b8e056d1cd77b10c",
+            "text": "be taken once per quarter.\nParental Leave: 26 weeks for primary caregivers; 4 weeks for secondary caregivers.\n3. Code of Conduct\nMoonlighting: Strictly prohibited. Employees cannot hold secondary employment without written consent from HR and Legal.\nDress Code: Smart Casual. Formal attire is required only for client meetings.\nConflict of Interest: Any personal relationship with a vendor or competitor must be disclosed to the 'Ethics Committee' within 7 days.\n4. Compensation & Benefits\nSalary Disbursal: Last",
+            "metadata": {
+                "allowed_roles": "Employee,Manager,HR",
+                "category": "company",
+                "department": "HR",
+                "document_id": "doc_c55ab6b4911e8e2f",
+                "document_type": "handbook",
+                "effective_date": "",
+                "ingested_at": "2025-11-28T18:06:46.496219Z",
+                "is_latest_version": true,
+                "parent_version": "",
+                "public_summary": "Meta-data for HR_policies_handbook.md",
+                "seeded": true,
+                "sensitivity": "public_internal",
+                "source": "company/v1/HR_policies_handbook.md",
+                "status": "published",
+                "tags": "HR,policies,handbook",
+                "version": "1.0",
+                "version_created_at": "2025-11-28T18:06:46.495221Z",
+                "version_created_by": "system_seed"
+            },
+            "distance": 0.7036445143959015
+        },
+        {
+            "id": "doc_c55ab6b4911e8e2f_v1.0_69efa78edd0343fa93a564c6c91a0e24",
+            "text": "within 7 days.\n4. Compensation & Benefits\nSalary Disbursal: Last working day of the month.\nVariable Pay: Performance bonuses are calculated based on the 'Agni Scorecard' distributed in April.\nInsurance: Global health coverage is provided by 'SecureLife World,' covering the employee + spouse + 2 children.",
+            "metadata": {
+                "allowed_roles": "Employee,Manager,HR",
+                "category": "company",
+                "department": "HR",
+                "document_id": "doc_c55ab6b4911e8e2f",
+                "document_type": "handbook",
+                "effective_date": "",
+                "ingested_at": "2025-11-28T18:06:46.496219Z",
+                "is_latest_version": true,
+                "parent_version": "",
+                "public_summary": "Meta-data for HR_policies_handbook.md",
+                "seeded": true,
+                "sensitivity": "public_internal",
+                "source": "company/v1/HR_policies_handbook.md",
+                "status": "published",
+                "tags": "HR,policies,handbook",
+                "version": "1.0",
+                "version_created_at": "2025-11-28T18:06:46.495221Z",
+                "version_created_by": "system_seed"
+            },
+            "distance": 0.714316572149476
+        }
+    ],
+    "context": "or \"Remote-First\" work. Employees at Agni Pharma (Lab staff) and Praxis (Logistics on-site) must adhere to the \"3-days-in-office\" hybrid policy.\n2. Leave Policy (Global Standard)\nPrivilege Leave (PL): 21 days annually (accrued monthly). Can be carried forward up to 45 days.\nCasual/Sick Leave (CL/SL): 12 days annually. Cannot be carried forward.\nWellness Days: 4 \"Unplug\" days per year, mandated by CEO Aisha Sharma to prevent burnout. These must be taken once per quarter.\nParental Leave: 26 weeks for primary \n\n---\n\nbe taken once per quarter.\nParental Leave: 26 weeks for primary caregivers; 4 weeks for secondary caregivers.\n3. Code of Conduct\nMoonlighting: Strictly prohibited. Employees cannot hold secondary employment without written consent from HR and Legal.\nDress Code: Smart Casual. Formal attire is required only for client meetings.\nConflict of Interest: Any personal relationship with a vendor or competitor must be disclosed to the 'Ethics Committee' within 7 days.\n4. Compensation & Benefits\nSalary Disbursal: Last\n\n---\n\nwithin 7 days.\n4. Compensation & Benefits\nSalary Disbursal: Last working day of the month.\nVariable Pay: Performance bonuses are calculated based on the 'Agni Scorecard' distributed in April.\nInsurance: Global health coverage is provided by 'SecureLife World,' covering the employee + spouse + 2 children."
+}

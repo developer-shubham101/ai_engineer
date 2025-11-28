@@ -611,6 +611,11 @@ class BaseRAGService(ABC):
             query_text, context_text, final_prefix, use_llm, max_tokens, session_id
         )
 
-        return self.build_base_response(
+        response = self.build_base_response(
             visible_docs, filtered_result, raw_docs, raw_metadatas, raw_ids, raw_distances, context_text, answer
         )
+        
+        # Add final prompt if available
+        final_prompt = getattr(self, '_last_final_prompt', None) if use_llm else None
+        response["final_prompt"] = final_prompt
+        return response

@@ -67,7 +67,7 @@ EMBEDDING_MODELS = {
 }
 
 # Current active model (recommended: start with bge-small-en-v1.5 for now set as default)
-EMBEDDING_MODEL_KEY = os.getenv("EMBEDDING_MODEL_KEY", "all-MiniLM-L6-v2")
+EMBEDDING_MODEL_KEY = os.getenv("EMBEDDING_MODEL_KEY", "bge-small-en-v1.5")
 EMBEDDING_MODEL_NAME = EMBEDDING_MODELS[EMBEDDING_MODEL_KEY]["name"]
 
 

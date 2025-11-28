@@ -582,6 +582,9 @@ class LocalRAGService(BaseRAGService):
             max_total_tokens=max_prompt_tokens,
             context_priority=0.65  # Allocate 65% to context, 35% to system/question
         )
+        
+        # Store final prompt for response
+        self._last_final_prompt = prompt
 
         try:
             # Calculate prompt metrics

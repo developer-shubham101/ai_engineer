@@ -55,6 +55,7 @@ class QueryResponse(BaseModel):
     answer: Optional[str] = None
     retrieved: List[RetrievedDoc] = Field(default_factory=list)
     context: Optional[str] = None
+    final_prompt: Optional[str] = None
 
 class AddDocRequest(BaseModel):
     source_name: str
@@ -439,7 +440,12 @@ async def query_rag(
         except Exception as exc:
             logger.exception("Failed to store session messages: %s", exc)
 
-    return QueryResponse(answer=answer, retrieved=docs, context=res.get("context"))
+    return QueryResponse(
+        answer=answer, 
+        retrieved=docs, 
+        context=res.get("context"),
+        final_prompt=res.get("final_prompt")
+    )
 
 
 @router.post("/documents/add", response_model=AddResponse, dependencies=[Depends(require_roles(["SuperAdmin", "Manager", "HR", "Employee"]))])
