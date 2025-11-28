@@ -16,7 +16,7 @@ import uuid
 from pathlib import Path
 from typing import List, Optional, Dict, Any
 
-from app.config import ENABLE_DYNAMIC_MODEL_SELECTION, DEFAULT_MODEL_NAME
+
 from app.services.base_rag_service import BaseRAGService
 
 # Embed/LLM imports (optional at runtime)
@@ -57,7 +57,7 @@ from app.utils.doc_parser import parse_file
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
-from app.services.model_manager import choose_model_for_task, get_llm_instance
+from app.services.model_manager import get_llm_instance
 from app.services.prompt_builder import (
     estimate_tokens_from_text,
     build_prompt_with_selected_chunks,
@@ -272,7 +272,7 @@ async def add_document_to_rag_local(
             prev_version_info = version_tracking.get_version(document_id, parent_version)
             if prev_version_info:
                 prev_chunk_ids = prev_version_info["chunk_ids"]
-                update_metadatas(collection=collection, ids=prev_chunk_ids, 
+                update_metadatas(collection=collection, ids=prev_chunk_ids,
                                metadata={"is_latest_version": False})
                 logger.info("Marked previous version %s as not latest", parent_version)
         except Exception as e:
@@ -296,7 +296,7 @@ async def update_document_version(
 ) -> Dict[str, Any]:
     """
     Create a new version of an existing document (non-destructive update).
-    
+
     Args:
         document_id: Document ID to update
         text: New document content
@@ -304,7 +304,7 @@ async def update_document_version(
         version_notes: Description of changes
         requester_id: User ID making the update
         status: Version status
-    
+
     Returns:
         Dictionary with version info
     """
@@ -312,13 +312,13 @@ async def update_document_version(
     latest = version_tracking.get_latest_version(document_id)
     if not latest:
         raise ValueError(f"Document {document_id} not found")
-    
+
     parent_version = latest["version"]
     source_name = latest["source_name"]
-    
+
     # Calculate next version
     next_version = _calculate_next_version(document_id)
-    
+
     # Create new version
     result = await add_document_to_rag_local(
         source_name=source_name,
@@ -331,7 +331,7 @@ async def update_document_version(
         version_notes=version_notes,
         created_by=requester_id
     )
-    
+
     from app.logging_config import log_user_action
     log_user_action(
         logger, "DOCUMENT_VERSION_UPDATE", requester_id,
@@ -347,11 +347,11 @@ async def get_document_version(
 ) -> Optional[Dict[str, Any]]:
     """
     Retrieve a specific version of a document with its chunks.
-    
+
     Args:
         document_id: Document ID
         version: Version number (if None, get latest)
-    
+
     Returns:
         Dictionary with chunks, metadata, and version info
     """
@@ -360,10 +360,10 @@ async def get_document_version(
         version_info = version_tracking.get_version(document_id, version)
     else:
         version_info = version_tracking.get_latest_version(document_id)
-    
+
     if not version_info:
         return None
-    
+
     # Get chunks from ChromaDB
     try:
         from app.services.chroma_utils import get_documents_by_ids
@@ -371,13 +371,13 @@ async def get_document_version(
             persist_directory=str(DEFAULT_PERSIST_DIR),
             collection_name=DEFAULT_COLLECTION_NAME
         )
-        
+
         chunk_ids = version_info["chunk_ids"]
         result = get_documents_by_ids(collection, chunk_ids)
-        
+
         chunks = result.get("documents", [])
         metadatas = result.get("metadatas", [])
-        
+
         return {
             "document_id": document_id,
             "version": version_info["version"],
@@ -402,26 +402,26 @@ async def compare_document_versions(
 ) -> Optional[Dict[str, Any]]:
     """
     Compare two versions of a document.
-    
+
     Args:
         document_id: Document ID
         version1: First version number
         version2: Second version number
-    
+
     Returns:
         Dictionary with version data and diff
     """
     # Get both versions
     v1_data = await get_document_version(document_id, version1)
     v2_data = await get_document_version(document_id, version2)
-    
+
     if not v1_data or not v2_data:
         return None
-    
+
     # Combine chunks into full text
     text1 = "\n\n".join(v1_data["chunks"])
     text2 = "\n\n".join(v2_data["chunks"])
-    
+
     # Compute diff
     import difflib
     diff = difflib.unified_diff(
@@ -432,12 +432,12 @@ async def compare_document_versions(
         lineterm=''
     )
     diff_text = ''.join(diff)
-    
+
     # Calculate statistics
     added_lines = diff_text.count('\n+')
     removed_lines = diff_text.count('\n-')
     chunk_diff = len(v2_data["chunks"]) - len(v1_data["chunks"])
-    
+
     return {
         "document_id": document_id,
         "version1": version1,
@@ -470,12 +470,12 @@ async def list_documents(
 ) -> List[Dict[str, Any]]:
     """
     List all documents with optional filtering.
-    
+
     Args:
         department: Filter by department
         status: Filter by status
         latest_only: If True, only return latest versions
-    
+
     Returns:
         List of document summaries
     """
@@ -484,7 +484,7 @@ async def list_documents(
         documents = version_tracking.get_documents_by_status(status)
     else:
         documents = version_tracking.list_all_documents(latest_only=latest_only)
-    
+
     # Filter by department if specified
     if department:
         filtered = []
@@ -492,7 +492,7 @@ async def list_documents(
             if doc.get("metadata", {}).get("department") == department:
                 filtered.append(doc)
         documents = filtered
-    
+
     return documents
 
 
@@ -502,35 +502,35 @@ async def archive_document_version(
 ) -> bool:
     """
     Archive (soft-delete) a specific version of a document.
-    
+
     Args:
         document_id: Document ID
         version: Version number
-    
+
     Returns:
         True if successful
     """
     try:
         # Update version tracking status
         success = version_tracking.update_version_status(document_id, version, "archived")
-        
+
         if not success:
             return False
-        
+
         # Update ChromaDB metadata
         version_info = version_tracking.get_version(document_id, version)
         if not version_info:
             return False
-        
+
         chunk_ids = version_info["chunk_ids"]
         client, collection = ensure_chroma_client(
             persist_directory=str(DEFAULT_PERSIST_DIR),
             collection_name=DEFAULT_COLLECTION_NAME
         )
-        
-        update_metadatas(collection=collection, ids=chunk_ids, 
+
+        update_metadatas(collection=collection, ids=chunk_ids,
                         metadata={"status": "archived", "is_latest_version": False})
-        
+
         from app.logging_config import log_user_action
         log_user_action(
             logger, "DOCUMENT_VERSION_ARCHIVED", "system",
@@ -547,7 +547,7 @@ class LocalRAGService(BaseRAGService):
     Local RAG service implementation using local LLM models.
     Inherits common functionality from BaseRAGService.
     """
-    
+
     async def generate_response(
         self,
         query_text: str,
@@ -560,25 +560,12 @@ class LocalRAGService(BaseRAGService):
         """
         Generate a response using local LLM.
         """
+        logger.debug("use_llmXXXX: %s ", use_llm)
         if not use_llm:
             return None
 
-        if ENABLE_DYNAMIC_MODEL_SELECTION:
-            task = "reason"
-            model_key = choose_model_for_task(task)
-            from app.logging_config import log_user_action
-            log_user_action(
-                logger, "MODEL_SELECTION_DYNAMIC", "system",
-                chosen_model=model_key, task=task, selection_mode="dynamic"
-            )
-        else:
-            model_key = DEFAULT_MODEL_NAME
-            from app.logging_config import log_user_action
-            log_user_action(
-                logger, "MODEL_SELECTION_DEFAULT", "system",
-                default_model=DEFAULT_MODEL_NAME, selection_mode="static"
-            )
-
+        model_key = getattr(self, '_model_key', None)
+        logger.debug("model_key: %s ", model_key)
         try:
             llm_instance = get_llm_instance(model_key)
         except Exception as e:
@@ -587,7 +574,7 @@ class LocalRAGService(BaseRAGService):
 
         # Calculate available tokens for prompt (reserve tokens for generation)
         max_prompt_tokens = 2048 - max_tokens - 50  # 50 token safety margin
-        
+
         prompt = build_prompt_with_selected_chunks(
             prefix=final_prefix,
             context_text=context_text,
@@ -602,32 +589,32 @@ class LocalRAGService(BaseRAGService):
             context_tokens = estimate_tokens_from_text(context_text or "")
             prefix_tokens = estimate_tokens_from_text(final_prefix)
             query_tokens = estimate_tokens_from_text(query_text)
-            
+
             from app.logging_config import log_llm_interaction, log_performance_metric
             import time
             llm_start_time = time.time()
-            
+
             log_llm_interaction(
-                logger, "LOCAL_MISTRAL", prompt_tokens, 0,  # response tokens unknown yet
-                model_key=model_key, prompt_len=len(prompt), max_tokens=max_tokens,
+                logger, "LOCAL_LLM", prompt_tokens, 0,  # response tokens unknown yet
+                prompt_len=len(prompt), max_tokens=max_tokens,
                 session_id=session_id or "none"
             )
-            
+
             logger.info("LOCAL_PROMPT_METRICS: prefix_tokens=%d context_tokens=%d query_tokens=%d total_tokens=%d",
                        prefix_tokens, context_tokens, query_tokens, prompt_tokens)
-            
+
             from app.logging_config import log_sensitive_debug
             log_sensitive_debug(
                 logger, "Local LLM prompt components",
                 final_prefix=final_prefix, context_text=context_text or "[NO_CONTEXT]",
-                query_text=query_text, model_key=model_key
+                query_text=query_text
             )
-            
+
             log_sensitive_debug(
                 logger, "Local LLM full prompt",
                 full_prompt=prompt, prompt_len=len(prompt), prompt_tokens=prompt_tokens
             )
-            
+
             # Check if prompt might exceed context window
             estimated_total = prompt_tokens + max_tokens
             context_window_limit = 2048  # Common context window size
@@ -637,43 +624,43 @@ class LocalRAGService(BaseRAGService):
                     logger, "POTENTIAL_CONTEXT_OVERFLOW", "system",
                     estimated_total=estimated_total, prompt_tokens=prompt_tokens,
                     max_tokens=max_tokens, context_limit=context_window_limit,
-                    model_key=model_key, session_id=session_id
+                    session_id=session_id
                 )
-            
+
             answer = await _call_llm_with_retry(
                 llm_instance,
                 prompt,
                 max_tokens=max_tokens,
                 temperature=0.0
             )
-            
+
             response_len = len(answer or "")
             response_tokens = estimate_tokens_from_text(answer or "")
-            
+
             llm_duration = (time.time() - llm_start_time) * 1000
-            
+
             log_llm_interaction(
-                logger, "LOCAL_MISTRAL", prompt_tokens, response_tokens,
-                model_key=model_key, response_len=response_len, 
+                logger, "LOCAL_LLM", prompt_tokens, response_tokens,
+                response_len=response_len,
                 duration_ms=llm_duration, session_id=session_id or "none"
             )
-            
+
             log_performance_metric(
                 logger, "LOCAL_LLM_GENERATION", llm_duration,
-                model_key=model_key, prompt_tokens=prompt_tokens, 
+                prompt_tokens=prompt_tokens,
                 response_tokens=response_tokens, session_id=session_id
             )
-            
+
             log_sensitive_debug(
                 logger, "Local LLM response",
                 response_text=answer or "", response_len=response_len,
                 response_tokens=response_tokens
             )
-            
+
             # Log efficiency metrics
             efficiency_ratio = response_tokens / max(prompt_tokens, 1)
             tokens_per_second = response_tokens / max(llm_duration / 1000, 0.001)
-            
+
             logger.info("LOCAL_EFFICIENCY_METRICS: input_tokens=%d output_tokens=%d efficiency_ratio=%.2f tokens_per_sec=%.1f",
                        prompt_tokens, response_tokens, efficiency_ratio, tokens_per_second)
         except Exception as e:
@@ -700,7 +687,6 @@ async def query_local_rag(
     """
     Query the local RAG service using the base RAG functionality.
     """
-    # Store model_key in service for generate_response method
     _local_rag_service._model_key = model_key
     return await _local_rag_service.query_rag(
         query_text=query_text,

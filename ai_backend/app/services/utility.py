@@ -75,6 +75,11 @@ def get_database_path(filename: str) -> Path:
     return DATABASE_DIR / filename
 
 
+def get_models_path() -> Path:
+    """Get path to the models directory."""
+    return MODELS_DIR
+
+
 # ============================================================================
 # EMBEDDING MODEL LOADER (Singleton to prevent duplicate loading)
 # ============================================================================

@@ -12,7 +12,7 @@
 A **production-ready multi-provider RAG system** supporting both **offline-first** (local models) and **cloud-based** (API) LLM providers through a unified architecture. Designed for enterprise environments with comprehensive RBAC, document versioning, and session management.
 
 ### Supported Providers
-- **Local Models**: Mistral-7B, Phi-2, Llama-3.2, Gemma-2B, Qwen2 (via llama-cpp-python)
+- **Local Models**: Auto-selected from local_models.json (Phi-2, Llama-3.2-1B/3B, Gemma-2B, Qwen2, Mistral-7B via llama-cpp-python)
 - **Cloud APIs**: Google Gemini, OpenAI GPT, Hugging Face Inference API
 - **Shared Components**: ChromaDB vectors, MiniLM embeddings, SQLite sessions
 
@@ -58,8 +58,8 @@ User Request → FastAPI Router → Provider Service → Base RAG Service → Re
 - `profile_analyzer.py` - User profile analysis for personalization
 
 **⚙️ Infrastructure**
-- `model_manager.py` - Local LLM loading & caching
-- `local_model_manager.py` - Multi-model support and selection
+- `model_manager.py` - Simplified local LLM loading & caching
+- `local_model_manager.py` - Multi-model detection and auto-selection
 - `prompt_builder.py` - Prompt construction & token management
 - `sentiment_classifier.py` - Sentiment analysis
 
@@ -152,7 +152,7 @@ Request: {
   "max_tokens": 256,
   "category": "string",
   "debug": false,
-  "local_llm_model": "phi2"  // Local provider only
+  "local_llm_model": "llama32-1b"  // Local provider only
 }
 
 Response: {

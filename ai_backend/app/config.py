@@ -19,7 +19,6 @@ DATABASE_DIR = PROJECT_ROOT / "database"
 # ============================================================================
 
 # --- LLM ---
-ENABLE_DYNAMIC_MODEL_SELECTION = False  # Set to True to enable dynamic model selection based on task
 DEFAULT_MODEL_NAME = "mistral-7b-instruct-v0.2.Q3_K_M.gguf"  # Primary model to use
 
 # --- Embeddings ---
