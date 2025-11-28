@@ -80,32 +80,46 @@ class BaseRAGService(ABC):
         Flexible RBAC: Level-based access + specific role overrides.
         """
         if not requester:
+            logger.debug("RBAC_CHECK: No requester provided. Defaulting to public_internal.")
             return meta.get("sensitivity", "public_internal") == "public_internal"
         
         sens = meta.get("sensitivity", "public_internal") if meta else "public_internal"
         user_role = requester.get("role")
         user_level = self._get_role_level(user_role)
+
+        logger.debug("RBAC_CHECK: user_role=%s user_level=%d doc_sensitivity=%s", user_role, user_level, sens)
         
         # Personal documents: owner or high-level roles
         if sens == "personal":
             owner = meta.get("owner_id")
+            log_sensitive_debug(logger, "RBAC_CHECK: personal doc owner=", owner=owner)
             if owner == requester.get("user_id"):
+                log_sensitive_debug(logger, "RBAC_CHECK: personal doc owner match")
                 return True
+            log_sensitive_debug(logger, "RBAC_CHECK: personal doc owner mismatch")
             return user_level >= 2  # HR+
         
         # Specific role restrictions override level hierarchy
         allowed_roles = meta.get("allowed_roles")
         if allowed_roles:
+            log_sensitive_debug(logger, "RBAC_CHECK: allowed_roles=", allowed_roles =allowed_roles)
+            # SuperAdmin bypasses role restrictions
+            if user_role == "SuperAdmin":
+                return True
             return user_role in allowed_roles
         
         # Department restrictions
         if sens == "department_confidential":
+            log_sensitive_debug(logger, "RBAC_CHECK: department_confidential doc dept", department= meta.get("department"))
             if requester.get("department") == meta.get("department"):
+                log_sensitive_debug(logger, "RBAC_CHECK: department_confidential doc dept match")
                 return True
         
         # Default: Level-based access
         required_level = self._get_sensitivity_level(sens)
-        return user_level >= required_level
+        has_access = user_level >= required_level
+        logger.debug("RBAC_RESULT: user_level=%d required_level=%d access=%s", user_level, required_level, has_access)
+        return has_access
     
     def _get_role_level(self, role: str) -> int:
         """Get numerical level for role."""
@@ -133,15 +147,29 @@ class BaseRAGService(ABC):
         public_summaries, filtered_details = [], []
         filtered_out_count = 0
 
+        logger.debug("Requester for RBAC filtering: %s", requester or "anonymous")
+        #{'user_id': 'u_admin_1', 'username': 'admin', 'role': 'SuperAdmin', 'department': 'Executive', 'session_id': 'sess_0bc192002dd44bc78ff272f1c534cb03', 'exp': 1764413396, 'iat': 1764326996}
+
+
         # 1. First Pass: RBAC Filtering
         for doc, meta, id_, dist in zip(raw_docs, raw_metadatas, raw_ids, raw_distances):
             try:
-                if self._allowed_by_metadata(meta, requester):
+                has_access = self._allowed_by_metadata(meta, requester)
+                logger.debug("RBAC check for document_id=%s access=%s", id_, has_access)
+                if has_access:
+                    log_sensitive_debug(
+                        logger, "RBAC allowed document",
+                        document_id=id_, document=doc, metadata=meta
+                    )
                     temp_docs.append(doc)
                     temp_metas.append(meta)
                     temp_ids.append(id_)
                     temp_distances.append(dist)
                 else:
+                    log_sensitive_debug(
+                        logger, "RBAC blocked document",
+                        document_id=id_, document=doc, metadata=meta
+                    )
                     filtered_out_count += 1
                     ps = meta.get("public_summary") if isinstance(meta, dict) else None
                     if ps:
@@ -157,6 +185,7 @@ class BaseRAGService(ABC):
 
         # Audit logging for blocked access attempts
         if filtered_out_count > 0:
+            logger.debug("RBAC filtering blocked %d documents", filtered_out_count)
             from app.logging_config import log_security_event
             
             user_id = requester.get("user_id", "anonymous") if requester else "anonymous"

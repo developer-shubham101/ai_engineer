@@ -560,12 +560,12 @@ class LocalRAGService(BaseRAGService):
         """
         Generate a response using local LLM.
         """
-        logger.debug("use_llmXXXX: %s ", use_llm)
+        logger.debug("Generating response with local LLM, use_llm=%s", use_llm)
         if not use_llm:
             return None
 
         model_key = getattr(self, '_model_key', None)
-        logger.debug("model_key: %s ", model_key)
+        logger.debug("Using model_key=%s for local LLM", model_key)
         try:
             llm_instance = get_llm_instance(model_key)
         except Exception as e:
