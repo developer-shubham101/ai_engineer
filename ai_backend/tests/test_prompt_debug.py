@@ -5,8 +5,10 @@ Test script to debug prompt generation in the RAG system.
 import requests
 import json
 
+from .constants import BASE_URL
+
 # API endpoint
-url = "http://192.168.1.2:8000/api/rag/local/query"
+url = f"{BASE_URL}/api/rag/local/query"
 
 # Headers
 headers = {

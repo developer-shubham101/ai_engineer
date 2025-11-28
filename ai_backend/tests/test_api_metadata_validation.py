@@ -12,7 +12,7 @@ This script tests:
 import requests
 import json
 
-BASE_URL = "http://192.168.1.2:8000"
+from .constants import BASE_URL
 
 def print_test(name):
     print(f"\n{'='*60}")

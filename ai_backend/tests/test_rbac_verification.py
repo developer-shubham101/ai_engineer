@@ -12,7 +12,7 @@ import requests
 import json
 import sys
 
-BASE_URL = "http://192.168.1.2:8000"
+from .constants import BASE_URL
 
 # Test users with different roles
 TEST_USERS = [

@@ -4,9 +4,9 @@ import sys
 import time
 from typing import Dict, Any, List
 
+from .constants import BASE_URL
+
 # Configuration
-BASE_URL = "http://192.168.1.2:8000"  # User provided URL
-# BASE_URL = "http://localhost:5444" # Fallback/Local testing
 USERNAME = "admin"
 PASSWORD = "admin123"
 

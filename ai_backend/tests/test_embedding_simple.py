@@ -7,7 +7,7 @@ Quick test for embedding model upgrade system
 import requests
 import json
 
-BASE_URL = "http://localhost:5444"
+from .constants import BASE_URL
 
 def test_embedding_api():
     print("🧪 Simple Embedding Model Test")

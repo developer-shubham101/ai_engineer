@@ -7,7 +7,8 @@ Tests the complete prompt construction flow without Unicode characters.
 import requests
 import json
 
-BASE_URL = "http://192.168.1.2:8000"
+from .constants import BASE_URL
+
 ADMIN_CREDENTIALS = {"username": "admin", "password": "admin123"}
 
 def test_prompt_construction():

@@ -66,7 +66,8 @@ def test_model_system():
     print("\n5. MODEL API TEST:")
     try:
         import requests
-        response = requests.get("http://192.168.1.2:8000/api/models/list")
+        from .constants import BASE_URL
+        response = requests.get(f"{BASE_URL}/api/models/list")
         if response.status_code == 200:
             data = response.json()
             print(f"✅ API working: {data['available_count']}/{data['total_count']} models available")

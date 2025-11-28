@@ -12,7 +12,7 @@ Tests all RBAC features:
 import requests
 import json
 
-BASE_URL = "http://192.168.1.2:8000"
+from .constants import BASE_URL
 
 def print_section(title):
     print(f"\n{'='*70}")

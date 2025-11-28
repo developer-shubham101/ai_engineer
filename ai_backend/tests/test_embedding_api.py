@@ -10,8 +10,9 @@ import time
 import os
 from typing import Dict, Any
 
+from .constants import BASE_URL
+
 # Configuration
-BASE_URL = "http://192.168.1.2:8000"
 ADMIN_CREDENTIALS = {"username": "admin", "password": "admin123"}
 
 class EmbeddingModelTester:

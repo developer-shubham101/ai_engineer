@@ -6,7 +6,7 @@ Test script for RBAC endpoints with new flexible role system.
 import requests
 import json
 
-BASE_URL = "http://localhost:8000"
+from .constants import BASE_URL
 
 def test_rbac_scenarios():
     """Test various RBAC scenarios"""
