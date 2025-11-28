@@ -253,13 +253,13 @@ class BaseRAGService(ABC):
         import time
         start_time = time.time()
         
-        logger.info("🛠️ PROMPT_OPTIMIZATION_START: session_id=%s query_len=%d max_prefix_tokens=%d", 
+        logger.info("PROMPT_OPTIMIZATION_START: session_id=%s query_len=%d max_prefix_tokens=%d", 
                    session_id, len(query_text or ""), max_prefix_tokens)
         
         # Get user context
         user_role = (requester or {}).get("role", "Guest")
         user_dept = (requester or {}).get("department", "General")
-        logger.debug("👤 USER_CONTEXT: role=%s dept=%s session=%s", user_role, user_dept, session_id or "none")
+        logger.debug("USER_CONTEXT: role=%s dept=%s session=%s", user_role, user_dept, session_id or "none")
         
         # Get conversation context and tone
         chat_history = []
@@ -268,12 +268,12 @@ class BaseRAGService(ABC):
         if session_id:
             try:
                 chat_history = fetch_recent_messages(session_id, limit=2)  # Reduced for efficiency
-                logger.debug("💬 CHAT_HISTORY: fetched %d messages for session=%s", len(chat_history), session_id)
+                logger.debug("CHAT_HISTORY: fetched %d messages for session=%s", len(chat_history), session_id)
                 # Find last user tone
                 for m in reversed(chat_history):
                     if m.get("speaker") == "user" and m.get("tone"):
                         last_user_tone = m["tone"]
-                        logger.debug("🎨 DETECTED_TONE: %s for session=%s", last_user_tone, session_id)
+                        logger.debug("DETECTED_TONE: %s for session=%s", last_user_tone, session_id)
                         break
             except Exception as e:
                 logger.warning("History fetch failed: %s", e)
@@ -289,7 +289,7 @@ class BaseRAGService(ABC):
         if current_tokens + system_tokens <= max_prefix_tokens:
             prompt_parts.append(system_base)
             current_tokens += system_tokens
-            logger.debug("⚙️ ADDED_SYSTEM: %s (%d tokens)", system_base, system_tokens)
+            logger.debug("ADDED_SYSTEM: %s (%d tokens)", system_base, system_tokens)
         
         # 2. User context (ultra-compact)
         if user_role != "Guest" or user_dept != "General":
@@ -299,7 +299,7 @@ class BaseRAGService(ABC):
             if current_tokens + user_tokens <= max_prefix_tokens:
                 prompt_parts.append(user_context)
                 current_tokens += user_tokens
-                logger.debug("👤 ADDED_USER_CONTEXT: %s (%d tokens)", user_context, user_tokens)
+                logger.debug("ADDED_USER_CONTEXT: %s (%d tokens)", user_context, user_tokens)
         
         # 3. Critical profile info only (name/position if space allows)
         if profile and current_tokens < max_prefix_tokens - 10:  # Reserve 10 tokens
@@ -318,7 +318,7 @@ class BaseRAGService(ABC):
                 if current_tokens + profile_tokens <= max_prefix_tokens:
                     prompt_parts.append(profile_text)
                     current_tokens += profile_tokens
-                    logger.debug("💼 ADDED_PROFILE: %s (%d tokens)", profile_text, profile_tokens)
+                    logger.debug("ADDED_PROFILE: %s (%d tokens)", profile_text, profile_tokens)
         
         # 4. Tone guidance (compressed)
         if last_user_tone and current_tokens < max_prefix_tokens - 15:
@@ -330,7 +330,7 @@ class BaseRAGService(ABC):
             if current_tokens + tone_tokens <= max_prefix_tokens:
                 prompt_parts.append(tone_compressed)
                 current_tokens += tone_tokens
-                logger.debug("🎨 ADDED_TONE: %s (%d tokens)", tone_compressed, tone_tokens)
+                logger.debug("ADDED_TONE: %s (%d tokens)", tone_compressed, tone_tokens)
         
         # 5. Last exchange context (only if significant space remains)
         if chat_history and current_tokens < max_prefix_tokens - 20:
@@ -348,7 +348,7 @@ class BaseRAGService(ABC):
                         if current_tokens + context_tokens <= max_prefix_tokens:
                             prompt_parts.append(context_text)
                             current_tokens += context_tokens
-                            logger.debug("📝 ADDED_CONTEXT: %s (%d tokens)", context_text, context_tokens)
+                            logger.debug("ADDED_CONTEXT: %s (%d tokens)", context_text, context_tokens)
         
         # Build final optimized prefix
         if prompt_parts:
@@ -369,12 +369,12 @@ class BaseRAGService(ABC):
             parts_count=len(prompt_parts), session_id=session_id
         )
         
-        logger.info("✅ PROMPT_OPTIMIZATION_COMPLETE: prefix_len=%d tokens=%d/%d (%.1f%%) parts=%d", 
+        logger.info("PROMPT_OPTIMIZATION_COMPLETE: prefix_len=%d tokens=%d/%d (%.1f%%) parts=%d", 
                    len(optimized_prefix), final_tokens, max_prefix_tokens, efficiency, len(prompt_parts))
         
         # Warning if still too large
         if final_tokens > max_prefix_tokens:
-            logger.warning("⚠️ PREFIX_BUDGET_EXCEEDED: %d tokens > %d limit (session=%s)", 
+            logger.warning("PREFIX_BUDGET_EXCEEDED: %d tokens > %d limit (session=%s)", 
                          final_tokens, max_prefix_tokens, session_id or "none")
         
         log_sensitive_debug(
@@ -555,7 +555,7 @@ class BaseRAGService(ABC):
         )
         
         logger.info(
-            "🤖 LLM_QUERY_DEBUG: user=%s provider=%s query_len=%d context_len=%d prefix_len=%d total_input_tokens_est=%d",
+            "LLM_QUERY_DEBUG: user=%s provider=%s query_len=%d context_len=%d prefix_len=%d total_input_tokens_est=%d",
             user_id, provider_name, query_len, context_len, prefix_len, total_input_tokens
         )
         
@@ -573,7 +573,7 @@ class BaseRAGService(ABC):
             query_tokens = estimate_tokens_from_text(query_text)
             
             logger.info(
-                "📊 TOKEN_BREAKDOWN: prefix=%d context=%d query=%d total=%d max_gen=%d efficiency=%.2f%%",
+                "TOKEN_BREAKDOWN: prefix=%d context=%d query=%d total=%d max_gen=%d efficiency=%.2f%%",
                 prefix_tokens, context_tokens, query_tokens, total_input_tokens, max_tokens,
                 (context_tokens / max(total_input_tokens, 1)) * 100
             )

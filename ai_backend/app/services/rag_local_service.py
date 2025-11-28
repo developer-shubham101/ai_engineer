@@ -261,7 +261,7 @@ async def add_document_to_rag_local(
             version_notes=version_notes,
             metadata=sanitized_base
         )
-        logger.info("📝 Created version record: document_id=%s version=%s", document_id, version)
+        logger.info("Created version record: document_id=%s version=%s", document_id, version)
     except Exception as e:
         logger.warning("Failed to create version record (non-fatal): %s", e)
 
@@ -274,7 +274,7 @@ async def add_document_to_rag_local(
                 prev_chunk_ids = prev_version_info["chunk_ids"]
                 update_metadatas(collection=collection, ids=prev_chunk_ids, 
                                metadata={"is_latest_version": False})
-                logger.info("🔄 Marked previous version %s as not latest", parent_version)
+                logger.info("Marked previous version %s as not latest", parent_version)
         except Exception as e:
             logger.warning("Failed to update previous version metadata (non-fatal): %s", e)
 
@@ -572,7 +572,7 @@ class LocalRAGService(BaseRAGService):
                 chosen_model=model_key, task=task, selection_mode="dynamic"
             )
         else:
-            model_key = "default"
+            model_key = DEFAULT_MODEL_NAME
             from app.logging_config import log_user_action
             log_user_action(
                 logger, "MODEL_SELECTION_DEFAULT", "system",
@@ -613,7 +613,7 @@ class LocalRAGService(BaseRAGService):
                 session_id=session_id or "none"
             )
             
-            logger.info("📊 LOCAL_PROMPT_METRICS: prefix_tokens=%d context_tokens=%d query_tokens=%d total_tokens=%d",
+            logger.info("LOCAL_PROMPT_METRICS: prefix_tokens=%d context_tokens=%d query_tokens=%d total_tokens=%d",
                        prefix_tokens, context_tokens, query_tokens, prompt_tokens)
             
             from app.logging_config import log_sensitive_debug
@@ -674,7 +674,7 @@ class LocalRAGService(BaseRAGService):
             efficiency_ratio = response_tokens / max(prompt_tokens, 1)
             tokens_per_second = response_tokens / max(llm_duration / 1000, 0.001)
             
-            logger.info("⚡ LOCAL_EFFICIENCY_METRICS: input_tokens=%d output_tokens=%d efficiency_ratio=%.2f tokens_per_sec=%.1f",
+            logger.info("LOCAL_EFFICIENCY_METRICS: input_tokens=%d output_tokens=%d efficiency_ratio=%.2f tokens_per_sec=%.1f",
                        prompt_tokens, response_tokens, efficiency_ratio, tokens_per_second)
         except Exception as e:
             logger.exception("LLM call failed: %s", e)
@@ -700,6 +700,8 @@ async def query_local_rag(
     """
     Query the local RAG service using the base RAG functionality.
     """
+    # Store model_key in service for generate_response method
+    _local_rag_service._model_key = model_key
     return await _local_rag_service.query_rag(
         query_text=query_text,
         n_results=n_results,
