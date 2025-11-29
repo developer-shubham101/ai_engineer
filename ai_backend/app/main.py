@@ -16,6 +16,7 @@ from app.services import rag_local_service
 # Routers
 from app.api_routes_rag import router as rag_router
 from app.api_routes_auth import router as auth_router
+from app.api_routes_training import router as training_router
 
 logger = setup_logging()
 
@@ -90,6 +91,7 @@ app = FastAPI(
 # Register routers
 app.include_router(auth_router)
 app.include_router(rag_router)
+app.include_router(training_router)
 
 # CORS (for development only)
 app.add_middleware(

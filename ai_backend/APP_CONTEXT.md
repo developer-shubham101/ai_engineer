@@ -63,6 +63,7 @@ User Request → FastAPI Router → Provider Service → Base RAG Service → Re
 - `model_manager.py` - Simplified local LLM loading & caching
 - `local_model_manager.py` - Multi-model detection and auto-selection
 - `prompt_builder.py` - **Optimized prompt construction** with token budgeting & context truncation
+- `model_training_service.py` - **NEW: Llama 3.2 1B fine-tuning** on company data
 - `sentiment_classifier.py` - Sentiment analysis
 - `logging_config.py` - **Enhanced logging** with performance metrics & debug output
 
@@ -71,6 +72,7 @@ User Request → FastAPI Router → Provider Service → Base RAG Service → Re
 - `api_routes_rag.py` - Multi-provider RAG endpoints
 - `api_routes_auth.py` - Authentication endpoints
 - `api_routes_models.py` - Model management endpoints
+- `api_routes_training.py` - **NEW: Model training endpoints** with background jobs
 - `dependencies.py` - Dependency injection for auth and services
 
 ---
@@ -86,6 +88,7 @@ ai_backend/
 │   │   ├── google_models.py         # Google Gemini
 │   │   ├── gpt_rag_service.py       # OpenAI GPT
 │   │   ├── hf_rag_service.py        # Hugging Face
+│   │   ├── model_training_service.py # Model fine-tuning
 │   │   ├── auth.py                  # JWT token management
 │   │   ├── user_service.py          # User management
 │   │   ├── support_chat.py          # Session management
@@ -106,6 +109,7 @@ ai_backend/
 │   ├── api_routes_rag.py     # RAG endpoints
 │   ├── api_routes_auth.py    # Auth endpoints
 │   ├── api_routes_models.py  # Model endpoints
+│   ├── api_routes_training.py # Training endpoints
 │   ├── dependencies.py       # Dependency injection
 │   ├── config.py            # Application configuration
 │   └── logging_config.py    # Logging setup
@@ -184,6 +188,14 @@ Response: {
 **GET /api/models/downloadable** - Models available for download
 **POST /api/models/refresh** - Refresh model cache
 
+### Model Training (`/api/training/`)
+
+**GET /api/training/status** - Check training availability
+**POST /api/training/start** - Start training job (SuperAdmin only)
+**GET /api/training/jobs/{id}** - Monitor training progress
+**GET /api/training/models** - List trained models
+**DELETE /api/training/models/{name}** - Delete trained model
+
 ---
 
 ## 5. RBAC System
@@ -247,9 +259,56 @@ personal (1)              - Owner + HR+ level
 - **Multi-Model Support**: Enhanced local model detection and selection
 - **Improved Caching**: Better LLM instance management and reuse
 
+### Model Training System (NEW)
+- **Llama 3.2 1B Fine-tuning**: Train custom models on company data
+- **Automated Export**: Models saved to `models/` directory in GGUF format
+- **Background Processing**: Non-blocking training with job tracking
+- **Data Filtering**: Automatic exclusion of sensitive documents
+- **Format Conversion**: HuggingFace to GGUF conversion for llama.cpp
+
 ---
 
-## 7. Core Service Functions
+## 7. Model Training Service
+
+### Training Capabilities
+- **Base Model**: Llama 3.2 1B (meta-llama/Llama-3.2-1B)
+- **Training Data**: Company documents from ChromaDB (filtered by sensitivity)
+- **Output Formats**: HuggingFace format + GGUF quantized (Q4_K_M)
+- **Training Method**: Instruction tuning with company-specific Q&A pairs
+
+### Training API Endpoints
+```python
+# Training Management (/api/training/)
+GET /api/training/status          # Check training availability
+POST /api/training/start          # Start training job (SuperAdmin)
+GET /api/training/jobs/{id}       # Monitor training progress
+GET /api/training/models          # List trained models
+DELETE /api/training/models/{name} # Delete trained model
+```
+
+### Training Process
+1. **Data Preparation**: Extract non-sensitive documents from ChromaDB
+2. **Format Conversion**: Create instruction-tuning format (user/assistant pairs)
+3. **Model Training**: Fine-tune Llama 3.2 1B with company data
+4. **Export**: Save in HuggingFace format to `models/{name}/`
+5. **GGUF Conversion**: Convert to quantized GGUF for llama.cpp integration
+6. **Integration**: Trained model automatically available in RAG system
+
+### Training Configuration
+```python
+{
+  "output_name": "llama-3.2-1b-company-tuned",
+  "max_samples": 1000,           # Training samples from documents
+  "epochs": 3,                   # Training epochs
+  "learning_rate": 2e-5,         # Learning rate
+  "batch_size": 1,               # Per-device batch size
+  "quantization": "q4_k_m"       # GGUF quantization level
+}
+```
+
+---
+
+## 8. Core Service Functions
 
 ### BaseRAGService (Abstract)
 ```python
