@@ -1,5 +1,14 @@
 {
   "models": {
+    "distilgpt2-company-tuned": {
+      "name": "DistilGPT2 Company Tuned",
+      "size": "82M",
+      "description": "A small, efficient model fine-tuned for company-specific tasks",
+      "hf_repo": "your-org/distilgpt2-company-tuned",
+      "gguf_file": "distilgpt2-company-tuned.gguf",
+      "download_url": "https://huggingface.co/your-org/distilgpt2-company-tuned/resolve/main/distilgpt2-company-tuned.gguf",
+      "context_length": 1024
+    },
     "phi2": {
       "name": "Phi-2 (Microsoft)",
       "size": "2.7B",

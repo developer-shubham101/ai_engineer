@@ -292,6 +292,7 @@ export default function RAGChat({ onLogout }){
               <option value="llama31-8b">Llama 3.1 8B</option>
               <option value="phi3-mini">Phi-3 Mini</option>
               <option value="gemma2-2b">Gemma 2 2B</option>
+              <option value="distilgpt2-company-tuned">DistilGPT2 Company Tuned</option>
             </select>
           )}
           <select

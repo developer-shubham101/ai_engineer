@@ -20,3 +20,4 @@ chroma_storage/
 # Logs
 logs/
 
+models/*

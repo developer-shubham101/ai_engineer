@@ -43,7 +43,7 @@
 **RAG Operations (require Bearer token):**
 - `POST /api/rag/{model_provider}/query` — `{ question, top_k, use_llm, max_tokens?, category?, local_llm_model? }` → `{ answer, retrieved[], context, filtered_out_count?, public_summaries?, filtered_details? }`
   - `model_provider`: `local`, `google`, `gpt`, `hf` (huggingface)
-  - `local_llm_model`: Optional parameter for local provider (e.g., "llama32-1b", "llama32-3b", "llama31-8b", "phi3-mini", "gemma2-2b")
+  - `local_llm_model`: Optional parameter for local provider (e.g., "llama32-1b", "llama32-3b", "llama31-8b", "phi3-mini", "gemma2-2b", "distilgpt2-company-tuned")
 
 **Document Management (require Bearer token):**
 - `POST /api/rag/documents/add` — `{ source_name, text, metadata }` → add JSON doc with versioning
