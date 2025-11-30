@@ -66,8 +66,17 @@ TEST_QUERIES = [
     }
 ]
 
-def query_model(question: str, model_name: str = "distilgpt2-company-tuned") -> Dict:
+def query_model(question: str, model_name: str = None) -> Dict:
     """Send a query to the model and return the response."""
+    
+    # Import here to avoid circular imports
+    import sys
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).parent.parent))
+    from app.config.model_config import ModelConfig
+    
+    if model_name is None:
+        model_name = ModelConfig.DEFAULT_OUTPUT_NAME
     
     payload = {
         "question": question,

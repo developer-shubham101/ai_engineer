@@ -102,7 +102,7 @@ def main():
     """Main conversion function."""
     if len(sys.argv) < 2:
         print("Usage: python convert_to_gguf_improved.py <model_path> [output_name] [quantization]")
-        print("Example: python convert_to_gguf_improved.py models/distilgpt2-company-tuned")
+        print("Example: python convert_to_gguf_improved.py models/my-model")
         sys.exit(1)
     
     model_path = Path(sys.argv[1])

@@ -34,11 +34,14 @@ if errorlevel 1 (
 REM Step 4: Convert to GGUF format
 echo.
 echo Step 4: Converting to GGUF format...
-if exist "models\distilgpt2-company-tuned" (
-    python scripts\convert_to_gguf_improved.py models\distilgpt2-company-tuned
+REM Get model name from config and convert
+for /f "tokens=*" %%i in ('python -c "import sys; sys.path.insert(0, '.'); from app.config.model_config import ModelConfig; print(ModelConfig.DEFAULT_OUTPUT_NAME)"') do set MODEL_NAME=%%i
+
+if exist "models\%MODEL_NAME%" (
+    python scripts\convert_to_gguf_improved.py models\%MODEL_NAME%
     if errorlevel 1 (
         echo Warning: GGUF conversion failed, trying fallback method...
-        python scripts\simple_gguf_convert_fixed.py models\distilgpt2-company-tuned
+        python scripts\simple_gguf_convert_fixed.py models\%MODEL_NAME%
         if errorlevel 1 (
             echo Note: GGUF conversion failed, but HuggingFace model is available
         )
@@ -54,11 +57,11 @@ echo TRAINING WORKFLOW COMPLETED!
 echo ========================================
 echo.
 echo Available files:
-if exist "models\distilgpt2-company-tuned" (
-    echo    HuggingFace model: models\distilgpt2-company-tuned\
+if exist "models\%MODEL_NAME%" (
+    echo    HuggingFace model: models\%MODEL_NAME%\
 )
-if exist "models\distilgpt2-company-tuned.gguf" (
-    echo    GGUF model: models\distilgpt2-company-tuned.gguf
+if exist "models\%MODEL_NAME%.gguf" (
+    echo    GGUF model: models\%MODEL_NAME%.gguf
 )
 if exist "training_data.jsonl" (
     echo    Training data: training_data.jsonl

@@ -138,7 +138,7 @@ curl -X POST "http://localhost:8000/api/query" \
 ## File Structure After Training
 
 ```
-laura_traning/
+lora_traning/
 ├── data/                          # Your company documents
 ├── models/
 │   ├── distilgpt2-company-tuned/  # HuggingFace format model

@@ -135,21 +135,30 @@ class ModelTrainingService:
     """Service for training Llama 3.2 1B on company documents."""
     
     def __init__(self):
-        # Use an open-source model that doesn't require authentication
-        self.model_name = "distilgpt2"  # Lightweight, open-source alternative
+        from app.config.model_config import ModelConfig
+        self.model_name = ModelConfig.DEFAULT_BASE_MODEL
         self.models_dir = Path("models")
         self.models_dir.mkdir(exist_ok=True)
 
     def train_model(
         self, 
-        output_name: str = "distilgpt2-company-tuned",
-        max_samples: int = 1000,
-        epochs: int = 3,
-        learning_rate: float = 2e-5
+        output_name: str = None,
+        max_samples: int = None,
+        epochs: int = None,
+        learning_rate: float = None
     ) -> Dict[str, Any]:
-        """Train Llama 3.2 1B on company data."""
+        """Train model on company data."""
         if not TRAINING_AVAILABLE:
             raise RuntimeError("Training dependencies not installed")
+        
+        from app.config.model_config import ModelConfig
+        config = ModelConfig.get_model_config()
+        
+        # Use config defaults if not provided
+        output_name = output_name or config["output_name"]
+        max_samples = max_samples or config["max_samples"]
+        epochs = epochs or config["epochs"]
+        learning_rate = learning_rate or config["learning_rate"]
             
         logger.info(f"Starting training of {self.model_name}")
         
@@ -325,10 +334,10 @@ _training_service = ModelTrainingService()
 
 
 async def train_company_model(
-    output_name: str = "distilgpt2-company-tuned",
-    max_samples: int = 1000,
-    epochs: int = 3,
-    learning_rate: float = 2e-5
+    output_name: str = None,
+    max_samples: int = None,
+    epochs: int = None,
+    learning_rate: float = None
 ) -> Dict[str, Any]:
     """Train a model on company data."""
     return _training_service.train_model(

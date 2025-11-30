@@ -55,7 +55,7 @@ User Request → FastAPI Router → Service Layer → Model/Training Response
 ## 3. Directory Structure
 
 ```
-laura_traning/
+lora_traning/
 ├── app/
 │   ├── services/              # Core business logic
 │   │   ├── __init__.py
@@ -134,7 +134,7 @@ Response: {
 ## 5. Training System
 
 ### Model Configuration
-- **Base Model**: DistilGPT2 (lightweight, fast training)
+- **Base Model**: Configurable via `app/config/model_config.py` (default: DistilGPT2)
 - **Training Format**: "Question: X\nAnswer: Y"
 - **Context Length**: 512 tokens
 - **Training Epochs**: 2-3 (adjustable)
@@ -157,7 +157,8 @@ Response: {
 ### Training Request
 ```json
 {
-  "output_name": "distilgpt2-company-tuned",
+  "output_name": "auto-generated-from-model-name",
+  "base_model": "configurable-via-model_config.py",
   "max_samples": 500,
   "epochs": 2,
   "learning_rate": 2e-5
@@ -341,9 +342,9 @@ def generate_questions_for_topic(topic: str) -> List[str]:
 
 ### ModelTrainingService
 ```python
-def train_model(output_name: str, max_samples: int, epochs: int) -> Dict:
+def train_model(output_name: str, base_model: str, max_samples: int, epochs: int) -> Dict:
     # 1. Prepare training data from documents
-    # 2. Load DistilGPT2 model and tokenizer
+    # 2. Load configurable base model and tokenizer
     # 3. Train model with company data
     # 4. Save and convert to GGUF
     # 5. Return training metadata
@@ -462,7 +463,7 @@ python scripts\test_trained_model.py
 ## 11. Current Project Structure
 
 ```
-laura_traning/
+lora_traning/
 ├── app/                     # FastAPI application
 │   ├── services/           # Core business logic
 │   ├── config/            # Configuration files
@@ -492,7 +493,19 @@ laura_traning/
 └── USAGE_GUIDE.md        # User guide and instructions
 ```
 
-## 12. Performance Expectations
+## 12. Model Configuration Management
+
+### Centralized Configuration
+- **File**: `app/config/model_config.py`
+- **Purpose**: Single source of truth for model settings
+- **Usage**: Import `ModelConfig` class to get default settings
+
+### Adding New Models
+1. Update `DEFAULT_BASE_MODEL` in `model_config.py`
+2. Update `DEFAULT_OUTPUT_NAME` if needed
+3. All scripts automatically use new configuration
+
+### Performance Expectations
 
 ### Good Performance (>60% test score):
 - ✅ Company-specific responses
@@ -509,7 +522,9 @@ laura_traning/
 - Add more company documents
 - Increase training epochs (2→5)
 - Improve data quality
-- Use larger base model## Directory Paths
+- Use larger base model
+
+## Directory Paths
 ```python
 MODELS_DIR = Path("models")      # GGUF models and trained models
 DATA_DIR = Path("data")          # Training data (text files)
@@ -709,6 +724,28 @@ epochs=1, learning_rate=1e-5, max_samples=1000
 
 
 ---
+
+---
+
+## Quick Model Change Guide
+
+### To Add/Change Models (One Place Only):
+
+**File**: `app/config/model_config.py`
+
+```python
+# Change these two lines only:
+DEFAULT_BASE_MODEL = "your-new-model"  # e.g., "gpt2", "microsoft/DialoGPT-small"
+DEFAULT_OUTPUT_NAME = "your-new-model-company-tuned"  # Auto-generated if not specified
+```
+
+**Available Models**:
+- `distilgpt2` - Fast, lightweight (default)
+- `gpt2` - Standard GPT-2
+- `microsoft/DialoGPT-small` - Dialog-focused
+- `microsoft/DialoGPT-medium` - Larger dialog model
+
+**Test Configuration**: Run `python scripts/change_model_example.py`
 
 ---
 

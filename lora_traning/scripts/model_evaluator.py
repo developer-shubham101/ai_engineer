@@ -10,7 +10,7 @@ import time
 BASE_URL = "http://192.168.1.2:8000"
 
 QUESTIONS = [
-    "Tell me about the attendance policy."
+    "What are the requirements for a new password? Give me A sample of it."
     # "Tell me about the attendance policy.",
     # "What are the rules for moonlighting?",
     # "How does parental leave work at the company?",
@@ -28,11 +28,11 @@ def ask_question(question):
         "use_llm": True,
         "max_tokens": 300,
         "debug": True,
-        "local_llm_model": "distilgpt2-company-tuned"
+        "local_llm_model": "gpt2-company-tuned"
     }
     
     try:
-        response = requests.post(f"{BASE_URL}/api/query", json=payload, timeout=30)
+        response = requests.post(f"{BASE_URL}/api/query", json=payload, timeout=330)
         if response.status_code == 200:
             return response.json()["answer"]
         else:

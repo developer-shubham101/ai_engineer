@@ -13,6 +13,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from app.services.model_training_service import train_company_model, is_training_available
+from app.config.model_config import ModelConfig
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -27,11 +28,12 @@ async def main():
 
     try:
         logger.info("Starting model training...")
+        config = ModelConfig.get_model_config()
         result = await train_company_model(
-            output_name="distilgpt2-company-tuned",
-            max_samples=500,  # Smaller for testing
-            epochs=2,
-            learning_rate=2e-5
+            output_name=config["output_name"],
+            max_samples=config["max_samples"],
+            epochs=config["epochs"],
+            learning_rate=config["learning_rate"]
         )
 
         logger.info("Training completed successfully!")

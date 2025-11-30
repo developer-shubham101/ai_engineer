@@ -34,10 +34,10 @@ router = APIRouter(prefix="/api/training", tags=["Model Training"])
 
 # Request/Response models
 class TrainingRequest(BaseModel):
-    output_name: str = Field(default="llama-3.2-1b-company-tuned", description="Name for the trained model")
-    max_samples: int = Field(default=1000, ge=100, le=5000, description="Maximum training samples")
-    epochs: int = Field(default=3, ge=1, le=10, description="Number of training epochs")
-    learning_rate: float = Field(default=2e-5, gt=0, lt=1, description="Learning rate")
+    output_name: str = Field(default=None, description="Name for the trained model (auto-generated if not provided)")
+    max_samples: int = Field(default=None, ge=100, le=5000, description="Maximum training samples")
+    epochs: int = Field(default=None, ge=1, le=10, description="Number of training epochs")
+    learning_rate: float = Field(default=None, gt=0, lt=1, description="Learning rate")
 
 
 class TrainingResponse(BaseModel):
