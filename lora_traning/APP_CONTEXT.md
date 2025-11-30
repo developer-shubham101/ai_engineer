@@ -55,22 +55,43 @@ User Request → FastAPI Router → Service Layer → Model/Training Response
 ## 3. Directory Structure
 
 ```
-lora_training/
+laura_traning/
 ├── app/
 │   ├── services/              # Core business logic
+│   │   ├── __init__.py
 │   │   ├── model_training_service.py # LoRA fine-tuning
 │   │   ├── model_manager.py         # GGUF model loading
 │   │   └── local_model_manager.py   # Model discovery
 │   ├── config/               # Configuration files
 │   │   └── local_models.json       # Model configurations
+│   ├── __init__.py
 │   ├── main.py               # FastAPI application
 │   ├── api_routes_rag.py     # Simple query endpoint
 │   ├── api_routes_models.py  # Model management
 │   ├── api_routes_training.py # Training endpoints
 │   └── logging_config.py    # Logging setup
 ├── models/                  # Local LLM files (GGUF + trained models)
+│   ├── distilgpt2-company-tuned/     # HuggingFace format
+│   ├── distilgpt2-company-tuned.gguf # GGUF format
+│   └── distilgpt2-company-tuned.json # Training metadata
 ├── data/                   # Training data (text files)
-└── requirements.txt        # Python dependencies
+│   └── company/            # Company documents
+├── raw_data/               # Original markdown files
+│   └── company/            # Source documents (.md format)
+├── scripts/                # Training and conversion scripts
+│   ├── doc_parser.py
+│   ├── train_model.py
+│   ├── convert_to_gguf_improved.py
+│   ├── test_trained_model.py
+│   └── retrain_improved.bat
+├── logs/                   # Application logs
+├── .env                    # Environment variables
+├── .gitignore             # Git ignore rules
+├── requirements.txt       # Python dependencies
+├── APP_CONTEXT.md         # This file
+├── DOCUMENT_PARSING.md    # Document parsing guide
+├── FIXES_AND_IMPROVEMENTS.md # Known issues and fixes
+└── USAGE_GUIDE.md         # Usage instructions
 ```
 
 ---
@@ -252,15 +273,28 @@ curl -X POST "http://localhost:8000/api/query" \
 
 ### Core Requirements
 ```python
+# Core FastAPI and server
 fastapi>=0.104.0
 uvicorn>=0.24.0
+pydantic>=2.0.0
+
+# Machine Learning and Training
 torch>=2.0.0
 transformers>=4.35.0
+peft>=0.6.0
 datasets>=2.14.0
+accelerate>=0.24.0
+
+# Model Inference
 llama-cpp-python>=0.2.0
+
+# Document Parsing
 markdown>=3.4.0
 beautifulsoup4>=4.12.0
-pydantic>=2.0.0
+
+# Utilities
+python-multipart>=0.0.6
+pytest
 ```
 
 ### Hardware Requirements
@@ -425,27 +459,37 @@ python -m uvicorn app.main:app --reload
 python scripts\test_trained_model.py
 ```
 
-## 11. Directory Structure
+## 11. Current Project Structure
 
 ```
-lora_training/
-├── data/                    # Company documents (any structure)
-│   ├── company/v1/*.md     # Nested directories supported
-│   ├── policies/*.html     # Multiple formats
-│   └── converted/          # Auto-generated text files
-├── models/
+laura_traning/
+├── app/                     # FastAPI application
+│   ├── services/           # Core business logic
+│   ├── config/            # Configuration files
+│   ├── main.py            # FastAPI app entry point
+│   └── api_routes_*.py    # API endpoints
+├── data/                   # Processed training data (text files)
+│   └── company/           # Company documents (.txt format)
+├── raw_data/              # Original source documents
+│   └── company/           # Source documents (.md format)
+├── models/                # Trained models and GGUF files
 │   ├── distilgpt2-company-tuned/     # HuggingFace format
 │   ├── distilgpt2-company-tuned.gguf # GGUF format
 │   └── distilgpt2-company-tuned.json # Training metadata
-├── scripts/
+├── scripts/               # Training and utility scripts
 │   ├── doc_parser.py              # Document conversion
-│   ├── prepare_training_data_improved.py # Data preparation
 │   ├── train_model.py             # Model training
 │   ├── convert_to_gguf_improved.py # GGUF conversion
 │   ├── test_trained_model.py      # Automated testing
 │   └── retrain_improved.bat       # Complete workflow
-├── training_data.jsonl      # Generated training data
-└── requirements.txt         # Dependencies
+├── logs/                  # Application logs
+├── .env                   # Environment variables
+├── .gitignore            # Git ignore rules
+├── requirements.txt      # Python dependencies
+├── APP_CONTEXT.md        # This technical context file
+├── DOCUMENT_PARSING.md   # Document parsing documentation
+├── FIXES_AND_IMPROVEMENTS.md # Known issues and solutions
+└── USAGE_GUIDE.md        # User guide and instructions
 ```
 
 ## 12. Performance Expectations
@@ -669,5 +713,6 @@ epochs=1, learning_rate=1e-5, max_samples=1000
 ---
 
 **Last Updated**: 2025-01-10
+**Project Structure Synced**: 2025-01-10
 
 This context file provides complete system understanding for the LoRA training and testing system. The system is designed to be minimal, focused, and efficient for model fine-tuning workflows.
