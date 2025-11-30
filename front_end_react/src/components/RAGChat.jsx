@@ -68,7 +68,6 @@ export default function RAGChat({ onLogout }){
   async function sendQuery(){
     if (inFlight) return
     if (!composer.trim()) return addToast('Please enter a question', 'warning', 'Validation')
-    if (!token) return addToast('Please login first', 'warning', 'Auth')
 
     setInFlight(true)
     const userMsg = { role:'user', text: composer }
@@ -81,8 +80,11 @@ export default function RAGChat({ onLogout }){
     }
 
     try {
-      const headers = { "Content-Type": "application/json", "Authorization": `Bearer ${token}` };
-      if (sessionId) headers['X-Session-ID'] = sessionId;
+      const headers = { "Content-Type": "application/json" };
+      if (token) {
+        headers["Authorization"] = `Bearer ${token}`;
+        if (sessionId) headers['X-Session-ID'] = sessionId;
+      }
       const res = await fetch(BASE_API_URL + `/api/rag/${modelProvider}/query`, {
         method: "POST",
         headers: headers,
@@ -104,9 +106,11 @@ export default function RAGChat({ onLogout }){
   }
 
   async function postAddJson({ source_name, text, metadata }){
-    if (!token) return addToast('Please login first', 'warning', 'Auth')
-    const headers = { 'Content-Type':'application/json', 'Authorization': `Bearer ${token}` };
-    if (sessionId) headers['X-Session-ID'] = sessionId;
+    const headers = { 'Content-Type':'application/json' };
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+      if (sessionId) headers['X-Session-ID'] = sessionId;
+    }
     try {
       const res = await fetch(BASE_API_URL + `/api/rag/documents/add`, { method:'POST', headers: headers, body: JSON.stringify({ source_name, text, metadata }) })
       if (!res.ok){ const txt = await res.text().catch(()=>res.statusText); throw new Error(txt || 'Server error') }
@@ -115,9 +119,11 @@ export default function RAGChat({ onLogout }){
   }
 
   async function postUploadFile(formData){
-    if (!token) return addToast('Please login first', 'warning', 'Auth')
-    const headers = { 'Authorization': `Bearer ${token}` };
-    if (sessionId) headers['X-Session-ID'] = sessionId;
+    const headers = {};
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+      if (sessionId) headers['X-Session-ID'] = sessionId;
+    }
     try {
       const res = await fetch(BASE_API_URL + `/api/rag/documents/add-file`, { method:'POST', headers: headers, body: formData })
       if (!res.ok){ const txt = await res.text().catch(()=>res.statusText); throw new Error(txt || 'Upload error') }

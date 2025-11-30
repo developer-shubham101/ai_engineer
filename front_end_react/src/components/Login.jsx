@@ -122,6 +122,21 @@ export default function Login({ onLoginSuccess }) {
                   Login with Guest
                 </button>
               </div>
+
+              <div className="mt-2">
+                <button
+                  type="button"
+                  className="btn btn-link w-100 text-muted"
+                  onClick={() => {
+                    if (onLoginSuccess) {
+                      onLoginSuccess(null, { username: 'guest', role: 'guest' });
+                    }
+                  }}
+                  disabled={loading}
+                >
+                  Skip as Guest
+                </button>
+              </div>
             </div>
           </div>
         </div>

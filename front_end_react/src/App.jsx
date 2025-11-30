@@ -19,8 +19,13 @@ export default function App(){
   }, [])
 
   function handleLoginSuccess(token, user) {
-    setStoredToken(token)
-    setStoredUser(user)
+    if (token) {
+      setStoredToken(token)
+      setStoredUser(user)
+    } else {
+      // Guest mode - don't store token
+      setStoredUser(user)
+    }
     setIsAuthenticated(true)
   }
 
