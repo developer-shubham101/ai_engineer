@@ -11,9 +11,9 @@ from abc import ABC, abstractmethod
 
 from app.logging_config import log_sensitive_debug
 from app.services.chroma_utils import ensure_chroma_client, query_collection
-from app.services.legacy.support_chat import fetch_recent_messages
+from app.services.support_chat import fetch_recent_messages
 from app.services.prompt_builder import build_tone_guidance, estimate_tokens_from_text
-from app.services.legacy.utility import embed_texts, DEFAULT_PERSIST_DIR, DEFAULT_COLLECTION_NAME
+from app.services.utility import embed_texts, DEFAULT_PERSIST_DIR, DEFAULT_COLLECTION_NAME
 # Removed old profile_analyzer import - using optimized approach
 
 logger = logging.getLogger(__name__)
@@ -550,13 +550,13 @@ class BaseRAGService(ABC):
         user_profile = None
         if requester and requester.get("user_id"):
             try:
-                from app.services.legacy.user_service import get_all_user_meta
+                from app.services.user_service import get_all_user_meta
                 user_profile = get_all_user_meta(requester["user_id"])
             except Exception as e:
                 logger.warning("Failed to load user profile: %s", e)
         elif session_id:
             try:
-                from app.services.legacy.support_chat import get_full_profile
+                from app.services.support_chat import get_full_profile
                 user_profile = get_full_profile(session_id)
             except Exception as e:
                 logger.warning("Failed to load session profile: %s", e)

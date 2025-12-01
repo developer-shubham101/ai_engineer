@@ -232,53 +232,42 @@ result = await query_local_rag(
 
 ---
 
-## 4. Modular Architecture
-
-### New Modular Structure (2025-01-11)
-
-The system has been refactored into a modular architecture with clear separation of concerns:
+## 4. Directory Structure
 
 ```
 ai_backend/
 ├── app/
-│   ├── modules/              # Modular architecture
-│   │   ├── api/             # API layer (input/output handling)
-│   │   │   ├── models.py           # Request/response models
-│   │   │   ├── handlers.py         # Request handlers
-│   │   │   └── validators.py       # Input validation
-│   │   ├── config/          # Configuration management
-│   │   │   ├── settings.py         # Application settings
-│   │   │   ├── constants.py        # Constants and enums
-│   │   │   └── models.py           # Configuration models
-│   │   ├── auth/            # Authentication & session management
-│   │   │   ├── interfaces.py       # Auth interfaces
-│   │   │   ├── jwt_auth.py          # JWT implementation
-│   │   │   ├── user_manager.py     # User management
-│   │   │   ├── session_manager.py  # Session management
-│   │   │   └── rbac.py             # Role-based access control
-│   │   ├── vector_db/       # Vector database abstraction
-│   │   │   ├── interfaces.py       # Vector DB interfaces
-│   │   │   ├── chroma_impl.py      # ChromaDB implementation
-│   │   │   └── embedding_manager.py # Embedding providers
-│   │   ├── llm/             # LLM providers and RAG orchestration
-│   │   │   ├── interfaces.py       # LLM interfaces
-│   │   │   ├── providers.py        # LLM provider implementations
-│   │   │   ├── rag_orchestrator.py # RAG orchestration
-│   │   │   └── prompt_manager.py   # Prompt management
-│   │   ├── core/            # Core business logic
-│   │   │   ├── document_manager.py # Document operations
-│   │   │   ├── version_manager.py  # Version control
-│   │   │   ├── profile_analyzer.py # User profiling
-│   │   │   └── utils.py            # Utility functions
-│   │   └── integration.py   # Module integration & DI
-│   ├── services/            # Legacy services (being migrated)
-│   ├── utils/               # Utility modules
-│   ├── config/             # Configuration files
-│   ├── main.py             # FastAPI application
-│   ├── api_routes_*.py     # API route definitions
-│   ├── dependencies.py     # FastAPI dependencies
-│   ├── config.py          # Legacy configuration
-│   └── logging_config.py  # Logging setup
+│   ├── services/              # Core business logic
+│   │   ├── base_rag_service.py      # Abstract RAG base
+│   │   ├── rag_local_service.py     # Local models + docs
+│   │   ├── google_models.py         # Google Gemini
+│   │   ├── gpt_rag_service.py       # OpenAI GPT
+│   │   ├── hf_rag_service.py        # Hugging Face
+│   │   ├── model_training_service.py # Model fine-tuning
+│   │   ├── auth.py                  # JWT token management
+│   │   ├── user_service.py          # User management
+│   │   ├── support_chat.py          # Session management
+│   │   ├── version_tracking.py      # Document versions
+│   │   ├── profile_analyzer.py      # User personalization
+│   │   ├── model_manager.py         # LLM loading
+│   │   ├── local_model_manager.py   # Multi-model support
+│   │   ├── prompt_builder.py        # Prompt construction
+│   │   ├── sentiment_classifier.py  # Sentiment analysis
+│   │   ├── utility.py               # Shared utilities
+│   │   └── chroma_utils.py          # Vector DB operations
+│   ├── utils/                 # Utility modules
+│   │   └── doc_parser/             # Document parsing
+│   ├── config/               # Configuration files
+│   │   ├── onboarding_fields.json  # User onboarding
+│   │   └── local_models.json       # Model configurations
+│   ├── main.py               # FastAPI application
+│   ├── api_routes_rag.py     # RAG endpoints
+│   ├── api_routes_auth.py    # Auth endpoints
+│   ├── api_routes_models.py  # Model endpoints
+│   ├── api_routes_training.py # Training endpoints
+│   ├── dependencies.py       # Dependency injection
+│   ├── config.py            # Application configuration
+│   └── logging_config.py    # Logging setup
 ├── database/                # SQLite databases
 ├── chroma_storage/          # Vector database
 ├── models/                  # Local LLM files
@@ -900,119 +889,6 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000
 - **SQLite** for sessions/users/versions
 - **Local models** in `models/` directory
 - **Embedding models** in `embeddings_models/`
-
----
-
-## 16. Modular Architecture Benefits
-
-### Design Principles
-
-**1. Separation of Concerns**
-- Each module has a single, well-defined responsibility
-- Clear boundaries between API, business logic, and data layers
-- Minimal coupling between modules
-
-**2. Interface-Based Design**
-- All modules define clear interfaces (abstract base classes)
-- Multiple implementations can coexist (e.g., ChromaDB vs Pinecone)
-- Easy to mock for testing
-
-**3. Dependency Injection**
-- Central container manages all dependencies
-- Services are injected rather than directly instantiated
-- Easy to swap implementations for testing or different environments
-
-**4. Testability**
-- Each module can be tested independently
-- Mock implementations available for all interfaces
-- Clear test boundaries
-
-### Module Responsibilities
-
-**API Module** (`app/modules/api/`)
-- Request/response validation and serialization
-- Error handling and HTTP status codes
-- Input sanitization and output formatting
-
-**Config Module** (`app/modules/config/`)
-- Environment variable management
-- Application settings and constants
-- Configuration validation
-
-**Auth Module** (`app/modules/auth/`)
-- User authentication (JWT, OAuth, etc.)
-- Session management and persistence
-- Role-based access control (RBAC)
-- User profile management
-
-**Vector DB Module** (`app/modules/vector_db/`)
-- Document embedding and storage
-- Similarity search and retrieval
-- Multiple vector database support (ChromaDB, Pinecone, etc.)
-- Embedding provider abstraction
-
-**LLM Module** (`app/modules/llm/`)
-- Multiple LLM provider support (Local, OpenAI, Google, etc.)
-- RAG orchestration and workflow
-- Prompt engineering and optimization
-- Response generation and formatting
-
-**Core Module** (`app/modules/core/`)
-- Document lifecycle management
-- Version control and history
-- User profiling and personalization
-- Business logic utilities
-
-### Migration Strategy
-
-**Phase 1: Interface Definition** ✅
-- Define all module interfaces
-- Create basic implementations
-- Set up dependency injection container
-
-**Phase 2: Gradual Migration** (In Progress)
-- Migrate existing services to new modules
-- Update API routes to use new architecture
-- Maintain backward compatibility
-
-**Phase 3: Legacy Cleanup** (Future)
-- Remove old service files
-- Update all imports and references
-- Complete documentation update
-
-### Usage Examples
-
-**Dependency Injection:**
-```python
-from app.modules.integration import get_container
-
-# Get services from container
-container = get_container()
-rag_orchestrator = container.get_rag_orchestrator()
-vector_store = container.get_vector_store()
-rbac_manager = container.get_rbac_manager()
-```
-
-**Swapping Implementations:**
-```python
-# Easy to swap vector database
-from app.modules.vector_db.pinecone_impl import PineconeVectorStore
-
-# In container initialization
-container._instances["vector_store"] = PineconeVectorStore()
-```
-
-**Testing with Mocks:**
-```python
-from app.modules.vector_db.interfaces import IVectorStore
-from unittest.mock import Mock
-
-# Mock vector store for testing
-mock_vector_store = Mock(spec=IVectorStore)
-mock_vector_store.search_documents.return_value = []
-
-container._instances["vector_store"] = mock_vector_store
-```
 
 ---
 
