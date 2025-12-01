@@ -47,7 +47,7 @@ async def lifespan(app: FastAPI):
 
     # Legacy user database
     try:
-        from app.services.user_service import init_user_db
+        from app.services.legacy.user_service import init_user_db
         init_user_db(reset_on_start=False)
         logger.info("Legacy user database initialized.")
     except Exception as e:
