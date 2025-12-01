@@ -8,7 +8,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import logging
 
 from app.services import rag_local_service
-from app.services.auth import verify_token
+from app.services.legacy.auth import verify_token
 
 logger = logging.getLogger(__name__)
 

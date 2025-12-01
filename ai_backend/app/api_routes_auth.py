@@ -9,9 +9,9 @@ import uuid
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel
 
-from app.services.user_service import authenticate_user, get_all_user_meta
-from app.services.auth import create_access_token
-from app.services import support_chat
+from app.services.legacy.user_service import authenticate_user, get_all_user_meta
+from app.services.legacy.auth import create_access_token
+from app.services.legacy import support_chat
 
 logger = logging.getLogger(__name__)
 
