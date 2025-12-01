@@ -46,6 +46,7 @@ class QueryRequest(BaseModel):
     top_k: int = 3
     use_llm: bool = False
     max_tokens: int = 256
+    temperature: float = 0.1  # Default temperature for all providers
     category: Optional[str] = None
     debug: bool = False
     local_llm_model: Optional[str] = None  # Model selection for local provider
@@ -361,6 +362,7 @@ async def query_rag(
                 llm_prompt_prefix=llm_prefix,
                 use_llm=req.use_llm,
                 max_tokens=req.max_tokens,
+                temperature=req.temperature,
                 session_id=session_id,
                 model_key=req.local_llm_model,
             )
@@ -371,6 +373,7 @@ async def query_rag(
                 requester=requester,
                 llm_prompt_prefix=llm_prefix,
                 use_llm=req.use_llm,
+                temperature=req.temperature,
                 session_id=session_id,
             )
         elif model_provider == "gpt":
@@ -381,6 +384,7 @@ async def query_rag(
                 llm_prompt_prefix=llm_prefix,
                 use_llm=req.use_llm,
                 max_tokens=req.max_tokens,
+                temperature=req.temperature,
                 session_id=session_id,
             )
         elif model_provider == "huggingface" or model_provider == "hf":
@@ -391,6 +395,7 @@ async def query_rag(
                 llm_prompt_prefix=llm_prefix,
                 use_llm=req.use_llm,
                 max_tokens=req.max_tokens,
+                temperature=req.temperature,
                 session_id=session_id,
             )
         else:

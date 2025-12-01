@@ -163,6 +163,7 @@ class GoogleRAGService(BaseRAGService):
         final_prefix: str,
         use_llm: bool,
         max_tokens: int,
+        temperature: float,
         session_id: Optional[str]
     ) -> Optional[str]:
         """
@@ -194,7 +195,14 @@ class GoogleRAGService(BaseRAGService):
                 full_prompt=prompt, prompt_len=len(prompt)
             )
             
-            answer = google_llm.invoke(prompt)
+            # Create a temporary LLM instance with the specified temperature
+            temp_llm = ChatGoogleGenerativeAI(
+                model=google_ai_models[1],  # gemini-2.5-flash-lite
+                google_api_key=os.environ.get("GOOGLE_API_KEY"),
+                convert_system_message_to_human=True,
+                temperature=temperature
+            )
+            answer = temp_llm.invoke(prompt)
             answer_content = answer.content if answer and hasattr(answer, 'content') else str(answer)
             
             google_duration = (time.time() - google_start_time) * 1000
@@ -233,6 +241,7 @@ async def query_google_rag(
         requester: Optional[Dict[str, str]] = None,
         llm_prompt_prefix: Optional[str] = None,
         use_llm: bool = True,
+        temperature: float = 0.1,
         session_id: Optional[str] = None
 ) -> Dict[str, Any]:
     """
@@ -245,6 +254,7 @@ async def query_google_rag(
         llm_prompt_prefix=llm_prompt_prefix,
         use_llm=use_llm,
         max_tokens=256,  # Google doesn't use max_tokens in the same way
+        temperature=temperature,
         session_id=session_id
     )
 

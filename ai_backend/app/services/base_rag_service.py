@@ -478,6 +478,7 @@ class BaseRAGService(ABC):
         final_prefix: str,
         use_llm: bool,
         max_tokens: int,
+        temperature: float,
         session_id: Optional[str]
     ) -> Optional[str]:
         """
@@ -494,6 +495,7 @@ class BaseRAGService(ABC):
         llm_prompt_prefix: Optional[str] = None,
         use_llm: bool = True,
         max_tokens: int = 256,
+        temperature: float = 0.1,
         session_id: Optional[str] = None
     ) -> Dict[str, Any]:
         """
@@ -608,7 +610,7 @@ class BaseRAGService(ABC):
             )
         
         answer = await self.generate_response(
-            query_text, context_text, final_prefix, use_llm, max_tokens, session_id
+            query_text, context_text, final_prefix, use_llm, max_tokens, temperature, session_id
         )
 
         response = self.build_base_response(

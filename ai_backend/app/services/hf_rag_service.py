@@ -45,6 +45,7 @@ class HuggingFaceRAGService(BaseRAGService):
         final_prefix: str,
         use_llm: bool,
         max_tokens: int,
+        temperature: float,
         session_id: Optional[str]
     ) -> Optional[str]:
         """
@@ -66,7 +67,7 @@ class HuggingFaceRAGService(BaseRAGService):
                 prompt=prompt,
                 model=self.model_name,
                 max_new_tokens=max_tokens,
-                temperature=0.1,
+                temperature=temperature,
                 return_full_text=False
             )
             
@@ -90,6 +91,7 @@ async def query_hf_rag(
         llm_prompt_prefix: Optional[str] = None,
         use_llm: bool = True,
         max_tokens: int = 256,
+        temperature: float = 0.1,
         session_id: Optional[str] = None
 ) -> Dict[str, Any]:
     """
@@ -102,5 +104,6 @@ async def query_hf_rag(
         llm_prompt_prefix=llm_prompt_prefix,
         use_llm=use_llm,
         max_tokens=max_tokens,
+        temperature=temperature,
         session_id=session_id
     )
