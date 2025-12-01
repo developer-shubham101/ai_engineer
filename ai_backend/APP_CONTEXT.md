@@ -77,7 +77,160 @@ User Request → FastAPI Router → Provider Service → Base RAG Service → Re
 
 ---
 
-## 3. Directory Structure
+## 3. Unified Session Management Architecture
+
+### Design Decision: Custom SQLite vs. LangChain Memory
+
+**Chosen Approach**: Custom SQLite-based session management via `support_chat.py`  
+**Alternative Rejected**: LangChain's `ConversationBufferMemory`  
+**Decision Date**: Initial architecture (2024), Documented 2025-12-01
+
+#### Why Custom Implementation?
+
+All RAG providers (Local, Google, GPT, HuggingFace) use the **same unified session management system** through inheritance from `BaseRAGService`. This provides:
+
+1. **Persistence**: SQLite storage survives server restarts (critical for production)
+2. **Multi-user Support**: Session-isolated storage with unique `session_id` keys
+3. **Enterprise Features**: RBAC integration, audit logging, sentiment tracking
+4. **Token Optimization**: Precise control over prompt budgets (60-80 token prefixes vs 200+)
+5. **Provider Agnostic**: Same session works across local, Google, GPT, HuggingFace providers
+
+#### Session Management Flow
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    BaseRAGService                           │
+│  (Unified session management for all providers)             │
+│                                                             │
+│  inject_personalized_context()                             │
+│   ├─ fetch_recent_messages(session_id, limit=2)            │
+│   ├─ Extract tone from conversation history                │
+│   ├─ get_full_profile(session_id)                          │
+│   └─ Build optimized prefix (max 80 tokens)                │
+│                                                             │
+│  filter_documents_by_rbac()                                 │
+│   └─ Version deduplication + RBAC filtering                │
+└─────────────────────────────────────────────────────────────┘
+                            │
+        ┌───────────────────┼───────────────────┬──────────────┐
+        │                   │                   │              │
+        ▼                   ▼                   ▼              ▼
+┌───────────────┐  ┌───────────────┐  ┌───────────────┐  ┌──────────────┐
+│ LocalRAG      │  │ GoogleRAG     │  │ GPTRAG        │  │ HuggingFace  │
+│ Service       │  │ Service       │  │ Service       │  │ RAGService   │
+└───────────────┘  └───────────────┘  └───────────────┘  └──────────────┘
+```
+
+#### What All Providers Share
+
+**✅ Session History**
+- **Source**: `support_chat.fetch_recent_messages(session_id, limit=2)`
+- **Storage**: SQLite (`database/support_sessions.db`)
+- **Persistence**: Survives server restarts
+- **Isolation**: Per-session (multi-user safe)
+
+**✅ Sentiment & Tone Tracking**
+- **Computed**: Automatically on `store_message(session_id, speaker, content)`
+- **Used For**: Response adaptation via `build_tone_guidance(tone)`
+- **Available To**: All providers through `inject_personalized_context()`
+
+**✅ User Profile Integration**
+- **Source**: `get_full_profile(session_id)` or `get_all_user_meta(user_id)`
+- **Contains**: Name, position, preferences, department, custom fields
+- **Used In**: Personalized prompt prefixes across all providers
+
+**✅ RBAC Filtering**
+- **Method**: `filter_documents_by_rbac()` in `BaseRAGService`
+- **Rules**: Role hierarchy + department restrictions + `allowed_roles` overrides
+- **Applies To**: All retrieved documents before LLM generation
+
+**✅ Token Budgeting**
+- **Budget**: 80 tokens maximum for system prefix
+- **Strategy**: Prioritize essential info (role > profile > tone > history)
+- **Result**: 60-80 token prefixes (vs 200+ with naive approaches)
+- **Benefits**: More tokens available for context and generation
+
+**✅ Audit Logging**
+- **Events**: `log_user_action()`, `log_security_event()`, `log_performance_metric()`
+- **Captured**: User ID, session ID, role, department, query details, provider
+- **Storage**: Application logs with structured data
+
+#### Usage Example
+
+```python
+# 1. Create session (any provider)
+from app.services.support_chat import create_session, store_message
+
+session_id = create_session(None, role="Employee", department="Engineering")
+
+# 2. Store conversation (manual or automatic)
+store_message(session_id, "user", "What is our vacation policy?")
+# → Automatically computes sentiment & tone
+
+# 3. Query any provider with same session_id
+from app.services.google_models import query_google_rag
+
+result = await query_google_rag(
+    query_text="What is our vacation policy?",
+    session_id=session_id,  # ← Same session across providers
+    requester={"user_id": "u123", "role": "Employee", "department": "Engineering"}
+)
+
+# 4. BaseRAGService automatically:
+#    - Fetches last 2 messages from SQLite
+#    - Extracts user tone
+#    - Loads user profile
+#    - Builds optimized prefix (60-80 tokens)
+#    - Applies RBAC filtering
+#    - Logs all actions
+
+# 5. Switch providers seamlessly
+from app.services.rag_local_service import query_local_rag
+
+result = await query_local_rag(
+    query_text="Can you elaborate?",
+    session_id=session_id,  # ← Same session, different provider
+    requester={"user_id": "u123", "role": "Employee", "department": "Engineering"}
+)
+# → Conversation context preserved
+```
+
+#### Trade-offs Accepted
+
+**Advantages of Custom System:**
+- ✅ Production-ready persistence
+- ✅ Multi-user session isolation
+- ✅ Enterprise compliance (audit logs)
+- ✅ Precise token control
+- ✅ Provider-agnostic abstraction
+
+**Disadvantages vs. LangChain:**
+- ⚠️ Custom code maintenance
+- ⚠️ Less community examples
+- ⚠️ No LangChain ecosystem integrations
+
+**Verdict**: Custom implementation provides superior production capabilities at the cost of initial development effort (already completed).
+
+#### Performance Benefits
+
+- **Average prefix size**: 60-80 tokens (vs 200+ with naive approaches)
+- **Token savings**: ~60% reduction in system prompt overhead
+- **Efficiency ratio**: Measured per-query via `log_performance_metric()`
+- **Context availability**: More tokens for retrieved documents and generation
+
+#### Legacy Code Note
+
+`google_models.py` contains legacy LangChain `ConversationBufferMemory` code at the top of the file (marked with clear comments). This code is **NOT used** in the production RAG flow and is kept only for reference. See file comments for detailed explanation.
+
+**References**: 
+- Implementation details: `SESSION_UNIFICATION_PLAN.md`
+- LangChain comparison: `LANGCHAIN_REVIEW.md`
+- Session code: `app/services/support_chat.py`
+- Base abstraction: `app/services/base_rag_service.py`
+
+---
+
+## 4. Directory Structure
 
 ```
 ai_backend/
@@ -124,7 +277,7 @@ ai_backend/
 
 ---
 
-## 4. API Endpoints
+## 5. API Endpoints
 
 ### Authentication (`/api/auth/`)
 
@@ -198,7 +351,7 @@ Response: {
 
 ---
 
-## 5. RBAC System
+## 6. RBAC System
 
 ### Role Hierarchy
 ```
@@ -235,7 +388,7 @@ personal (1)              - Owner + HR+ level
 
 ---
 
-## 6. Recent Enhancements (Latest Commits)
+## 7. Recent Enhancements (Latest Commits)
 
 ### Prompt Optimization System
 - **Token Budgeting**: Dynamic allocation between system instructions, context, and user query
@@ -268,7 +421,7 @@ personal (1)              - Owner + HR+ level
 
 ---
 
-## 7. Model Training Service
+## 8. Model Training Service
 
 ### Training Capabilities
 - **Base Model**: Llama 3.2 1B (meta-llama/Llama-3.2-1B)
@@ -308,7 +461,7 @@ DELETE /api/training/models/{name} # Delete trained model
 
 ---
 
-## 8. Core Service Functions
+## 9. Core Service Functions
 
 ### BaseRAGService (Abstract)
 ```python
@@ -367,7 +520,7 @@ def build_prompt_prefix(requester, history, category) -> str
 
 ---
 
-## 7. Data Models
+## 10. Data Models
 
 ### User/Requester
 ```python
@@ -409,7 +562,7 @@ def build_prompt_prefix(requester, history, category) -> str
 
 ---
 
-## 8. Configuration
+## 11. Configuration
 
 ### Environment Variables
 ```bash
@@ -453,7 +606,7 @@ VALID_DEPARTMENTS = [
 
 ---
 
-## 9. Local Model Support
+## 12. Local Model Support
 
 ### Supported Models
 ```json
@@ -489,7 +642,7 @@ python scripts/download_hf_model.py --all
 
 ---
 
-## 10. Logging & Monitoring
+## 13. Logging & Monitoring
 
 ### Security Events
 - `TOKEN_CREATED` - JWT token generation with context
@@ -513,7 +666,7 @@ python scripts/download_hf_model.py --all
 
 ---
 
-## 11. Development Guidelines
+## 14. Development Guidelines
 
 ### Code Conventions
 - **Python 3.10+** with type hints
@@ -539,7 +692,7 @@ python scripts/download_hf_model.py --all
 
 ---
 
-## 12. Usage Examples
+## 15. Usage Examples
 
 ### Authentication
 ```bash
@@ -580,7 +733,7 @@ curl "/api/rag/documents/list?department=HR&status=published"
 
 ---
 
-## 13. Deployment
+## 16. Deployment
 
 ### Development
 ```bash
@@ -606,7 +759,7 @@ uvicorn app.main:app --host 0.0.0.0 --port 5444
 
 ---
 
-## 14. AI Assistant Instructions
+## 17. AI Assistant Instructions
 
 **When generating code:**
 
