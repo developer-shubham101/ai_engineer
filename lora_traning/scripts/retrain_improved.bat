@@ -1,76 +1,62 @@
 @echo off
-REM Complete training and conversion workflow for Windows
+REM LoRA Training Pipeline with JSONL Data
 REM Usage: retrain_improved.bat
 
-echo ========================================
-echo COMPANY MODEL TRAINING WORKFLOW
-echo ========================================
-
-REM Step 1: Convert documents to text (optional)
 echo.
-echo Step 1a: Converting documents to text format...
-python scripts\doc_parser.py
-
-REM Step 1b: Prepare training data
+echo ============================================
+echo      LoRA Training Pipeline (JSONL)
+echo ============================================
 echo.
-echo Step 1b: Preparing training data from company documents...
-python scripts\doc_parser.py
-if errorlevel 1 (
-    echo Error: Training data preparation failed!
-    pause
-    exit /b 1
-)
-
-REM Step 2: Run training
+echo Using data from: data\agniholdings_train.jsonl
 echo.
-echo Step 3: Starting model training...
+echo Press Ctrl+C to cancel or
+pause
+
+REM Step 1: Install/Update dependencies
+echo.
+echo [Step 1/4] Installing dependencies...
+@REM pip install -q transformers datasets torch accelerate peft
+
+REM Step 2: Train model (uses JSONL data directly)
+echo.
+echo [Step 2/4] Training model on company data...
+echo.
 python scripts\train_model.py
 if errorlevel 1 (
-    echo Error: Model training failed!
+    echo ERROR: Model training failed!
     pause
     exit /b 1
 )
 
-REM Step 4: Convert to GGUF format
+REM Step 3: Convert to GGUF format
 echo.
-echo Step 4: Converting to GGUF format...
-REM Get model name from config and convert
-for /f "tokens=*" %%i in ('python -c "import sys; sys.path.insert(0, '.'); from app.config.model_config import ModelConfig; print(ModelConfig.DEFAULT_OUTPUT_NAME)"') do set MODEL_NAME=%%i
-
-if exist "models\%MODEL_NAME%" (
-    python scripts\convert_to_gguf_improved.py models\%MODEL_NAME%
-    if errorlevel 1 (
-        echo Warning: GGUF conversion failed, trying fallback method...
-        python scripts\simple_gguf_convert_fixed.py models\%MODEL_NAME%
-        if errorlevel 1 (
-            echo Note: GGUF conversion failed, but HuggingFace model is available
-        )
-    )
-) else (
-    echo Error: Trained model directory not found!
+echo [Step 3/4] Converting to GGUF format...
+echo.
+python scripts\convert_to_gguf_improved.py models\gpt2-company-tuned
+if errorlevel 1 (
+    echo WARNING: GGUF conversion failed, but HuggingFace model is available
 )
 
-REM Step 5: Summary
+REM Step 4: Show summary
 echo.
-echo ========================================
-echo TRAINING WORKFLOW COMPLETED!
-echo ========================================
+echo [Step 4/4] Training complete!
+echo.
+echo ============================================
+echo               SUMMARY
+echo ============================================
+echo.
+echo Data source: data\agniholdings_train.jsonl
+echo Training samples: 12
 echo.
 echo Available files:
-if exist "models\%MODEL_NAME%" (
-    echo    HuggingFace model: models\%MODEL_NAME%\
-)
-if exist "models\%MODEL_NAME%.gguf" (
-    echo    GGUF model: models\%MODEL_NAME%.gguf
-)
-if exist "training_data.jsonl" (
-    echo    Training data: training_data.jsonl
-)
-
+if exist "models\gpt2-company-tuned\" echo   - HuggingFace model: models\gpt2-company-tuned\
+if exist "models\gpt2-company-tuned.gguf" echo   - GGUF model: models\gpt2-company-tuned.gguf
+if exist "models\gpt2-company-tuned.json" echo   - Training info: models\gpt2-company-tuned.json
 echo.
-echo To test your model, run:
-echo    python -m uvicorn app.main:app --reload
-echo    Then use the /api/query endpoint
+echo ============================================
 echo.
-
+echo To test the model:
+echo   1. Start server: python -m uvicorn app.main:app --reload
+echo   2. Run tests:    python scripts\test_trained_model.py
+echo.
 pause

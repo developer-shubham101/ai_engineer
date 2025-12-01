@@ -10,6 +10,7 @@ import json
 from pathlib import Path
 from typing import Dict, Any, List, Optional
 from datetime import datetime
+from app.services.prepare_jsonl_data import prepare_jsonl_training_data
 
 logger = logging.getLogger(__name__)
 
@@ -96,26 +97,33 @@ def read_training_data_from_files(data_dir: Path = Path("data"), max_samples: in
 
 
 def prepare_training_data(max_samples: int = 1000) -> List[Dict[str, str]]:
-    """Read training data from .md and .txt files in data/ directory."""
+    """Load training data from agniholdings_train.jsonl file."""
     if not TRAINING_AVAILABLE:
         raise RuntimeError("Training dependencies not installed")
 
-    logger.info("Preparing training data from company documents")
+    logger.info("Loading training data from agniholdings_train.jsonl")
 
     try:
-        # root/data/company/*.md
+        # Import the JSONL data loader from scripts directory
+        import sys
         app_path = Path(__file__).parent.parent.parent
-        data_path = app_path / "data"
-        training_pairs = read_training_data_from_files(data_path, max_samples)
+        scripts_path = app_path / "scripts"
+        if str(scripts_path) not in sys.path:
+            sys.path.insert(0, str(scripts_path))
+        
+
+        
+        # Load data from JSONL file (ignores max_samples, uses all available data)
+        training_pairs = prepare_jsonl_training_data()
 
         if not training_pairs:
-            raise ValueError("No .md or .txt files found in data/ directory")
+            raise ValueError("No training data found in agniholdings_train.jsonl")
 
-        logger.info(f"Prepared {len(training_pairs)} training samples from company documents")
+        logger.info(f"Loaded {len(training_pairs)} training samples from JSONL file")
         return training_pairs
 
     except Exception as e:
-        logger.exception("Failed to prepare training data: %s", e)
+        logger.exception("Failed to load training data: %s", e)
         raise
 
 

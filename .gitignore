@@ -7,3 +7,4 @@ ai_backend/chroma_storage/*
 /vector_databases/.idea
 /vector_databases/.chromadb
 ai_backend/app/data/support_sessions.db
+/Agni-Nexus

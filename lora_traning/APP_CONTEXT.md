@@ -9,7 +9,7 @@
 ## 1. System Overview
 
 ### Purpose
-A **minimal LoRA fine-tuning and testing system** for training custom models on company data and testing their performance. Focused on model training workflows without RAG complexity.
+A **minimal LoRA fine-tuning and testing system** for training custom models on company data from JSONL format and testing their performance. Focused on model training workflows without RAG complexity.
 
 ### Supported Models
 - **Local Models**: GGUF format models loaded via llama-cpp-python
@@ -31,6 +31,7 @@ A **minimal LoRA fine-tuning and testing system** for training custom models on 
 User Request → FastAPI Router → Service Layer → Model/Training Response
                                       ↓
                               Core Components:
+                              • JSONL Data Loader (Training Data)
                               • Model Manager (GGUF Loading)
                               • Training Service (LoRA Fine-tuning)
                               • Local Model Manager (Model Discovery)
@@ -46,7 +47,7 @@ User Request → FastAPI Router → Service Layer → Model/Training Response
 
 **🌐 API Layer**
 - `main.py` - FastAPI application with lifecycle management
-- `api_routes_rag.py` - Simple query endpoint for model testing
+- `api_routes_rag.py` - Simple query endpoint
 - `api_routes_models.py` - Model management endpoints
 - `api_routes_training.py` - Model training endpoints
 
@@ -71,15 +72,13 @@ lora_traning/
 │   ├── api_routes_training.py # Training endpoints
 │   └── logging_config.py    # Logging setup
 ├── models/                  # Local LLM files (GGUF + trained models)
-│   ├── distilgpt2-company-tuned/     # HuggingFace format
-│   ├── distilgpt2-company-tuned.gguf # GGUF format
-│   └── distilgpt2-company-tuned.json # Training metadata
-├── data/                   # Training data (text files)
-│   └── company/            # Company documents
-├── raw_data/               # Original markdown files
-│   └── company/            # Source documents (.md format)
+│   ├── gpt2-company-tuned/           # HuggingFace format
+│   ├── gpt2-company-tuned.gguf       # GGUF format
+│   └── gpt2-company-tuned.json       # Training metadata
+├── data/                   # Training data (JSONL format)
+│   └── agniholdings_train.jsonl      # Company Q&A pairs
 ├── scripts/                # Training and conversion scripts
-│   ├── doc_parser.py
+│   ├── prepare_jsonl_data.py          # JSONL data loader
 │   ├── train_model.py
 │   ├── convert_to_gguf_improved.py
 │   ├── test_trained_model.py
@@ -124,7 +123,7 @@ Response: {
 ### Model Training (`/api/training/`)
 
 **GET /api/training/status** - Check training availability
-**POST /api/training/start** - Start LoRA training job
+**POST /api/api/training/start** - Start LoRA training job
 **GET /api/training/jobs/{id}** - Monitor training progress
 **GET /api/training/models** - List trained models
 **DELETE /api/training/models/{name}** - Delete trained model
@@ -140,19 +139,16 @@ Response: {
 - **Training Epochs**: 2-3 (adjustable)
 
 ### Training Process
-1. **Document Conversion**: Convert .md/.html/.txt to plain text
-2. **Data Preparation**: Create Q&A pairs from company documents
-3. **Format Conversion**: Create instruction-tuning format
-4. **Model Training**: Fine-tune DistilGPT2 on company data
-5. **Export**: Save in HuggingFace format
-6. **GGUF Conversion**: Convert for llama.cpp inference
+1. **Load JSONL Data**: Read training pairs from `agniholdings_train.jsonl`
+2. **Format Conversion**: Convert to instruction-tuning format
+3. **Model Training**: Fine-tune GPT-2 on company data
+4. **Export**: Save in HuggingFace format
+5. **GGUF Conversion**: Convert for llama.cpp inference
 
-### Supported Document Formats
-- ✅ **Markdown (.md)** - Company policies, documentation
-- ✅ **HTML (.html, .htm)** - Web pages, exported documents
-- ✅ **Plain Text (.txt)** - Simple text files
-- 🔄 **PDF (.pdf)** - Coming soon
-- 🔄 **Word (.docx)** - Coming soon
+### Data Format
+- ✅ **JSONL Format** - Pre-formatted Q&A pairs in ChatML format
+- ✅ **12 Training Samples** - Real Agni Holdings company data
+- ✅ **High Quality** - Manually crafted questions and answers
 
 ### Training Request
 ```json
@@ -244,7 +240,7 @@ Response: {
 
 ### Complete Workflow (Recommended)
 ```bash
-# Run everything in one command
+# Run complete training pipeline (uses JSONL data)
 scripts\retrain_improved.bat
 ```
 
@@ -678,10 +674,10 @@ epochs=1, learning_rate=1e-5, max_samples=1000
 ```
 
 #### Data Quality Guidelines
-- **Filter sensitive content** - Exclude confidential data
-- **Limit text length** - Use 512 tokens max per sample
-- **Balance content** - Include diverse company information
-- **Quality over quantity** - Fewer high-quality samples work better
+- **Use JSONL format** - Pre-formatted training pairs in ChatML format
+- **Quality over quantity** - 12 high-quality samples work better than 1000 auto-generated
+- **Real company data** - Actual policies, procedures, and information
+- **Clear formatting** - Question and answer format for instruction tuning
 
 ---
 
