@@ -8,6 +8,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 try:
     import chromadb
+    from chromadb.config import Settings
 except Exception:
     chromadb = None  # will raise at runtime if used without installation
 
@@ -35,44 +36,22 @@ def ensure_chroma_client(persist_directory: Optional[str] = None, collection_nam
     if collection_name is None:
         collection_name = DEFAULT_COLLECTION_NAME
 
-    # Try different ChromaDB initialization methods
-    client = None
-    
-    # Method 1: Latest ChromaDB API
+    # Try new API first, fallback to older APIs
     try:
-        client = chromadb.PersistentClient(path=str(persist_directory))
-        logger.info("ChromaDB initialized with PersistentClient")
-    except Exception as e1:
-        logger.debug(f"PersistentClient failed: {e1}")
-        
-        # Method 2: Try with Settings (older versions)
+        from chromadb.config import Settings as _Settings
+        client = chromadb.Client(_Settings(chroma_db_impl="duckdb+parquet", persist_directory=persist_directory))
+    except Exception:
         try:
-            from chromadb.config import Settings as ChromaSettings
-            client = chromadb.Client(ChromaSettings(
-                chroma_db_impl="duckdb+parquet", 
-                persist_directory=persist_directory
-            ))
-            logger.info("ChromaDB initialized with Client + Settings")
-        except Exception as e2:
-            logger.debug(f"Client + Settings failed: {e2}")
-            
-            # Method 3: Simple client (in-memory fallback)
-            try:
-                client = chromadb.Client()
-                logger.warning("ChromaDB initialized with in-memory client (no persistence)")
-            except Exception as e3:
-                logger.error(f"All ChromaDB initialization methods failed: {e1}, {e2}, {e3}")
-                raise RuntimeError(f"Cannot initialize ChromaDB client: {e3}")
-    
-    if client is None:
-        raise RuntimeError("Failed to initialize ChromaDB client")
+            client = chromadb.PersistentClient(path=str(persist_directory))
+        except Exception as e:
+            logger.exception("Failed to initialize chroma client: %s", e)
+            raise
 
     try:
         collection = client.get_or_create_collection(name=collection_name)
-        logger.info(f"ChromaDB collection '{collection_name}' ready")
-    except Exception as e:
-        logger.error(f"Failed to get/create collection '{collection_name}': {e}")
-        raise
+    except Exception:
+        # fallback: try without options
+        collection = client.get_or_create_collection(name=collection_name)
     return client, collection
 
 
