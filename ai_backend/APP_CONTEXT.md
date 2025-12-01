@@ -12,9 +12,9 @@
 A **production-ready multi-provider RAG system** supporting both **offline-first** (local models) and **cloud-based** (API) LLM providers through a unified architecture. Designed for enterprise environments with comprehensive RBAC, document versioning, and session management.
 
 ### Supported Providers
-- **Local Models**: Auto-selected from local_models.json (Phi-2, Llama-3.2-1B/3B, Gemma-2B, Qwen2, Mistral-7B via llama-cpp-python)
-- **Cloud APIs**: Google Gemini, OpenAI GPT, Hugging Face Inference API
-- **Shared Components**: ChromaDB vectors, MiniLM embeddings, SQLite sessions
+- **Local Models**: Auto-selected from local_models.json (Mistral-7B, Phi-2, Llama-3.2, Gemma-2B via llama-cpp-python)
+- **Cloud APIs**: Google Gemini-2.5-Flash/Pro, OpenAI GPT-3.5/4, Hugging Face Inference API
+- **Shared Components**: ChromaDB vectors, BGE embeddings, SQLite sessions
 
 ### Key Features
 - ✅ **Multi-provider LLM support** with unified API
@@ -25,6 +25,8 @@ A **production-ready multi-provider RAG system** supporting both **offline-first
 - ✅ **JWT authentication** with comprehensive audit logging
 - ✅ **Prompt optimization** with token budgeting and context truncation
 - ✅ **Debug capabilities** with final_prompt exposure for optimization
+- ✅ **Production-ready** with 8GB+ RAM support for local models
+- ✅ **Temperature control** - Unified temperature parameter across all providers
 
 ---
 
@@ -310,6 +312,7 @@ Request: {
   "top_k": 3,
   "use_llm": true,
   "max_tokens": 256,
+  "temperature": 0.1,  // NEW: Temperature control (0.0-1.0)
   "category": "string",
   "debug": false,
   "local_llm_model": "llama32-1b"  // Local provider only
@@ -388,7 +391,122 @@ personal (1)              - Owner + HR+ level
 
 ---
 
-## 7. Recent Enhancements (Latest Commits)
+## 7. Temperature Parameter System
+
+### Unified Temperature Control
+
+All RAG providers now support a unified `temperature` parameter that controls response creativity and randomness:
+
+- **Range**: 0.0 (deterministic) to 1.0 (highly creative)
+- **Default**: 0.1 (balanced, slightly deterministic)
+- **Providers**: Local, Google Gemini, OpenAI GPT, Hugging Face
+- **API Integration**: Available in all `/api/rag/{provider}/query` endpoints
+
+### Temperature Behavior by Provider
+
+```python
+# Local Models (llama-cpp-python)
+- Uses native temperature parameter in llama.cpp
+- Applied during _call_llm_with_retry() function
+- Supports full 0.0-1.0 range
+
+# Google Gemini API
+- Maps to generation_config.temperature
+- Applied in GoogleRAGService.generate_response()
+- Supports 0.0-1.0 range
+
+# OpenAI GPT API
+- Maps directly to OpenAI temperature parameter
+- Applied in GPTRAGService.generate_response()
+- Supports 0.0-2.0 range (clamped to 1.0 for consistency)
+
+# Hugging Face API
+- Maps to parameters.temperature in inference API
+- Applied in HuggingFaceRAGService.generate_response()
+- Supports 0.0-1.0 range
+```
+
+### Implementation Details
+
+**Base RAG Service Integration:**
+```python
+# BaseRAGService.generate_response() signature
+async def generate_response(
+    self,
+    query_text: str,
+    context_text: str,
+    final_prefix: str,
+    use_llm: bool,
+    max_tokens: int,
+    temperature: float,  # ← Added to abstract method
+    session_id: Optional[str]
+) -> Optional[str]
+```
+
+**API Request Model:**
+```python
+class QueryRequest(BaseModel):
+    question: str
+    top_k: int = 3
+    use_llm: bool = False
+    max_tokens: int = 256
+    temperature: float = 0.1  # Default temperature
+    # ... other fields
+```
+
+### Usage Examples
+
+```bash
+# Deterministic response (temperature = 0.0)
+curl -X POST "/api/rag/local/query" \
+  -H "Content-Type: application/json" \
+  -d '{"question": "What is our policy?", "use_llm": true, "temperature": 0.0}'
+
+# Balanced response (default temperature = 0.1)
+curl -X POST "/api/rag/google/query" \
+  -H "Content-Type: application/json" \
+  -d '{"question": "Explain our benefits", "use_llm": true}'
+
+# Creative response (temperature = 0.7)
+curl -X POST "/api/rag/gpt/query" \
+  -H "Content-Type: application/json" \
+  -d '{"question": "Write a summary", "use_llm": true, "temperature": 0.7}'
+```
+
+### Testing Framework
+
+A comprehensive test suite validates temperature parameter acceptance:
+
+```python
+# tests/test_temperature.py
+- Tests temperature values: [0.0, 0.1, 0.5, 1.0]
+- Validates all providers accept temperature parameter
+- Confirms parameter is passed through to underlying LLM calls
+- Handles API key missing scenarios gracefully
+```
+
+### Temperature Guidelines
+
+**Recommended Values:**
+- **0.0**: Deterministic, factual responses (policies, procedures)
+- **0.1**: Default balanced (general Q&A)
+- **0.3**: Slightly creative (explanations, summaries)
+- **0.5**: Moderate creativity (brainstorming, alternatives)
+- **0.7**: High creativity (content generation, ideas)
+- **1.0**: Maximum creativity (experimental, highly varied responses)
+
+**Use Cases by Temperature:**
+```
+0.0-0.2: Compliance, legal, technical documentation
+0.2-0.4: Customer support, standard explanations
+0.4-0.6: Training content, educational materials
+0.6-0.8: Marketing content, creative writing
+0.8-1.0: Brainstorming, experimental responses
+```
+
+---
+
+## 8. Recent Enhancements (Latest Commits)
 
 ### Prompt Optimization System
 - **Token Budgeting**: Dynamic allocation between system instructions, context, and user query
@@ -409,8 +527,9 @@ personal (1)              - Owner + HR+ level
 
 ### Model Management Updates
 - **BGE Embeddings**: Switched to 'bge-small-en-v1.5' for better performance
-- **Multi-Model Support**: Enhanced local model detection and selection
+- **Multi-Model Support**: Enhanced local model detection and selection with GGUF format
 - **Improved Caching**: Better LLM instance management and reuse
+- **Auto-Detection**: Models automatically detected from `models/` directory
 
 ### Model Training System (NEW)
 - **Llama 3.2 1B Fine-tuning**: Train custom models on company data
@@ -480,10 +599,10 @@ def _allowed_by_metadata(metadata, requester):
 ```
 
 ### Provider Services
-- **LocalRAGService**: Mistral-7B/Phi-2/etc via llama-cpp-python
-- **GoogleRAGService**: Gemini API calls
-- **GPTRAGService**: OpenAI API calls
-- **HuggingFaceRAGService**: HF Inference API
+- **LocalRAGService**: Mistral-7B/Phi-2/etc via llama-cpp-python (with temperature)
+- **GoogleRAGService**: Gemini API calls (with temperature)
+- **GPTRAGService**: OpenAI API calls (with temperature)
+- **HuggingFaceRAGService**: HF Inference API (with temperature)
 
 ### Authentication Services
 ```python
@@ -566,20 +685,24 @@ def build_prompt_prefix(requester, history, category) -> str
 
 ### Environment Variables
 ```bash
-# Optional cloud API keys
-GOOGLE_API_KEY=your_google_api_key
-OPENAI_API_KEY=your_openai_api_key
+# Optional cloud API keys (for cloud providers)
+OPENAI_API_KEY=your_openai_key
+GOOGLE_API_KEY=your_google_key
 HUGGINGFACE_API_TOKEN=your_hf_token
+
+# Server configuration
+HOST=0.0.0.0
+PORT=8000
+DEBUG=false
+
+# Model settings
+DEFAULT_MODEL_NAME=mistral-7b-instruct-v0.2
+EMBEDDING_MODEL_NAME=bge-small-en-v1.5
 
 # JWT configuration
 JWT_SECRET_KEY=your_secret_key
 JWT_ALGORITHM=HS256
 JWT_EXPIRATION_DAYS=7
-
-# Model configuration
-EMBEDDING_MODEL_KEY=bge-small-en-v1.5
-ENABLE_DYNAMIC_MODEL_SELECTION=false
-DEFAULT_MODEL_NAME=mistral-7b-instruct-v0.2.Q3_K_M.gguf
 ```
 
 ### Key Settings (config.py)
@@ -608,17 +731,21 @@ VALID_DEPARTMENTS = [
 
 ## 12. Local Model Support
 
-### Supported Models
-```json
-{
-  "phi2": "Phi-2 (2.7B) - Default, optimized for reasoning",
-  "llama32-1b": "Llama 3.2 1B - Efficient edge model", 
-  "llama32-3b": "Llama 3.2 3B - Balanced performance",
-  "gemma-2b": "Gemma 2B - Google safety-aligned",
-  "qwen2-1.5b": "Qwen2 1.5B - Multilingual 32K context",
-  "mistral-7b": "Mistral 7B - Proven performance fallback"
-}
+### Supported Models (GGUF Format)
 ```
+models/
+├── mistral-7b-instruct-v0.2.Q3_K_M.gguf
+├── phi-2-q4_k_m.gguf
+├── llama-3.2-1b-instruct-q4_k_m.gguf
+├── gemma-2b-it-q4_k_m.gguf
+└── ... (auto-detected GGUF files)
+```
+
+**Model Capabilities:**
+- **Mistral-7B**: Production-ready, balanced performance
+- **Phi-2**: Optimized for reasoning tasks
+- **Llama-3.2**: Efficient edge models (1B/3B variants)
+- **Gemma-2B**: Google safety-aligned model
 
 ### Model Management
 ```python
@@ -735,19 +862,25 @@ curl "/api/rag/documents/list?department=HR&status=published"
 
 ## 16. Deployment
 
-### Development
+### Quick Start
 ```bash
-uvicorn app.main:app --reload --port 5444
+# Clone and install
+git clone https://github.com/your-username/ai_backend.git
+cd ai_backend
+pip install -r requirements.txt
+
+# Start server (works offline with local models)
+python -m app.main
 ```
 
-### Docker
+### Development
 ```bash
-docker-compose up --build
+uvicorn app.main:app --reload --port 8000
 ```
 
 ### Production
 ```bash
-uvicorn app.main:app --host 0.0.0.0 --port 5444
+uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 
 ### Requirements
@@ -790,6 +923,6 @@ uvicorn app.main:app --host 0.0.0.0 --port 5444
 
 ---
 
-**Last Updated**: 2025-01-10
+**Last Updated**: 2025-01-11 (Added Temperature Parameter Documentation)
 
 This context file provides complete system understanding for any AI assistant to effectively work with the codebase, generate accurate code, and maintain system consistency.

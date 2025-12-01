@@ -71,9 +71,26 @@ curl -X POST "http://localhost:5444/api/auth/token" \
   "top_k": 3,
   "use_llm": true,
   "max_tokens": 256,
-  "category": "optional_string"
+  "temperature": 0.1,
+  "category": "optional_string",
+  "debug": false,
+  "local_llm_model": "phi2"
 }
 ```
+
+**Request Parameters:**
+- `question` (string, required): The user's question or query
+- `top_k` (integer, default: 3): Number of documents to retrieve
+- `use_llm` (boolean, default: false): Whether to use LLM for response generation
+- `max_tokens` (integer, default: 256): Maximum tokens for LLM response
+- `temperature` (float, default: 0.1): Controls response creativity (0.0-1.0)
+  - `0.0`: Deterministic, factual responses
+  - `0.1`: Default balanced responses
+  - `0.5`: Moderate creativity
+  - `1.0`: Maximum creativity
+- `category` (string, optional): Category filter for documents
+- `debug` (boolean, default: false): Include debug information in response
+- `local_llm_model` (string, optional): Specific model for local provider
 
 **Features:**
 - RBAC filtering based on user role/department
@@ -90,7 +107,8 @@ curl -X POST "http://localhost:5444/api/rag/local/query" \
 -d '{
   "question": "What are the company leave policies?",
   "top_k": 3,
-  "use_llm": true
+  "use_llm": true,
+  "temperature": 0.1
 }'
 ```
 
@@ -101,7 +119,8 @@ curl -X POST "http://localhost:5444/api/rag/local/query" \
 -d '{
   "question": "What are your office hours?",
   "top_k": 3,
-  "use_llm": true
+  "use_llm": true,
+  "temperature": 0.0
 }'
 ```
 
@@ -113,7 +132,8 @@ curl -X POST "http://localhost:5444/api/rag/google/query" \
 -d '{
   "question": "What is the company mission?",
   "use_llm": true,
-  "top_k": 3
+  "top_k": 3,
+  "temperature": 0.3
 }'
 ```
 
@@ -361,6 +381,56 @@ curl -X POST "http://localhost:5444/api/rag/documents/add" \
 # Response: 400 - "Personal documents must have an 'owner_id' field"
 ```
 
+## 🌡️ Temperature Control Examples
+
+### Deterministic Response (Temperature = 0.0)
+```bash
+curl -X POST "http://localhost:5444/api/rag/local/query" \
+-H "Content-Type: application/json" \
+-H "Authorization: Bearer $TOKEN" \
+-d '{
+  "question": "What is our exact leave policy?",
+  "use_llm": true,
+  "temperature": 0.0
+}'
+```
+
+### Balanced Response (Temperature = 0.1 - Default)
+```bash
+curl -X POST "http://localhost:5444/api/rag/google/query" \
+-H "Content-Type: application/json" \
+-H "Authorization: Bearer $TOKEN" \
+-d '{
+  "question": "Explain our company benefits",
+  "use_llm": true,
+  "temperature": 0.1
+}'
+```
+
+### Creative Response (Temperature = 0.7)
+```bash
+curl -X POST "http://localhost:5444/api/rag/gpt/query" \
+-H "Content-Type: application/json" \
+-H "Authorization: Bearer $TOKEN" \
+-d '{
+  "question": "Write a creative summary of our mission",
+  "use_llm": true,
+  "temperature": 0.7,
+  "max_tokens": 512
+}'
+```
+
+### Temperature Guidelines by Use Case
+
+| Temperature | Use Case | Example |
+|-------------|----------|----------|
+| 0.0 | Compliance, Legal | "What is the exact policy?" |
+| 0.1 | General Q&A | "How do I request leave?" |
+| 0.3 | Explanations | "Explain our benefits package" |
+| 0.5 | Summaries | "Summarize the quarterly report" |
+| 0.7 | Creative Content | "Write a team announcement" |
+| 1.0 | Brainstorming | "Generate ideas for team building" |
+
 ## 🔍 Debug and Monitoring
 
 ### Query with Debug Information
@@ -371,9 +441,20 @@ curl -X POST "http://localhost:5444/api/rag/local/query" \
 -d '{
   "question": "What is the HR leave policy?",
   "top_k": 5,
-  "use_llm": false,
+  "use_llm": true,
+  "temperature": 0.2,
   "debug": true
 }'
+```
+
+**Debug Response includes:**
+```json
+{
+  "answer": "Generated response...",
+  "retrieved": [...],
+  "context": "Combined context...",
+  "final_prompt": "System: Assistant for Saarthi Infotech | SuperAdmin/Executive | Admin User | Prev: What is...\n\nContext: Leave policy documents...\n\nQuestion: What is the HR leave policy?"
+}
 ```
 
 ### Audit Log Events
@@ -455,11 +536,11 @@ TOKEN=$(curl -s -X POST "http://localhost:5444/api/auth/token" \
   -d '{"username": "admin", "password": "admin123"}' | \
   jq -r '.access_token')
 
-# 2. Test query
+# 2. Test query with temperature
 curl -X POST "http://localhost:5444/api/rag/local/query" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $TOKEN" \
-  -d '{"question": "What is the company mission?", "use_llm": true}'
+  -d '{"question": "What is the company mission?", "use_llm": true, "temperature": 0.1}'
 
 # 3. Test document add
 curl -X POST "http://localhost:5444/api/rag/documents/add" \
@@ -475,4 +556,42 @@ curl -X POST "http://localhost:5444/api/rag/documents/add" \
   }'
 ```
 
-This API documentation provides comprehensive coverage of all available endpoints, authentication methods, and testing scenarios for the Multi-Provider Enterprise RAG System.
+## 🧪 Temperature Testing Script
+
+```bash
+#!/bin/bash
+# Test temperature parameter across all providers
+
+# Get authentication token
+TOKEN=$(curl -s -X POST "http://localhost:5444/api/auth/token" \
+  -H "Content-Type: application/json" \
+  -d '{"username": "admin", "password": "admin123"}' | \
+  jq -r '.access_token')
+
+echo "Testing temperature parameters across providers..."
+
+# Test different temperatures
+for temp in 0.0 0.1 0.5 1.0; do
+  echo "\n=== Testing Temperature: $temp ==="
+  
+  # Local provider
+  echo "Local Provider:"
+  curl -s -X POST "http://localhost:5444/api/rag/local/query" \
+    -H "Content-Type: application/json" \
+    -H "Authorization: Bearer $TOKEN" \
+    -d "{\"question\": \"What is our policy?\", \"use_llm\": false, \"temperature\": $temp}" | \
+    jq -r '.answer // "Success"'
+  
+  # Google provider (if API key available)
+  echo "Google Provider:"
+  curl -s -X POST "http://localhost:5444/api/rag/google/query" \
+    -H "Content-Type: application/json" \
+    -H "Authorization: Bearer $TOKEN" \
+    -d "{\"question\": \"What is our policy?\", \"use_llm\": false, \"temperature\": $temp}" | \
+    jq -r '.answer // "Success"'
+done
+
+echo "\nTemperature testing complete!"
+```
+
+This API documentation provides comprehensive coverage of all available endpoints, authentication methods, temperature control, and testing scenarios for the Multi-Provider Enterprise RAG System.
