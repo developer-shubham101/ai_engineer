@@ -1,8 +1,8 @@
 # Model Configuration - Single Source of Truth
 class ModelConfig:
     # Default model settings - UPDATE ONLY HERE
-    DEFAULT_BASE_MODEL = "gpt2"  # Change this
-    DEFAULT_OUTPUT_NAME = "gpt2-company-tuned"  # Change this
+    DEFAULT_BASE_MODEL = "distilgpt2"  # Change this
+    DEFAULT_OUTPUT_NAME = "distilgpt2-company-tuned"  # Change this
 
     
     # Training parameters
