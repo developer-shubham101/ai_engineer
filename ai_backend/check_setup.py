@@ -17,7 +17,7 @@ def check_requirements():
         "sentence_transformers",
         "numpy",
         "sqlite3",  # Built-in
-        "PyJWT",
+        "jwt",
         "logging"  # Built-in
     ]
     
@@ -25,14 +25,14 @@ def check_requirements():
     
     for package in required_packages:
         try:
-            if package == "PyJWT":
-                importlib.import_module("jwt")
+            if package == "jwt":
+                importlib.import_module("PyJWT")
             else:
                 importlib.import_module(package)
-            print(f"OK {package}")
+            print(f"✅ {package}")
         except ImportError:
             missing.append(package)
-            print(f"MISSING {package}")
+            print(f"❌ {package}")
     
     return missing
 
@@ -52,41 +52,41 @@ def check_directories():
     for dir_name in required_dirs:
         dir_path = base_dir / dir_name
         if dir_path.exists():
-            print(f"OK {dir_name}/")
+            print(f"✅ {dir_name}/")
         else:
             missing_dirs.append(dir_name)
-            print(f"MISSING {dir_name}/ (will be created)")
+            print(f"❌ {dir_name}/ (will be created)")
             dir_path.mkdir(exist_ok=True)
     
     return missing_dirs
 
 def main():
-    print("Checking AI Backend Setup")
+    print("🔍 Checking AI Backend Setup")
     print("=" * 40)
     
-    print("\nChecking Python packages:")
+    print("\n📦 Checking Python packages:")
     missing_packages = check_requirements()
     
-    print("\nChecking directories:")
+    print("\n📁 Checking directories:")
     missing_dirs = check_directories()
     
-    print("\nChecking modular architecture:")
+    print("\n🏗️ Checking modular architecture:")
     try:
         from app.modules.integration import get_container
         container = get_container()
-        print("OK Modular architecture available")
+        print("✅ Modular architecture available")
     except Exception as e:
-        print(f"ERROR Modular architecture error: {e}")
+        print(f"❌ Modular architecture error: {e}")
     
     print("\n" + "=" * 40)
     
     if missing_packages:
-        print(f"ERROR Missing packages: {', '.join(missing_packages)}")
+        print(f"❌ Missing packages: {', '.join(missing_packages)}")
         print("Install with: pip install " + " ".join(missing_packages))
         return False
     else:
-        print("OK All requirements satisfied!")
-        print("\nReady to run:")
+        print("✅ All requirements satisfied!")
+        print("\n🚀 Ready to run:")
         print("   python run_app.py")
         print("   OR")
         print("   uvicorn app.main:app --reload --port 8000")
