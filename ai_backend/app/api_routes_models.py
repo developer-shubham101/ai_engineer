@@ -110,7 +110,7 @@ async def get_best_model():
 @router.post("/refresh")
 async def refresh_models(
     requester: Dict[str, Any] = Depends(get_current_user)
-):
+) -> Dict[str, Any]:
     """Refresh the model cache (scan for new models)."""
     manager = get_model_manager()
     manager.refresh_cache()

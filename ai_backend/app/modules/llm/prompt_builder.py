@@ -1,4 +1,4 @@
-# app/services/prompt_builder.py
+# app/modules/llm/prompt_builder.py
 """
 This module handles prompt construction and token budgeting for the RAG service.
 """

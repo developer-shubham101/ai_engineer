@@ -120,7 +120,7 @@ def test_optimized_prompt_generation():
             logger.info("  - Context tokens: %d", context_tokens)
             logger.info("  - Final tokens: %d", final_tokens)
             logger.info("  - Prefix ratio: %.1f%%", (prefix_tokens/final_tokens)*100)
-            logger.info("  - Within budget: %s", "✓" if result["within_budget"] else "✗")
+            logger.info("  - Within budget: %s", "" if result["within_budget"] else "✗")
         
         # Summary analysis
         logger.info("\n=== OPTIMIZATION SUMMARY ===")
@@ -132,22 +132,22 @@ def test_optimized_prompt_generation():
         
         logger.info("PERFORMANCE_METRICS:")
         logger.info("  - Average prefix ratio: %.1f%%", avg_prefix_ratio * 100)
-        logger.info("  - All within budget: %s", "✓" if all_within_budget else "✗")
+        logger.info("  - All within budget: %s", "" if all_within_budget else "✗")
         logger.info("  - Max prompt tokens: %d", max_tokens)
         logger.info("  - Min prefix tokens: %d", min_prefix_tokens)
         
         # Efficiency assessment
         if avg_prefix_ratio < 0.15:  # Less than 15% for prefix
-            logger.info("✓ EXCELLENT: Prefix efficiency is optimal")
+            logger.info(" EXCELLENT: Prefix efficiency is optimal")
         elif avg_prefix_ratio < 0.25:  # Less than 25%
-            logger.info("✓ GOOD: Prefix efficiency is acceptable")
+            logger.info(" GOOD: Prefix efficiency is acceptable")
         else:
-            logger.warning("⚠ NEEDS IMPROVEMENT: Prefix taking too much space")
+            logger.warning(" NEEDS IMPROVEMENT: Prefix taking too much space")
         
         if all_within_budget:
-            logger.info("✓ EXCELLENT: All prompts fit within token budget")
+            logger.info(" EXCELLENT: All prompts fit within token budget")
         else:
-            logger.warning("⚠ ISSUE: Some prompts exceed token budget")
+            logger.warning(" ISSUE: Some prompts exceed token budget")
         
         return {
             "success": True,
@@ -223,10 +223,10 @@ def test_context_truncation():
             
             logger.info("  - Original context: %d tokens", context_tokens)
             logger.info("  - Final prompt: %d tokens", prompt_tokens)
-            logger.info("  - Within budget: %s", "✓" if prompt_tokens <= budget else "✗")
+            logger.info("  - Within budget: %s", "" if prompt_tokens <= budget else "✗")
             logger.info("  - Reduction: %.1f%%", ((context_tokens - prompt_tokens) / context_tokens) * 100)
         
-        logger.info("✓ Context truncation test completed")
+        logger.info(" Context truncation test completed")
         return True
         
     except Exception as e:

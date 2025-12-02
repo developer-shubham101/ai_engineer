@@ -26,17 +26,32 @@ class RAGRequest:
     temperature: float = 0.1
     category: Optional[str] = None
     debug: bool = False
+    provider: str = "local"
     provider_specific: Optional[Dict[str, Any]] = None
 
+
+@dataclass
+class RetrievedDocument:
+    """Retrieved document structure."""
+    id: str
+    text: str
+    metadata: Dict[str, Any]
+    distance: Optional[float] = None
 
 @dataclass
 class RAGResponse:
     """RAG response data structure."""
     answer: Optional[str] = None
-    retrieved_documents: List[Dict[str, Any]] = None
+    retrieved_documents: List[RetrievedDocument] = None
     context: Optional[str] = None
     final_prompt: Optional[str] = None
     metadata: Dict[str, Any] = None
+    
+    def __post_init__(self):
+        if self.retrieved_documents is None:
+            self.retrieved_documents = []
+        if self.metadata is None:
+            self.metadata = {}
 
 
 class ILLMProvider(ABC):

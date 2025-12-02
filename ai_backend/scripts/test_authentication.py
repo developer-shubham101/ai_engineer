@@ -9,8 +9,8 @@ import os
 # Add project root to path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from app.services.user_service import init_user_db, authenticate_user
-from app.services.auth import create_access_token, verify_token
+from app.services.legacy.user_service import init_user_db, authenticate_user
+from app.services.legacy.auth import create_access_token, verify_token
 
 
 async def test_authentication():

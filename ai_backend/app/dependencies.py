@@ -7,8 +7,7 @@ from fastapi import Depends, HTTPException, status, Security
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import logging
 
-from app.services import rag_local_service
-from app.services.auth import verify_token
+from app.modules.integration import get_container
 
 logger = logging.getLogger(__name__)
 
@@ -18,13 +17,15 @@ security = HTTPBearer(auto_error=False, scheme_name="Bearer", description="Enter
 
 def get_rag_service():
     """
-    Dependency provider that returns the RAG service module.
+    Dependency provider that returns the RAG orchestrator.
     This allows for easy mocking in tests by overriding this dependency.
     """
-    return rag_local_service
+    container = get_container()
+    container.initialize()
+    return container.get_rag_orchestrator()
 
 
-def get_current_user(
+async def get_current_user(
     credentials: Optional[HTTPAuthorizationCredentials] = Security(security)
 ) -> Dict[str, Any]:
     """
@@ -40,7 +41,10 @@ def get_current_user(
     # Try Bearer token
     if credentials:
         token = credentials.credentials
-        user = verify_token(token)
+        container = get_container()
+        container.initialize()
+        authenticator = container.get_authenticator()
+        user = await authenticator.verify_token(token)
         if user:
             return user
     
@@ -52,7 +56,7 @@ def get_current_user(
     )
 
 
-def get_current_user_optional(
+async def get_current_user_optional(
     credentials: Optional[HTTPAuthorizationCredentials] = Security(security)
 ) -> Optional[Dict[str, Any]]:
     """
@@ -68,7 +72,10 @@ def get_current_user_optional(
     # Try Bearer token
     if credentials:
         token = credentials.credentials
-        user = verify_token(token)
+        container = get_container()
+        container.initialize()
+        authenticator = container.get_authenticator()
+        user = await authenticator.verify_token(token)
         if user:
             return user
     
@@ -89,7 +96,7 @@ def require_roles(allowed_roles: List[str]):
     Returns:
         Dependency function that checks if user has required role
     """
-    def check_role(current_user: Dict[str, Any] = Depends(get_current_user)):
+    async def check_role(current_user: Dict[str, Any] = Depends(get_current_user)):
         user_role = current_user.get("role")
         
         if user_role not in allowed_roles:

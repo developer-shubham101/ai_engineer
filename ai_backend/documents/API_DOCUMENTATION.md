@@ -4,7 +4,7 @@
 
 This document provides comprehensive API documentation and testing examples for the Multi-Provider Enterprise RAG System. The system provides both REST API endpoints and interactive testing capabilities.
 
-**Base URL:** `http://localhost:5444` (or your configured host and port)
+**Base URL:** `http://localhost:8000` (or your configured host and port)
 
 ## 📋 General Endpoints
 

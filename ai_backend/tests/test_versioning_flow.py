@@ -104,7 +104,7 @@ def test_rag_query(token: str):
         if "25 days" in answer or "20 days" in answer:
             print_success("Answer mentions updated leave counts (20 or 25 days).")
         else:
-            print("⚠️ Warning: Answer might not contain expected specific details. Check manually.")
+            print("️ Warning: Answer might not contain expected specific details. Check manually.")
             
         # Check retrieved sources
         print("\nSources used:")

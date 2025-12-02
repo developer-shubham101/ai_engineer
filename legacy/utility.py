@@ -24,7 +24,14 @@ BASE_DIR = PROJECT_ROOT / "app/"
 # ============================================================================
 # MODEL CONSTANTS
 # ============================================================================
-from app.config import EMBEDDING_MODEL_NAME, EMBEDDING_MODEL_KEY, EMBEDDING_MODELS
+# ============================================================================
+# MODEL CONSTANTS
+# ============================================================================
+from app.modules.config.settings import settings
+
+EMBEDDING_MODEL_NAME = settings.EMBEDDING_MODEL_NAME
+EMBEDDING_MODEL_KEY = settings.EMBEDDING_MODEL_KEY
+EMBEDDING_MODELS = settings.EMBEDDING_MODELS
 
 # ============================================================================
 # DIRECTORY PATHS
@@ -32,10 +39,10 @@ from app.config import EMBEDDING_MODEL_NAME, EMBEDDING_MODEL_KEY, EMBEDDING_MODE
 # DATA_DIR (relative to app/) is app/data - for app-specific data
 DATA_DIR = BASE_DIR / "data"
 # DATABASE_DIR (relative to project root) is project_root/database - for SQLite databases
-from app.config import DATABASE_DIR
+DATABASE_DIR = settings.DATABASE_DIR
 # TRAINING_DATA_DIR (relative to project root) is project_root/data
 TRAINING_DATA_DIR = PROJECT_ROOT / "data"
-CONFIG_DIR = BASE_DIR / "config"
+CONFIG_DIR = BASE_DIR / "modules/config" # Updated path
 MODELS_DIR = PROJECT_ROOT / "models"
 EMBEDDINGS_MODELS_DIR = PROJECT_ROOT / "embeddings_models"
 SENTIMENT_ARTIFACTS_DIR = PROJECT_ROOT / "sentiment"
@@ -43,7 +50,8 @@ SENTIMENT_ARTIFACTS_DIR = PROJECT_ROOT / "sentiment"
 # ============================================================================
 # CHROMA DEFAULTS
 # ============================================================================
-from app.config import DEFAULT_PERSIST_DIR, DEFAULT_COLLECTION_NAME
+DEFAULT_PERSIST_DIR = settings.DEFAULT_PERSIST_DIR
+DEFAULT_COLLECTION_NAME = settings.DEFAULT_COLLECTION_NAME
 
 
 # ============================================================================

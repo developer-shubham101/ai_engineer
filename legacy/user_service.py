@@ -13,7 +13,7 @@ from datetime import datetime
 logger = logging.getLogger(__name__)
 
 # Database path
-from app.services.utility import DATABASE_DIR
+from app.services.legacy.utility import DATABASE_DIR
 USER_DB_PATH = DATABASE_DIR / "users.db"
 
 # Dummy users to seed on initialization

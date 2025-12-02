@@ -55,7 +55,7 @@ class ProfileAnalyzer:
         
         # Add recent session context if available
         if session_id and self.session_manager:
-            recent_messages = await self.session_manager.get_messages(session_id, limit=2)
+            recent_messages = await self.session_manager.fetch_recent_messages(session_id, limit=2)
             if recent_messages:
                 last_sentiment = recent_messages[-1].get("sentiment", "neutral")
                 context_parts.append(f"Recent sentiment: {last_sentiment}")

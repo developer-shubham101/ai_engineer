@@ -1,185 +1,101 @@
-"""Core utility functions."""
+"""Core utility functions for the modular architecture."""
+from typing import List, Dict, Any, Optional
 
-import hashlib
-import uuid
-from typing import Any, Dict, List, Optional
-from datetime import datetime
-import logging
-
-logger = logging.getLogger(__name__)
-
-
-def generate_id(prefix: str = "") -> str:
-    """Generate unique ID with optional prefix."""
-    unique_id = str(uuid.uuid4())
-    return f"{prefix}_{unique_id}" if prefix else unique_id
-
-
-def hash_text(text: str) -> str:
-    """Generate hash for text content."""
-    return hashlib.sha256(text.encode()).hexdigest()
-
-
-def sanitize_metadata(metadata: Dict[str, Any]) -> Dict[str, Any]:
-    """Sanitize metadata by removing sensitive fields."""
-    sensitive_fields = ["password", "api_key", "secret", "token"]
-    
-    sanitized = {}
-    for key, value in metadata.items():
-        if not any(sensitive in key.lower() for sensitive in sensitive_fields):
-            sanitized[key] = value
-        else:
-            sanitized[key] = "[REDACTED]"
-    
-    return sanitized
+def chunk_text_basic(text: str, chunk_size: int = 512, overlap: int = 64) -> List[str]:
+    """
+    Produce overlapping chunks of the input text.
+    Fixed so we always make progress and produce expected overlaps.
+    """
+    if not text:
+        return []
+    chunks: List[str] = []
+    start = 0
+    L = len(text)
+    while start < L:
+        end = min(start + chunk_size, L)
+        chunks.append(text[start:end])
+        if end == L:
+            break
+        # advance start keeping overlap, but ensure progress by at least 1
+        start = max(end - overlap, start + 1)
+    return chunks
 
 
-def validate_required_fields(data: Dict[str, Any], required_fields: List[str]) -> List[str]:
-    """Validate required fields and return missing ones."""
-    return [field for field in required_fields if field not in data or data[field] is None]
+def sanitize_meta_value(val):
+    """
+    Ensure metadata values are primitives (str, int, float, bool) for Chroma.
+    - If val is list of primitives -> join with commas
+    - If val is dict -> json.dumps
+    - Else convert to str
+    """
+    import json
+    if val is None:
+        return None
+    if isinstance(val, (str, int, float, bool)):
+        return val
+    if isinstance(val, list):
+        # if list of primitives, join; otherwise json-dump
+        if all(isinstance(x, (str, int, float, bool)) for x in val):
+            return ",".join(str(x) for x in val)
+        return json.dumps(val, ensure_ascii=False)
+    if isinstance(val, dict):
+        return json.dumps(val, ensure_ascii=False)
+    # fallback
+    return str(val)
 
 
-def format_timestamp(dt: Optional[datetime] = None) -> str:
-    """Format timestamp for consistent storage."""
-    if dt is None:
-        dt = datetime.utcnow()
-    return dt.isoformat()
+def sanitize_metadata_dict(meta: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    """Sanitize a metadata dictionary for Chroma compatibility."""
+    if not meta:
+        return {}
+    return {str(k): sanitize_meta_value(v) for k, v in meta.items()}
 
 
-def parse_timestamp(timestamp_str: str) -> Optional[datetime]:
-    """Parse timestamp string to datetime object."""
+def is_empty(data):
+    # Case 1: None
+    if data is None:
+        return True
+
+    # Case 2: Iterable types (list, dict, tuple, set, string)
+    if isinstance(data, (list, dict, tuple, set, str)):
+        return len(data) == 0
+
+    # Case 3: Has length
+    if hasattr(data, "__len__"):
+        return len(data) == 0
+
+    return True
+
+
+def is_collection_empty(data):
+    """Return True if Chroma/Vector DB response represents an empty collection."""
+    if data is None:
+        return True
+
+    # If dictionary structure
+    if isinstance(data, dict):
+        # Chroma empty pattern: ids == [] and documents == []
+        ids = data.get("ids", [])
+        docs = data.get("documents", [])
+        metas = data.get("metadatas", [])
+
+        # "Empty" means: all primary fields contain no usable data
+        if len(ids) == 0 and len(docs) == 0 and len(metas) == 0:
+            return True
+
+        return False  # some data exists
+
+    # If some vector store object
+    if hasattr(data, "ids"):
+        ids = getattr(data, "ids", [])
+        return len(ids) == 0
+
+    if hasattr(data, "documents"):
+        docs = getattr(data, "documents", [])
+        return len(docs) == 0
+
+    # Generic fallback
     try:
-        return datetime.fromisoformat(timestamp_str)
-    except (ValueError, TypeError):
-        return None
-
-
-def truncate_text(text: str, max_length: int, suffix: str = "...") -> str:
-    """Truncate text to maximum length."""
-    if len(text) <= max_length:
-        return text
-    
-    return text[:max_length - len(suffix)] + suffix
-
-
-def chunk_list(items: List[Any], chunk_size: int) -> List[List[Any]]:
-    """Split list into chunks of specified size."""
-    return [items[i:i + chunk_size] for i in range(0, len(items), chunk_size)]
-
-
-def merge_dicts(dict1: Dict[str, Any], dict2: Dict[str, Any], deep: bool = False) -> Dict[str, Any]:
-    """Merge two dictionaries."""
-    if not deep:
-        return {**dict1, **dict2}
-    
-    result = dict1.copy()
-    for key, value in dict2.items():
-        if key in result and isinstance(result[key], dict) and isinstance(value, dict):
-            result[key] = merge_dicts(result[key], value, deep=True)
-        else:
-            result[key] = value
-    
-    return result
-
-
-def extract_keywords(text: str, max_keywords: int = 10) -> List[str]:
-    """Extract keywords from text (simple implementation)."""
-    # Simple keyword extraction - in production, use proper NLP
-    words = text.lower().split()
-    
-    # Remove common stop words
-    stop_words = {
-        "the", "a", "an", "and", "or", "but", "in", "on", "at", "to", "for", 
-        "of", "with", "by", "is", "are", "was", "were", "be", "been", "have", 
-        "has", "had", "do", "does", "did", "will", "would", "could", "should"
-    }
-    
-    keywords = [word for word in words if word not in stop_words and len(word) > 2]
-    
-    # Count frequency and return most common
-    word_freq = {}
-    for word in keywords:
-        word_freq[word] = word_freq.get(word, 0) + 1
-    
-    sorted_words = sorted(word_freq.items(), key=lambda x: x[1], reverse=True)
-    return [word for word, freq in sorted_words[:max_keywords]]
-
-
-def calculate_similarity(text1: str, text2: str) -> float:
-    """Calculate simple text similarity (Jaccard similarity)."""
-    words1 = set(text1.lower().split())
-    words2 = set(text2.lower().split())
-    
-    intersection = words1.intersection(words2)
-    union = words1.union(words2)
-    
-    return len(intersection) / len(union) if union else 0.0
-
-
-class Timer:
-    """Simple timer context manager."""
-    
-    def __init__(self, name: str = "Operation"):
-        self.name = name
-        self.start_time = None
-        self.end_time = None
-    
-    def __enter__(self):
-        self.start_time = datetime.utcnow()
-        return self
-    
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self.end_time = datetime.utcnow()
-        duration = (self.end_time - self.start_time).total_seconds()
-        logger.info(f"{self.name} completed in {duration:.3f} seconds")
-    
-    @property
-    def duration(self) -> Optional[float]:
-        """Get duration in seconds."""
-        if self.start_time and self.end_time:
-            return (self.end_time - self.start_time).total_seconds()
-        return None
-
-
-class Cache:
-    """Simple in-memory cache."""
-    
-    def __init__(self, max_size: int = 100):
-        self.max_size = max_size
-        self.cache: Dict[str, Any] = {}
-        self.access_order: List[str] = []
-    
-    def get(self, key: str) -> Optional[Any]:
-        """Get value from cache."""
-        if key in self.cache:
-            # Move to end (most recently used)
-            self.access_order.remove(key)
-            self.access_order.append(key)
-            return self.cache[key]
-        return None
-    
-    def set(self, key: str, value: Any) -> None:
-        """Set value in cache."""
-        if key in self.cache:
-            # Update existing
-            self.cache[key] = value
-            self.access_order.remove(key)
-            self.access_order.append(key)
-        else:
-            # Add new
-            if len(self.cache) >= self.max_size:
-                # Remove least recently used
-                oldest_key = self.access_order.pop(0)
-                del self.cache[oldest_key]
-            
-            self.cache[key] = value
-            self.access_order.append(key)
-    
-    def clear(self) -> None:
-        """Clear cache."""
-        self.cache.clear()
-        self.access_order.clear()
-    
-    def size(self) -> int:
-        """Get cache size."""
-        return len(self.cache)
+        return len(data) == 0
+    except Exception:
+        return not bool(data)

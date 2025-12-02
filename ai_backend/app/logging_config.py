@@ -14,7 +14,7 @@ SECURITY_LOG_FILE = LOG_DIR / "security.log"
 class StructuredFormatter(logging.Formatter):
     """Enhanced formatter for better debugging and LLM readability"""
     
-    def format(self, record):
+    def format(self, record) -> str:
         # Create structured log entry
         log_entry = {
             "timestamp": datetime.utcnow().isoformat() + "Z",
@@ -56,11 +56,11 @@ class StructuredFormatter(logging.Formatter):
 class SecurityFormatter(logging.Formatter):
     """Special formatter for security-related logs"""
     
-    def format(self, record):
+    def format(self, record) -> str:
         timestamp = datetime.utcnow().isoformat() + "Z"
         return f"[{timestamp}] SECURITY | {record.getMessage()}"
 
-def setup_logging():
+def setup_logging() -> logging.Logger:
     """Setup enhanced logging with multiple handlers and formatters"""
     logger = logging.getLogger()
     logger.setLevel(logging.DEBUG)  # Capture all levels
@@ -86,7 +86,7 @@ def setup_logging():
 
     # Debug log (ALL levels) - for detailed debugging
     debug_handler = RotatingFileHandler(
-        DEBUG_LOG_FILE, maxBytes=20_000_000, backupCount=5
+        DEBUG_LOG_FILE, maxBytes=20_00_000, backupCount=5
     )
     debug_handler.setLevel(logging.DEBUG)
     debug_handler.setFormatter(structured_formatter)
@@ -117,27 +117,27 @@ def setup_logging():
     return logger
 
 # Utility functions for structured logging
-def log_user_action(logger, action: str, user_id: str = None, **kwargs):
+def log_user_action(logger, action: str, user_id: str = None, **kwargs) -> None:
     """Log user actions with consistent format"""
     extra_info = " | ".join([f"{k}={v}" for k, v in kwargs.items()])
     logger.info(f"USER_ACTION: {action} | user_id={user_id or 'anonymous'} | {extra_info}")
 
-def log_security_event(logger, event: str, user_id: str = None, **kwargs):
+def log_security_event(logger, event: str, user_id: str = None, **kwargs) -> None:
     """Log security events with consistent format"""
     extra_info = " | ".join([f"{k}={v}" for k, v in kwargs.items()])
     logger.warning(f"SECURITY_EVENT: {event} | user_id={user_id or 'anonymous'} | {extra_info}")
 
-def log_performance_metric(logger, operation: str, duration_ms: float, **kwargs):
+def log_performance_metric(logger, operation: str, duration_ms: float, **kwargs) -> None:
     """Log performance metrics"""
     extra_info = " | ".join([f"{k}={v}" for k, v in kwargs.items()])
     logger.info(f"PERFORMANCE: {operation} | duration_ms={duration_ms:.2f} | {extra_info}")
 
-def log_llm_interaction(logger, provider: str, prompt_tokens: int, response_tokens: int, **kwargs):
+def log_llm_interaction(logger, provider: str, prompt_tokens: int, response_tokens: int, **kwargs) -> None:
     """Log LLM interactions for debugging"""
     extra_info = " | ".join([f"{k}={v}" for k, v in kwargs.items()])
     logger.info(f"LLM_INTERACTION: provider={provider} | prompt_tokens={prompt_tokens} | response_tokens={response_tokens} | {extra_info}")
 
-def log_sensitive_debug(logger, message: str, **sensitive_data):
+def log_sensitive_debug(logger, message: str, **sensitive_data) -> None:
     """Log sensitive information for debugging (to be removed in production)"""
     # WARNING: This logs sensitive data - remove in production
     sensitive_info = " | ".join([f"{k}={v}" for k, v in sensitive_data.items()])

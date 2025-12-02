@@ -1,4 +1,4 @@
-from app.services.sentiment_classifier import get_global_sentiment
+from app.services.legacy.sentiment_classifier import get_global_sentiment
 
 c = get_global_sentiment()
 examples = [

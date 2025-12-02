@@ -8,7 +8,11 @@ from datetime import datetime, timedelta
 from typing import Optional, Dict, Any
 import logging
 
-from app.config import JWT_SECRET_KEY, JWT_ALGORITHM, JWT_EXPIRATION_DAYS
+from app.modules.config.settings import settings
+
+JWT_SECRET_KEY = settings.JWT_SECRET_KEY
+JWT_ALGORITHM = settings.JWT_ALGORITHM
+JWT_EXPIRATION_DAYS = settings.JWT_EXPIRATION_DAYS
 
 logger = logging.getLogger(__name__)
 

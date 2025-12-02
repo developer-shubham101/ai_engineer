@@ -9,7 +9,7 @@ from typing import Dict, List, Optional
 
 from app.services.prompt_builder import build_tone_guidance
 # new import for sentiment classifier
-from app.services.sentiment_classifier import get_global_sentiment
+from app.services.legacy.sentiment_classifier import get_global_sentiment
 # Import centralized paths and utilities
 from app.services.utility import (
     DATABASE_DIR,
@@ -161,10 +161,10 @@ def end_session(session_id: str) -> None:
     )
 
 
-def session_exists(session_id: str) -> bool:
-    with _connect() as conn:
-        row = conn.execute("SELECT id FROM sessions WHERE id=?", (session_id,)).fetchone()
-        return bool(row)
+# def session_exists(session_id: str) -> bool:
+#     with _connect() as conn:
+#         row = conn.execute("SELECT id FROM sessions WHERE id=?", (session_id,)).fetchone()
+#         return bool(row)
 
 
 # ---------------------------------------------------------
