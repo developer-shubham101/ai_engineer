@@ -425,47 +425,50 @@ def get_session_entities(session_id: str, entity_type: Optional[str] = None) -> 
 # tests/test_session_management.py
 
 import pytest
-from app.services.support_chat import (
+from app.services.legacy.support_chat import (
     create_session, store_message, fetch_recent_messages,
     get_full_profile, set_profile_value
 )
 
+
 def test_session_persistence():
     """Verify sessions persist across restarts"""
     session_id = create_session(None, "Employee", "Engineering")
-    
+
     # Store messages
     store_message(session_id, "user", "Hello")
     store_message(session_id, "assistant", "Hi there!")
-    
+
     # Fetch history
     history = fetch_recent_messages(session_id, limit=10)
-    
+
     assert len(history) == 2
     assert history[0]["speaker"] == "user"
     assert history[1]["speaker"] == "assistant"
+
 
 def test_multi_session_isolation():
     """Verify sessions are isolated from each other"""
     session_a = create_session(None, "Employee", "HR")
     session_b = create_session(None, "Manager", "IT")
-    
+
     store_message(session_a, "user", "Message in session A")
     store_message(session_b, "user", "Message in session B")
-    
+
     history_a = fetch_recent_messages(session_a)
     history_b = fetch_recent_messages(session_b)
-    
+
     assert len(history_a) == 1
     assert len(history_b) == 1
     assert history_a[0]["content"] != history_b[0]["content"]
 
+
 def test_token_budget_compliance():
     """Verify prompt prefixes stay within token budget"""
     from app.services.base_rag_service import BaseRAGService
-    
+
     service = BaseRAGService()
-    
+
     prefix = service.inject_personalized_context(
         session_id="test_session",
         llm_prompt_prefix=None,
@@ -474,10 +477,10 @@ def test_token_budget_compliance():
         profile={"name": "John Doe", "position": "HR Manager"},
         max_prefix_tokens=80
     )
-    
+
     from app.services.prompt_builder import estimate_tokens_from_text
     actual_tokens = estimate_tokens_from_text(prefix)
-    
+
     assert actual_tokens <= 80, f"Prefix exceeded budget: {actual_tokens} > 80"
 ```
 

@@ -3,19 +3,20 @@
 Authentication API routes.
 Handles user login and token generation.
 """
-from typing import Dict, Any
 import logging
 import uuid
+from typing import Dict, Any
+
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel
 
-from app.services.user_service import authenticate_user, get_all_user_meta
-from app.services.auth import create_access_token
-from app.services import support_chat
+from app.modules.auth.interfaces import ISessionManager
+from app.modules.integration import get_container
+from app.modules.config import AUTH_PREFIX, HTTP_MESSAGES
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/auth", tags=["Authentication"])
+router = APIRouter(prefix=AUTH_PREFIX, tags=["Authentication"])
 
 
 # Request/Response Models
@@ -54,40 +55,47 @@ async def login(request: TokenRequest):
             }
         }
     """
+    container = get_container()
+    container.initialize()
+
     # Authenticate user
-    user_data = authenticate_user(request.username, request.password)
-    
+    authenticator = container.get_authenticator()
+    user_data = await authenticator.authenticate(request.username, request.password)
+
     if not user_data:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    
+
     # Generate a new session ID for this login
     session_id = f"sess_{uuid.uuid4().hex}"
 
     # Generate access token with session_id
-    access_token = create_access_token(user_data, session_id=session_id)
-    
+    access_token = await authenticator.create_access_token(user_data, session_id=session_id)
+
     # Auto-create support chat session using the new session_id
     try:
-        support_chat.create_session(
+        session_manager: ISessionManager = container.get_session_manager()
+
+        session_manager.create_session(
             session_id=session_id,
             role=user_data["role"],
             department=user_data["department"]
         )
         logger.info(f"Created support session {session_id} for user {user_data['user_id']}")
     except Exception as e:
-        # Session might already exist (unlikely with UUID), that's okay
+        # Session might already exist, that's okay
         logger.debug(f"Session creation skipped or failed: {e}")
-    
+
     # Get user profile from user_meta
-    profile = get_all_user_meta(user_data["user_id"])
-    
+    user_manager = container.get_user_manager()
+    profile = user_data.get("profile", {})
+
     # Add profile to user data
     user_response = {**user_data, "profile": profile}
-    
+
     return TokenResponse(
         access_token=access_token,
         token_type="bearer",

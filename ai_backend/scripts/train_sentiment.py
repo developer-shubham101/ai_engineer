@@ -1,4 +1,4 @@
-from app.services.sentiment_classifier import SentimentToneClassifier
+from app.services.legacy.sentiment_classifier import SentimentToneClassifier
 
 cls = SentimentToneClassifier()
 # examples: list of tuples (text, sentiment_label, tone_label)

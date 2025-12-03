@@ -9,8 +9,9 @@ from pydantic import BaseModel
 
 from app.dependencies import require_roles, get_current_user
 from app.services.local_model_manager import get_model_manager
+from app.modules.config import MODELS_PREFIX
 
-router = APIRouter(prefix="/api/models", tags=["Models"])
+router = APIRouter(prefix=MODELS_PREFIX, tags=["Models"])
 
 class ModelInfo(BaseModel):
     key: str
@@ -110,7 +111,7 @@ async def get_best_model():
 @router.post("/refresh")
 async def refresh_models(
     requester: Dict[str, Any] = Depends(get_current_user)
-):
+) -> Dict[str, Any]:
     """Refresh the model cache (scan for new models)."""
     manager = get_model_manager()
     manager.refresh_cache()

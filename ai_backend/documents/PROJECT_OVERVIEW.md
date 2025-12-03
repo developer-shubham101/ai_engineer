@@ -139,11 +139,7 @@ This system is perfect for:
 
 ### Environment Variables
 ```bash
-# Optional: Cloud provider API keys
-OPENAI_API_KEY=your_openai_key
-GOOGLE_API_KEY=your_google_key
-HUGGINGFACE_API_TOKEN=your_hf_token
-
+ 
 # Server configuration
 HOST=0.0.0.0
 PORT=8000
@@ -156,17 +152,5 @@ EMBEDDING_MODEL_NAME=bge-small-en-v1.5
 
 ## Project Structure
 
-```
-ai_backend/
-├── app/
-│   ├── services/           # Core business logic
-│   ├── api_routes_*.py     # API endpoints
-│   ├── main.py            # FastAPI app
-│   └── config.py          # Configuration
-├── models/                # Local LLM files
-├── data/                  # Sample documents
-├── database/              # SQLite databases
-└── requirements.txt       # Dependencies
-```
 
 This system provides a secure, scalable, and efficient internal knowledge platform using a local RAG pipeline. It ensures sensitive information is appropriately protected while giving employees and external users fast, intelligent access to company knowledge.

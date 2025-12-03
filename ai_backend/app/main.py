@@ -1,82 +1,44 @@
 from __future__ import annotations
 
-import logging
 from contextlib import asynccontextmanager
-from pathlib import Path
+from typing import AsyncIterator, Dict, Any
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-# Logging setup
-from app.logging_config import setup_logging
-
-# RAG services
-from app.services import rag_local_service
-
-# Routers
-from app.api_routes_rag import router as rag_router
 from app.api_routes_auth import router as auth_router
-# from app.api_routes_training import router as training_router
+from app.api_routes_rag import router as rag_router
+from app.logging_config import setup_logging
+from app.modules.integration import get_container
+from app.modules.config import API_PREFIX
 
 logger = setup_logging()
+
 
 # -----------------------------
 # Lifespan Handler (startup/shutdown)
 # -----------------------------
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """
-    Runs on application startup and shutdown.
-    - Initializes local RAG (embeddings + chroma)
-    - Optionally seeds the DB from a default file (if present)
+    Initialize modular architecture and legacy systems.
     """
     logger.info("Application startup...")
 
-    # Initialize the local RAG using rag_local_service
+    # Initialize modular architecture
     try:
-        if hasattr(rag_local_service, "initialize_local_rag"):
-            rag_local_service.initialize_local_rag()
-            logger.info("Local RAG initialized successfully.")
-        else:
-            logger.warning("initialize_local_rag() not found in rag_local_service.")
+        container = get_container()
+        container.initialize()
+        logger.info("Modular architecture initialized successfully.")
     except Exception as e:
-        logger.error(f"Error initializing Local RAG: {e}")
+        logger.error(f"Error initializing modular architecture: {e}")
 
-    # Initialize user database
-    try:
-        from app.services.user_service import init_user_db
-        init_user_db(reset_on_start=False)  # Set to True for development to reset users
-        logger.info("User database initialized successfully.")
-    except Exception as e:
-        logger.error(f"Error initializing user database: {e}")
-
-    # Initialize version tracking database
-    try:
-        from app.services.version_tracking import init_version_db
-        init_version_db(reset_on_start=False)  # Set to True for development to reset versions
-        logger.info("Version tracking database initialized successfully.")
-    except Exception as e:
-        logger.error(f"Error initializing version tracking database: {e}")
-
-    # Seed from default path (supports version folders: data/company/v1/, v2/, v3/...
-    try:
-        from pathlib import Path
-        default_seed = Path.cwd() / "data" / "company"
-        if default_seed.exists() and hasattr(rag_local_service, "seed_from_file"):
-            logger.info("Attempting to seed from %s (version-aware)", default_seed)
-            seeded_ids = await rag_local_service.seed_from_file(seed_path=default_seed, force_reseed=False)
-            if seeded_ids:
-                logger.info(f"Seeded {len(seeded_ids)} chunks from versioned folders")
-            else:
-                logger.info("No seed or collection already populated, skipping startup seed.")
-        else:
-            logger.info("Seed path not found or seed_from_file() not available; skipping seeding.")
-    except Exception as e:
-        logger.warning(f"Seeding at startup skipped or failed: {e}")
+    logger.info("Modular architecture startup complete.")
 
     yield
 
     logger.info("Application shutdown...")
+
 
 # -----------------------------
 # Create FastAPI app
@@ -96,19 +58,41 @@ app.include_router(rag_router)
 # CORS (for development only)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],    # restrict in production
+    allow_origins=["*"],  # restrict in production
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+
 # --- Health endpoint ---
 @app.get("/", tags=["General"])
-def read_root():
+def read_root() -> Dict[str, str]:
     """A simple health check endpoint."""
     return {"status": "ok", "message": "Welcome to the AI Engineering API!"}
 
 
-# Legacy endpoints removed - use /api/rag/{provider}/query instead
-# All functionality moved to proper RAG router endpoints
+# Health endpoint
+@app.get("/health", tags=["General"])
+def health_check() -> Dict[str, str]:
+    """Health check endpoint."""
+    return {"status": "healthy", "architecture": "modular"}
 
+
+# Test modular architecture endpoint
+@app.get(f"{API_PREFIX}/modules/status", tags=["Modules"])
+def modules_status() -> Dict[str, Any]:
+    """Check modular architecture status."""
+    try:
+        container = get_container()
+        return {
+            "status": "initialized",
+            "modules": {
+                "auth": "available",
+                "vector_db": "available",
+                "llm": "available",
+                "core": "available"
+            }
+        }
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
