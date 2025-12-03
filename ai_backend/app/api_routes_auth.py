@@ -60,7 +60,8 @@ async def login(request: TokenRequest):
 
     # Authenticate user
     authenticator = container.get_authenticator()
-    user_data = await authenticator.authenticate(request.username, request.password)
+    usermanager = container.get_user_manager()
+    user_data = await usermanager.authenticate(request.username, request.password)
 
     if not user_data:
         raise HTTPException(

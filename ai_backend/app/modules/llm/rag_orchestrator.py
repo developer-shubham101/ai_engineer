@@ -3,7 +3,7 @@
 import logging
 from typing import List, Dict, Any, Optional
 
-from .interfaces import IRAGOrchestrator, RAGRequest, RAGResponse, RetrievedDocument
+from .interfaces import IRAGOrchestrator, RAGRequest, RAGResponse, RetrievedDocument, LLMResponse
 
 from .prompt_manager import PromptManager
 from .prompt_chain import PromptChain
@@ -143,7 +143,7 @@ class RAGOrchestrator(IRAGOrchestrator):
             logger.error("Document retrieval failed: %s", str(e), exc_info=True)
             return []
     
-    async def generate_response(self, prompt: str, provider, max_tokens: int = 256, temperature: float = 0.1) : #-> Optional[str]:
+    async def generate_response(self, prompt: str, provider, max_tokens: int = 256, temperature: float = 0.1) -> LLMResponse | None: #-> Optional[str]:
         """Generate response using LLM."""
         try:
             if provider and hasattr(provider, 'generate'):
