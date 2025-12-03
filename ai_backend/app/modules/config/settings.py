@@ -72,9 +72,15 @@ class Settings:
         self.DATA_DIR = BASE_DIR / "data"
         self.TRAINING_DATA_DIR = PROJECT_ROOT / "data"
         
-        # Database settings
+        # Database settings - import config
+        from .database_config import db_config
+        self.DB_CONFIG = db_config
+        self.USERS_DB_NAME = db_config.USERS_DB
+        self.SESSIONS_DB_NAME = db_config.SESSIONS_DB
+        self.DOCUMENT_VERSIONS_DB_NAME = db_config.DOCUMENT_VERSIONS_DB
         self.DEFAULT_PERSIST_DIR = str(CHROMA_STORAGE_DIR)
-        self.DEFAULT_COLLECTION_NAME = "local_manual_rag"
+        self.DEFAULT_COLLECTION_NAME = db_config.DEFAULT_COLLECTION_NAME
+        self.DOCUMENTS_COLLECTION = db_config.DOCUMENTS_COLLECTION
 
         # JWT settings
         self.JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "your-secret-key-change-in-production-please-use-env-file")

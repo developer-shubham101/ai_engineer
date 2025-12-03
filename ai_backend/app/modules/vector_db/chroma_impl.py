@@ -271,7 +271,7 @@ class ChromaVectorStore(IVectorStore):
             doc_id = str(uuid.uuid4())
 
             # Generate embedding
-            embeddings = self.embedding_manager.encode([text])
+            embeddings = await self.embedding_manager.encode([text])
 
             # Use the utility method
             self.add_documents_to_collection(
@@ -350,7 +350,7 @@ class ChromaVectorStore(IVectorStore):
             # ChromaDB uses 'add' as an upsert (update if ID exists, insert if new).
 
             # Generate new embedding
-            embeddings = self.embedding_manager.encode([text])
+            embeddings = await self.embedding_manager.encode([text])
 
             # Use the utility method
             self.add_documents_to_collection(

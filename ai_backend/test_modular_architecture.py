@@ -79,7 +79,7 @@ class TestModularArchitecture:
         session_manager = container.get_session_manager()
         
         # Create session
-        session_id = await session_manager.create_session(
+        session_id = session_manager.create_session(
             user_id="test_user",
             role="Employee",
             department="Engineering"
@@ -87,12 +87,12 @@ class TestModularArchitecture:
         assert session_id is not None
         
         # Get session
-        session = await session_manager.get_session(session_id)
+        session = session_manager.get_session(session_id)
         assert session is not None
         
         # Store and retrieve messages
-        await session_manager.store_message(session_id, "user", "Hello")
-        await session_manager.store_message(session_id, "assistant", "Hi there!")
+        session_manager.store_message(session_id, "user", "Hello")
+        session_manager.store_message(session_id, "assistant", "Hi there!")
         
         messages = await session_manager.fetch_recent_messages(session_id)
         assert len(messages) == 2
@@ -142,12 +142,12 @@ class TestModularArchitecture:
         assert version_id == "v1"
         
         # Get versions
-        versions = await version_manager.get_versions("doc_123")
+        versions = version_manager.get_versions("doc_123")
         assert len(versions) == 1
         assert versions[0]["version_id"] == "v1"
         
         # Get specific version
-        version = await version_manager.get_version("doc_123", "v1")
+        version = version_manager.get_version("doc_123", "v1")
         assert version is not None
         assert version["content"] == "Version 1 content"
     

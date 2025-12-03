@@ -141,7 +141,7 @@ class DocumentManager:
 
         # Create version record in version tracking database
         try:
-            self.version_manager.create_version_record(
+            await self.version_manager.create_version_record(
                 document_id=document_id,
                 version=version,
                 source_name=source_name,

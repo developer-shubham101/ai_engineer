@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 
 # Global constants moved to class attributes defaults
-_DEFAULT_DB_PATH = settings.DATABASE_DIR / "support_sessions.db"
+_DEFAULT_DB_PATH = settings.DATABASE_DIR / settings.SESSIONS_DB_NAME
 _DEFAULT_MAX_HISTORY_TURNS = 5
 
 
