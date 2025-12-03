@@ -42,7 +42,7 @@ export default function PersonalizedTestModal({ onSendQuery, modelProvider }) {
       const query = customQuery.trim() || testScenarios[testScenario].query
       
       // Send the query using the parent's sendQuery function
-      const result = await fetch(`http://192.168.1.2:8000/api/rag/${modelProvider}/query`, {
+      const result = await fetch(`http://localhost:8000/api/rag/${modelProvider}/query`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

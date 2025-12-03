@@ -6,7 +6,7 @@ import requests
 
 # from tests.constants import BASE_URL
 
-BASE_URL = "http://192.168.1.2:8000"
+BASE_URL = "http://localhost:8000"
 
 # Configuration
 USERNAME = "admin"

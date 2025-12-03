@@ -16,7 +16,7 @@
   - `styles.css` — small project-specific styles.
   - `utility/const.js` - Defines constants like `BASE_API_URL`.
   - `utility/auth.js` - JWT token management utilities (encode/decode, localStorage operations).
-- Interacts with backend via REST endpoints at configurable `BASE_API_URL` (default `http://192.168.1.2:8000`).
+- Interacts with backend via REST endpoints at configurable `BASE_API_URL` (default `http://localhost:8000`).
   - API paths include `/api/rag/{model_provider}/query` for queries and `/api/rag/documents/*` for document management.
   - `X-Session-ID` is extracted from JWT token and included in request headers automatically.
   - Local LLM model selection available for local provider queries.

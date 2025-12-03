@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Live endpoint testing for personalized RAG system.
-Tests against running server at http://192.168.1.2:8000
+Tests against running server at http://localhost:8000
 """
 
 import time

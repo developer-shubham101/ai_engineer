@@ -85,7 +85,7 @@ A lightweight React application bootstrapped with Vite, providing the user inter
     npm run dev
     # or yarn dev
     ```
-    The frontend will typically be accessible at `http://localhost:5173`. Ensure `BASE_API_URL` in `src/utility/const.js` points to your backend (default `http://192.168.1.2:8000`).
+    The frontend will typically be accessible at `http://localhost:5173`. Ensure `BASE_API_URL` in `src/utility/const.js` points to your backend (default `http://localhost:8000`).
 
 ---
 
@@ -124,14 +124,4 @@ Contributions are welcome! Please fork the repository, create a new branch for y
 ## 🧑‍💻 Author
 
 **Shubham Sharma**
-[GitHub Profile](https://github.com/developer-shubham101/ai_engineer)
-
----
-
-## 🏷️ GitHub Metadata
-
-**Tags:** `RAG`, `LLM`, `FastAPI`, `React`, `Python`, `JavaScript`, `Enterprise AI`, `Role-Based Access Control`, `Document Versioning`, `Local LLM`, `Gemini API`, `OpenAI API`, `HuggingFace API`, `ChromaDB`, `AI Engineer`
-
-**Description:** A production-ready, multi-provider Enterprise RAG (Retrieval-Augmented Generation) system with a FastAPI backend and React frontend, featuring robust RBAC, document versioning, intelligent session management, and support for both local and cloud LLM providers.
-
-**Topics:** `rag-system`, `llm-application`, `fastapi-backend`, `react-frontend`, `enterprise-ai`, `rbac`, `document-management`, `ai-agent`, `python-development`, `javascript-development`, `machine-learning`, `natural-language-processing`, `vector-database`, `chromadb`, `gemini-pro`, `openai-gpt`, `huggingface-inference`
+[GitHub Profile](https://github.com/developer-shubham101)
