@@ -28,13 +28,12 @@ class VersionManager:
                     version TEXT NOT NULL,
                     source_name TEXT NOT NULL,
                     chunk_ids TEXT NOT NULL,
-                    content TEXT,
-                    metadata TEXT,
-                    created_by TEXT,
                     created_at TEXT NOT NULL,
+                    created_by TEXT,
                     parent_version TEXT,
                     status TEXT DEFAULT 'published',
-                    notes TEXT,
+                    version_notes TEXT,
+                    metadata_json TEXT,
                     UNIQUE(document_id, version)
                 )
             """)
@@ -59,12 +58,11 @@ class VersionManager:
         version: str,
         source_name: str,
         chunk_ids: List[str],
-        content: Optional[str] = None,
-        metadata: Optional[Dict[str, Any]] = None,
         created_by: Optional[str] = None,
         parent_version: Optional[str] = None,
         status: str = "published",
-        notes: Optional[str] = None
+        version_notes: Optional[str] = None,
+        metadata: Optional[Dict[str, Any]] = None
     ) -> int:
         """Create new document version.
         
@@ -73,12 +71,11 @@ class VersionManager:
             version: Version string (e.g., "1.0", "2.0")
             source_name: Original source file name
             chunk_ids: List of chunk IDs associated with this version
-            content: Optional document content
-            metadata: Optional metadata dictionary
             created_by: User who created this version
             parent_version: Previous version this is based on
             status: Version status (published, draft, pending_approval, archived)
-            notes: Optional version notes
+            version_notes: Optional version notes
+            metadata: Optional metadata dictionary
             
         Returns:
             Version ID of the created record
@@ -91,11 +88,11 @@ class VersionManager:
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.execute("""
                     INSERT INTO document_versions 
-                    (document_id, version, source_name, chunk_ids, content, metadata, 
-                     created_by, created_at, parent_version, status, notes)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """, (document_id, version, source_name, chunk_ids_json, content, 
-                      metadata_json, created_by, created_at, parent_version, status, notes))
+                    (document_id, version, source_name, chunk_ids, created_at, created_by,
+                     parent_version, status, version_notes, metadata_json)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (document_id, version, source_name, chunk_ids_json, created_at, created_by,
+                      parent_version, status, version_notes, metadata_json))
                 
                 version_id = cursor.lastrowid
             
@@ -143,8 +140,8 @@ class VersionManager:
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.execute("""
                     INSERT INTO document_versions 
-                    (document_id, version, source_name, chunk_ids, created_at, created_by, 
-                     parent_version, status, notes, metadata)
+                    (document_id, version, source_name, chunk_ids, created_at, created_by,
+                     parent_version, status, version_notes, metadata_json)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (document_id, version, source_name, chunk_ids_json, created_at, created_by,
                       parent_version, status, version_notes, metadata_json))
@@ -275,15 +272,15 @@ class VersionManager:
                 "version": v1["version"],
                 "created_at": v1["created_at"],
                 "created_by": v1["created_by"],
-                "content_length": len(v1["content"])
+                "chunk_count": len(v1["chunk_ids"])
             },
             "version2": {
                 "version": v2["version"],
                 "created_at": v2["created_at"],
                 "created_by": v2["created_by"],
-                "content_length": len(v2["content"])
+                "chunk_count": len(v2["chunk_ids"])
             },
-            "content_changed": v1["content"] != v2["content"],
+            "chunk_ids_changed": v1["chunk_ids"] != v2["chunk_ids"],
             "metadata_changed": v1["metadata"] != v2["metadata"]
         }
         
