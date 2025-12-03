@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field
 
 from app.dependencies import get_current_user, get_current_user_optional, require_roles
 from app.modules.auth.interfaces import ISessionManager
+from app.modules.config import MANAGER_PLUS_ROLES
 from app.modules.core.document_manager import DocumentManager
 from app.modules.integration import get_container
 from app.modules.llm.rag_orchestrator import RAGOrchestrator
