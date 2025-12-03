@@ -1,10 +1,11 @@
 """Chain of Responsibility pattern for prompt building."""
 
+import logging
 from abc import ABC, abstractmethod
 from typing import Dict, Any, Optional
 from dataclasses import dataclass
 
-
+logger = logging.getLogger(__name__)
 @dataclass
 class PromptContext:
     """Context passed through the prompt chain."""
@@ -120,7 +121,13 @@ class PersonalizationHandler(PromptHandler):
     """Adds personalization to prompts."""
     
     async def process(self, context: PromptContext) -> PromptContext:
+        logger.debug("Adding personalization to prompt for user: %s", context.user)
         if context.user:
+            # role = context.user.get("role", "")
+            # dept = context.user.get("department", "")
+            # if role or dept:
+            #     context.system_prompt += f" Address the user as {role} in {dept}."
+
             name = context.user.get("username", "User")
             context.system_prompt += f" Address the user as {name}."
         return context
@@ -162,6 +169,7 @@ class PromptChain:
     
     def _build_dynamic_chain(self, context: PromptContext) -> PromptHandler:
         """Build chain dynamically based on available context."""
+        logger.debug("Building dynamic prompt chain with context: %s", context)
         handlers = []
         
         # Always start with system
@@ -169,11 +177,13 @@ class PromptChain:
         
         # Add personalization if user exists
         if context.user:
+            logger.debug("User exists, adding personalization and security handlers")
             handlers.append(self.available_handlers['personalization'])
             handlers.append(self.available_handlers['security'])
         
         # Add query enhancement if we have user or session
         if context.user or context.session_id or context.category:
+            logger.debug("Adding query enhancement handler")
             handlers.append(self.available_handlers['query_enhancement'])
         
         # Always add user prompt and final

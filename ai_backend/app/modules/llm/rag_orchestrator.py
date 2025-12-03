@@ -31,12 +31,12 @@ class RAGOrchestrator(IRAGOrchestrator):
         # Process request through middleware
         request = await self.middleware_stack.process_request(request)
         
-        # Check for cached response
+        # Check for cached response as of now we don't need it but keep it for future
         if request.metadata and "_cached_response" in request.metadata:
             return await self.middleware_stack.process_response(request, request.metadata["_cached_response"])
         
         try:
-            # 1. Enhance query using chain
+            # 1. Enhance query using chain  as of now we don't need it but keep it for future
             enhanced_query = await self.prompt_chain.build_enhanced_query(
                 question=request.question,
                 user=request.user,
@@ -52,13 +52,18 @@ class RAGOrchestrator(IRAGOrchestrator):
                 category=request.category
             )
             
+            logger.info("Retrieved documents for query:\n %s", documents)
+
             # 2. Build context
             context = await self.build_context(documents)
+
+            logger.info("Built context with %s", context)
             
             # 3. Generate response if LLM requested
             answer = None
             final_prompt = None
             if request.use_llm:
+                logger.info("Generating response using LLM provider: %s", request.provider)    
                 provider_config = request.provider_specific or {}
                 provider = await create_provider(request.provider, provider_config)
                 
@@ -69,6 +74,7 @@ class RAGOrchestrator(IRAGOrchestrator):
                     session_id=request.session_id,
                     category=request.category
                 )
+                logger.info("Generated final prompt: ====START==== \n%s\n====END===", final_prompt)
                 
                 response = await self.generate_response(final_prompt, provider, request.max_tokens, request.temperature)
                 answer = response.text if response else "I found relevant documents but couldn't generate a response."
@@ -96,7 +102,7 @@ class RAGOrchestrator(IRAGOrchestrator):
             return await self.middleware_stack.process_response(request, response)
             
         except Exception as e:
-            logger.exception("RAG processing failed: %s", e)
+            logger.error("RAG processing failed: %s", str(e), exc_info=True)
             error_response = RAGResponse(
                 answer="Sorry, I encountered an error processing your request.",
                 retrieved_documents=[],
@@ -134,7 +140,7 @@ class RAGOrchestrator(IRAGOrchestrator):
             return filtered_results
             
         except Exception as e:
-            logger.exception("Document retrieval failed: %s", e)
+            logger.error("Document retrieval failed: %s", str(e), exc_info=True)
             return []
     
     async def generate_response(self, prompt: str, provider, max_tokens: int = 256, temperature: float = 0.1) : #-> Optional[str]:
@@ -149,7 +155,7 @@ class RAGOrchestrator(IRAGOrchestrator):
                 return response
             return None
         except Exception as e:
-            logger.exception("LLM generation failed: %s", e)
+            logger.error("LLM generation failed: %s", str(e), exc_info=True)
             return None
     
     async def build_context(self, documents: List[Dict[str, Any]]) -> str:

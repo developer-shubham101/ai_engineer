@@ -45,13 +45,13 @@ class LocalProviderPlugin(ProviderPlugin):
         return False
     
     async def create_provider(self, config: Optional[Dict[str, Any]] = None):
-        from .providers.local_provider import LocalLLMProvider
+        from app.modules.llm.providers.local import LocalLLMProvider
         model_name = config.get("model_name") if config else None
         return LocalLLMProvider(model_name=model_name)
     
     def is_available(self) -> bool:
         try:
-            from .providers.local_provider import LocalLLMProvider
+            from app.modules.llm.providers.local import LocalLLMProvider
             return True
         except ImportError:
             return False
@@ -69,7 +69,7 @@ class GoogleProviderPlugin(ProviderPlugin):
         return True
     
     async def create_provider(self, config: Optional[Dict[str, Any]] = None):
-        from .providers.google_provider import GoogleLLMProvider
+        from app.modules.llm.providers.google import GoogleLLMProvider
         return GoogleLLMProvider()
     
     def is_available(self) -> bool:
