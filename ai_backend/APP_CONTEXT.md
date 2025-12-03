@@ -40,6 +40,8 @@ User Request → FastAPI Router → Container → Modular Services → Response
                               • Auth Module (JWT + Users + Sessions)
                               • LLM Module (RAG Orchestrator + Providers)
                               • Core Module (Documents + Versions + Utils)
+                              • Config Module (Settings + Constants)
+                              • API Module (Models + Handlers)
 ```
 
 ### Modular Architecture
@@ -68,15 +70,26 @@ User Request → FastAPI Router → Container → Modular Services → Response
 - `profile_analyzer.py` - User profile analysis
 - `utils.py` - Shared utilities and sentiment analysis
 
+**⚙️ Config Module** (`app/modules/config/`)
+- `settings.py` - Environment and application settings
+- `constants.py` - System constants and enums
+- `models.py` - Configuration data models
+
+**🌐 API Module** (`app/modules/api/`)
+- `models.py` - Pydantic request/response models
+- `handlers.py` - Request processing logic
+- `validators.py` - Input validation
+
 **🌐 API Layer**
 - `main.py` - FastAPI application with modular initialization
-- `api_routes_rag.py` - Clean RAG endpoints using container
+- `api_routes_rag.py` - RAG endpoints using modular architecture
 - `api_routes_auth.py` - Authentication endpoints using container
+- `api_routes_models.py` - Model management endpoints
 - `dependencies.py` - Dependency injection using container
-- `integration.py` - **Dependency injection container**
+- `modules/integration.py` - **Dependency injection container**
 
-**📁 Legacy Services** (`app/services/legacy/`)
-- Legacy implementations moved for reference during migration
+**🛠️ Utilities**
+- `utils/doc_parser.py` - Document parsing utilities
 
 ---
 
@@ -260,11 +273,20 @@ ai_backend/
 │   │   │   ├── profile_analyzer.py # User profile analysis
 │   │   │   └── utils.py           # Shared utilities
 │   │   ├── config/          # Configuration module
+│   │   │   ├── settings.py        # Environment settings
+│   │   │   ├── constants.py       # System constants
+│   │   │   └── models.py          # Config data models
 │   │   ├── api/             # API layer components
-│   │   └── integration.py   # Dependency injection container
-│   ├── services/            # Legacy services (archived)
+│   │   │   ├── models.py          # Pydantic models
+│   │   │   ├── handlers.py        # Request handlers
+│   │   │   └── validators.py      # Input validation
+│   │   ├── integration.py   # Dependency injection container
+│   │   └── README.md        # Module documentation
 │   ├── utils/               # Utility functions
-│   ├── api_routes_*.py      # API endpoint definitions
+│   │   └── doc_parser.py    # Document parsing
+│   ├── api_routes_auth.py   # Authentication endpoints
+│   ├── api_routes_rag.py    # RAG endpoints
+│   ├── api_routes_models.py # Model management endpoints
 │   ├── dependencies.py      # FastAPI dependencies
 │   ├── logging_config.py    # Logging configuration
 │   └── main.py             # FastAPI application
@@ -360,13 +382,12 @@ Response: {
 **GET /api/models/downloadable** - Models available for download
 **POST /api/models/refresh** - Refresh model cache
 
-### Model Training (`/api/training/`)
+### Model Management (`/api/models/`)
 
-**GET /api/training/status** - Check training availability
-**POST /api/training/start** - Start training job (SuperAdmin only)
-**GET /api/training/jobs/{id}** - Monitor training progress
-**GET /api/training/models** - List trained models
-**DELETE /api/training/models/{name}** - Delete trained model
+**GET /api/models/list** - List available models
+**GET /api/models/best** - Get best available model
+**GET /api/models/downloadable** - Models available for download
+**POST /api/models/refresh** - Refresh model cache
 
 ---
 
@@ -1036,7 +1057,7 @@ python tests/test_rbac_comprehensive.py
 
 ---
 
-**Last Updated**: 2025-01-11 (Modular Architecture + Comprehensive Test Suite Complete)
+**Last Updated**: 2025-01-11 (Modular Architecture Complete - Updated Architecture Documentation)
 
 ---
 
@@ -1059,11 +1080,13 @@ python tests/test_rbac_comprehensive.py
 - ✅ `modules/llm/` - RAG orchestration and providers
 - ✅ `modules/core/` - Business logic and utilities
 - ✅ `modules/config/` - Configuration management
+- ✅ `modules/api/` - API layer components
 - ✅ `modules/integration.py` - Dependency injection container
 
 **API Endpoints:**
 - ✅ `api_routes_auth.py` - Uses modular auth services
-- ✅ `api_routes_rag.py` - Clean modular RAG implementation
+- ✅ `api_routes_rag.py` - RAG implementation using modular architecture
+- ✅ `api_routes_models.py` - Model management endpoints
 - ✅ `dependencies.py` - Container-based dependency injection
 - ✅ `main.py` - Modular architecture initialization
 

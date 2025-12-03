@@ -7,12 +7,10 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api_routes_auth import router as auth_router
-# Clean modular routers
 from app.api_routes_rag import router as rag_router
-# Logging setup
 from app.logging_config import setup_logging
-# New modular architecture
 from app.modules.integration import get_container
+from app.modules.config import API_PREFIX
 
 logger = setup_logging()
 
@@ -82,7 +80,7 @@ def health_check() -> Dict[str, str]:
 
 
 # Test modular architecture endpoint
-@app.get("/api/modules/status", tags=["Modules"])
+@app.get(f"{API_PREFIX}/modules/status", tags=["Modules"])
 def modules_status() -> Dict[str, Any]:
     """Check modular architecture status."""
     try:

@@ -12,10 +12,11 @@ from pydantic import BaseModel
 
 from app.modules.auth.interfaces import ISessionManager
 from app.modules.integration import get_container
+from app.modules.config import AUTH_PREFIX, HTTP_MESSAGES
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/auth", tags=["Authentication"])
+router = APIRouter(prefix=AUTH_PREFIX, tags=["Authentication"])
 
 
 # Request/Response Models

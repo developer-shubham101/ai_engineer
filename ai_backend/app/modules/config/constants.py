@@ -1,7 +1,7 @@
 """Application constants and enums."""
 
 from enum import Enum
-from typing import Dict, List
+from typing import Dict, List, Set
 
 
 class UserRole(Enum):
@@ -10,6 +10,7 @@ class UserRole(Enum):
     MANAGER = "Manager"
     HR = "HR"
     EMPLOYEE = "Employee"
+    PUBLIC_USER = "PublicUser"
     GUEST = "Guest"
 
 
@@ -41,6 +42,14 @@ class LLMProvider(Enum):
     OPENAI = "openai"
     GOOGLE = "google"
     HUGGINGFACE = "huggingface"
+    HF = "hf"
+
+
+class DocumentStatus(Enum):
+    """Document status enumeration."""
+    DRAFT = "draft"
+    PUBLISHED = "published"
+    ARCHIVED = "archived"
 
 
 # Role hierarchy levels
@@ -49,6 +58,7 @@ ROLE_LEVELS: Dict[str, int] = {
     UserRole.MANAGER.value: 3,
     UserRole.HR.value: 2,
     UserRole.EMPLOYEE.value: 1,
+    UserRole.PUBLIC_USER.value: 0,
     UserRole.GUEST.value: 0
 }
 
@@ -62,20 +72,21 @@ SENSITIVITY_LEVELS: Dict[str, int] = {
     SensitivityLevel.PERSONAL.value: 1
 }
 
-# Valid departments list
-VALID_DEPARTMENTS: List[str] = [dept.value for dept in Department]
-
-# Valid roles list
-VALID_ROLES: List[str] = [role.value for role in UserRole]
-
-# Valid sensitivity levels list
-VALID_SENSITIVITY_LEVELS: List[str] = [level.value for level in SensitivityLevel]
+# Valid sets for validation
+VALID_DEPARTMENTS: Set[str] = {dept.value for dept in Department}
+VALID_ROLES: Set[str] = {role.value for role in UserRole}
+VALID_SENSITIVITY_LEVELS: Set[str] = {level.value for level in SensitivityLevel}
+VALID_DOCUMENT_STATUSES: Set[str] = {status.value for status in DocumentStatus}
+VALID_PROVIDERS: Set[str] = {provider.value for provider in LLMProvider}
 
 # Default values
 DEFAULT_TOP_K = 3
 DEFAULT_MAX_TOKENS = 256
 DEFAULT_TEMPERATURE = 0.1
 DEFAULT_EMBEDDING_MODEL = "bge-small-en-v1.5"
+DEFAULT_DEPARTMENT = Department.GENERAL.value
+DEFAULT_SENSITIVITY = SensitivityLevel.PUBLIC_INTERNAL.value
+DEFAULT_STATUS = DocumentStatus.PUBLISHED.value
 
 # API endpoints
 API_PREFIX = "/api"
@@ -90,7 +101,27 @@ MAX_CONTEXT_TOKENS = 2048
 MAX_SYSTEM_TOKENS = 80
 MAX_HISTORY_TURNS = 5
 
-# File extensions for document parsing
-SUPPORTED_EXTENSIONS = [
-    ".txt", ".md", ".pdf", ".docx", ".json", ".csv"
-]
+# File handling
+MAX_FILE_SIZE_MB = 5
+MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024
+SUPPORTED_EXTENSIONS = [".txt", ".md", ".markdown", ".html", ".htm", ".json", ".csv"]
+MARKDOWN_EXTENSIONS = [".md", ".markdown"]
+HTML_EXTENSIONS = [".html", ".htm"]
+JSON_EXTENSIONS = [".json"]
+
+# HTTP status messages
+HTTP_MESSAGES = {
+    "UNAUTHORIZED": "Could not validate credentials",
+    "FORBIDDEN": "Access denied",
+    "FILE_EMPTY": "Uploaded file is empty",
+    "FILE_TOO_LARGE": f"File too large (max {MAX_FILE_SIZE_MB} MB)",
+    "FILE_DECODE_ERROR": "Failed to decode file; ensure it's a text file (UTF-8)",
+    "COLLECTION_CLEARED": "Collection cleared"
+}
+
+# RBAC constants
+HR_LEVEL_THRESHOLD = 2
+SUPER_ADMIN_ROLES = [UserRole.SUPER_ADMIN.value]
+MANAGER_PLUS_ROLES = [UserRole.SUPER_ADMIN.value, UserRole.MANAGER.value]
+HR_PLUS_ROLES = [UserRole.SUPER_ADMIN.value, UserRole.MANAGER.value, UserRole.HR.value]
+EMPLOYEE_PLUS_ROLES = [UserRole.SUPER_ADMIN.value, UserRole.MANAGER.value, UserRole.HR.value, UserRole.EMPLOYEE.value]

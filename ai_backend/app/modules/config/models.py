@@ -1,6 +1,6 @@
 """Configuration data models."""
 
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional, List, Set
 from pydantic import BaseModel
 from dataclasses import dataclass
 
@@ -61,11 +61,19 @@ class RAGConfig(BaseModel):
     chunk_overlap: int = 50
 
 
+class ValidationConfig(BaseModel):
+    """Validation configuration."""
+    max_file_size_mb: int = 5
+    supported_extensions: List[str] = [".txt", ".md", ".markdown", ".html", ".htm", ".json", ".csv"]
+    hr_level_threshold: int = 2
+
+
 class AppConfig(BaseModel):
     """Complete application configuration."""
     database: DatabaseConfig = DatabaseConfig()
     security: SecurityConfig = SecurityConfig(jwt_secret_key="change-me")
     embedding: EmbeddingConfig = EmbeddingConfig()
     rag: RAGConfig = RAGConfig()
+    validation: ValidationConfig = ValidationConfig()
     debug: bool = False
     log_level: str = "INFO"

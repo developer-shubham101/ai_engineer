@@ -108,7 +108,7 @@ class VersionManager:
 
         try:
             with sqlite3.connect(self.db_path) as conn:
-                cursor = conn.execute("""
+                conn.execute("""
                     INSERT INTO document_versions 
                     (document_id, version, source_name, chunk_ids, created_at, created_by,
                      parent_version, status, version_notes, metadata_json)

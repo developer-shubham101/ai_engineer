@@ -15,10 +15,18 @@ from app.modules.core.document_manager import DocumentManager
 from app.modules.integration import get_container
 from app.modules.llm.rag_orchestrator import RAGOrchestrator
 from app.modules.llm.interfaces import RAGRequest
+from app.modules.config.constants import (
+    VALID_SENSITIVITY_LEVELS, VALID_DEPARTMENTS, VALID_ROLES, ROLE_LEVELS, SENSITIVITY_LEVELS,
+    DEFAULT_DEPARTMENT, DEFAULT_SENSITIVITY, DEFAULT_TOP_K, DEFAULT_MAX_TOKENS, DEFAULT_TEMPERATURE,
+    MAX_FILE_SIZE_BYTES, HTTP_MESSAGES, HR_LEVEL_THRESHOLD, EMPLOYEE_PLUS_ROLES, SUPER_ADMIN_ROLES,
+    HR_PLUS_ROLES, MARKDOWN_EXTENSIONS, HTML_EXTENSIONS, JSON_EXTENSIONS
+)
 from app.utils.doc_parser import parse_text, RawFormat
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/api/rag", tags=["RAG"])
+from app.modules.config.constants import RAG_PREFIX
+
+router = APIRouter(prefix=RAG_PREFIX, tags=["RAG"])
 
 
 # ---------------------------
@@ -37,10 +45,10 @@ class RetrievedDoc(BaseModel):
 
 class QueryRequest(BaseModel):
     question: str
-    top_k: int = 3
+    top_k: int = DEFAULT_TOP_K
     use_llm: bool = False
-    max_tokens: int = 256
-    temperature: float = 0.1
+    max_tokens: int = DEFAULT_MAX_TOKENS
+    temperature: float = DEFAULT_TEMPERATURE
     category: Optional[str] = None
     debug: bool = False
     local_llm_model: Optional[str] = None
@@ -64,12 +72,14 @@ class AddResponse(BaseModel):
     chunk_count: int = 0
 
 
+from app.modules.config.constants import DEFAULT_STATUS
+
 class UpdateDocumentRequest(BaseModel):
     document_id: str
     text: str
     metadata: Optional[Dict[str, Any]] = None
     version_notes: Optional[str] = None
-    status: str = "published"
+    status: str = DEFAULT_STATUS
 
 
 class UpdateDocumentResponse(BaseModel):
@@ -109,30 +119,7 @@ class CompareVersionsResponse(BaseModel):
     summary: Dict[str, Any]
 
 
-# ---------------------------
-# Configuration (keep original)
-# ---------------------------
-ALLOWED_SENSITIVITY = {
-    "public_internal", "department_confidential", "role_confidential",
-    "highly_confidential", "super_confidential", "personal"
-}
 
-ALLOWED_DEPARTMENTS = {
-    "General", "HR", "Finance", "Engineering", "IT", "Legal", "Executive", "Admin"
-}
-
-ALLOWED_ROLES = {
-    "SuperAdmin", "Manager", "HR", "Employee", "PublicUser", "Guest"
-}
-
-ROLE_LEVELS = {
-    "SuperAdmin": 4, "Manager": 3, "HR": 2, "Employee": 1, "PublicUser": 0, "Guest": 0
-}
-
-SENSITIVITY_LEVELS = {
-    "public_internal": 0, "department_confidential": 1, "role_confidential": 2,
-    "highly_confidential": 3, "super_confidential": 4, "personal": 1
-}
 
 
 def validate_metadata(meta: Optional[Dict[str, Any]], requester: Optional[Dict[str, Any]] = None) -> None:
@@ -141,14 +128,14 @@ def validate_metadata(meta: Optional[Dict[str, Any]], requester: Optional[Dict[s
         return
 
     sens = meta.get("sensitivity")
-    if sens and sens not in ALLOWED_SENSITIVITY:
+    if sens and sens not in VALID_SENSITIVITY_LEVELS:
         raise HTTPException(status_code=400,
-                            detail=f"Invalid sensitivity '{sens}'. Allowed: {list(ALLOWED_SENSITIVITY)}")
+                            detail=f"Invalid sensitivity '{sens}'. Allowed: {list(VALID_SENSITIVITY_LEVELS)}")
 
     dept = meta.get("department")
-    if dept and dept not in ALLOWED_DEPARTMENTS:
+    if dept and dept not in VALID_DEPARTMENTS:
         raise HTTPException(status_code=400,
-                            detail=f"Invalid department '{dept}'. Allowed: {list(ALLOWED_DEPARTMENTS)}")
+                            detail=f"Invalid department '{dept}'. Allowed: {list(VALID_DEPARTMENTS)}")
 
     if requester and sens:
         user_role = requester.get("role")
@@ -222,15 +209,15 @@ async def query_rag(
 # Document Management (use original working services)
 # ---------------------------
 @router.post("/documents/add", response_model=AddResponse,
-             dependencies=[Depends(require_roles(["SuperAdmin", "Manager", "HR", "Employee"]))])
+             dependencies=[Depends(require_roles(EMPLOYEE_PLUS_ROLES))])
 async def add_document_json(
         req: AddDocRequest,
         requester: Dict[str, Any] = Depends(get_current_user)
 ):
     """Add document via JSON - original working implementation."""
     metadata = req.metadata or {}
-    metadata.setdefault("department", metadata.get("department", "General"))
-    metadata.setdefault("sensitivity", metadata.get("sensitivity", "public_internal"))
+    metadata.setdefault("department", metadata.get("department", DEFAULT_DEPARTMENT))
+    metadata.setdefault("sensitivity", metadata.get("sensitivity", DEFAULT_SENSITIVITY))
     metadata["ingested_by"] = requester.get("user_id")
     if "ingested_at" in metadata and metadata["ingested_at"] is None:
         del metadata["ingested_at"]
@@ -272,33 +259,33 @@ async def add_document_json(
 
 
 @router.post("/documents/add-file", response_model=AddResponse,
-             dependencies=[Depends(require_roles(["SuperAdmin", "Manager", "HR", "Employee"]))])
+             dependencies=[Depends(require_roles(EMPLOYEE_PLUS_ROLES))])
 async def add_document_file(
         file: UploadFile = File(...),
         requester: Dict[str, Any] = Depends(get_current_user),
-        department: Optional[str] = "General",
-        sensitivity: Optional[str] = "public_internal"
+        department: Optional[str] = DEFAULT_DEPARTMENT,
+        sensitivity: Optional[str] = DEFAULT_SENSITIVITY
 ):
     """Upload and add document file - original working implementation."""
     raw = await file.read()
     if not raw:
-        raise HTTPException(status_code=400, detail="Uploaded file is empty.")
-    if len(raw) > 5 * 1024 * 1024:
-        raise HTTPException(status_code=413, detail="File too large (max 5 MB).")
+        raise HTTPException(status_code=400, detail=HTTP_MESSAGES["FILE_EMPTY"])
+    if len(raw) > MAX_FILE_SIZE_BYTES:
+        raise HTTPException(status_code=413, detail=HTTP_MESSAGES["FILE_TOO_LARGE"])
 
     try:
         text_content = raw.decode("utf-8", errors="ignore")
     except Exception as e:
         logger.exception("Failed to decode uploaded file: %s", e)
-        raise HTTPException(status_code=400, detail="Failed to decode file; ensure it's a text file (UTF-8).")
+        raise HTTPException(status_code=400, detail=HTTP_MESSAGES["FILE_DECODE_ERROR"])
 
     # Determine format from extension
     ext = os.path.splitext(file.filename)[1].lower()
-    if ext in ['.md', '.markdown']:
+    if ext in MARKDOWN_EXTENSIONS:
         fmt = RawFormat.MARKDOWN
-    elif ext in ['.html', '.htm']:
+    elif ext in HTML_EXTENSIONS:
         fmt = RawFormat.HTML
-    elif ext in ['.json']:
+    elif ext in JSON_EXTENSIONS:
         fmt = RawFormat.JSON
     else:
         fmt = RawFormat.PLAIN
@@ -348,7 +335,7 @@ async def add_document_file(
 
 
 @router.post("/documents/seed", response_model=AddResponse,
-             dependencies=[Depends(require_roles(["SuperAdmin"]))])
+             dependencies=[Depends(require_roles(SUPER_ADMIN_ROLES))])
 async def seed_defaults(
         requester: Dict[str, Any] = Depends(get_current_user),
         reseed: bool = False
@@ -371,7 +358,7 @@ async def seed_defaults(
 
 
 @router.post("/documents/clear", response_model=AddResponse,
-             dependencies=[Depends(require_roles(["SuperAdmin"]))])
+             dependencies=[Depends(require_roles(SUPER_ADMIN_ROLES))])
 def clear_store(
         requester: Dict[str, Any] = Depends(get_current_user)
 ) -> AddResponse:
@@ -380,7 +367,7 @@ def clear_store(
         # Use original working service
         document_manager: DocumentManager = get_document_instance()
         document_manager.clear_collection()
-        return AddResponse(message="Collection cleared.", chunk_count=0)
+        return AddResponse(message=HTTP_MESSAGES["COLLECTION_CLEARED"], chunk_count=0)
     except Exception as e:
         logger.exception("Failed to clear collection: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
@@ -390,7 +377,7 @@ def clear_store(
 # Document Versioning (use original working services)
 # ---------------------------
 @router.post("/documents/update", response_model=UpdateDocumentResponse,
-             dependencies=[Depends(require_roles(["SuperAdmin", "Manager", "HR", "Employee"]))])
+             dependencies=[Depends(require_roles(EMPLOYEE_PLUS_ROLES))])
 async def update_document(
         req: UpdateDocumentRequest,
         requester: Dict[str, Any] = Depends(get_current_user)
@@ -413,7 +400,7 @@ async def update_document(
 
         # Department ownership check (unless high-level roles)
         user_level = ROLE_LEVELS.get(user_role, 0)
-        if user_level < 2:  # Below HR level
+        if user_level < HR_LEVEL_THRESHOLD:
             if current_dept != user_dept:
                 from app.logging_config import log_security_event
                 log_security_event(
@@ -479,7 +466,7 @@ async def update_document(
 
 
 @router.get("/documents/list", response_model=DocumentListResponse,
-            dependencies=[Depends(require_roles(["SuperAdmin", "Manager", "HR", "Employee"]))])
+            dependencies=[Depends(require_roles(EMPLOYEE_PLUS_ROLES))])
 async def list_all_documents(
         department: Optional[str] = None,
         status: Optional[str] = None,
@@ -501,7 +488,7 @@ async def list_all_documents(
 
 
 @router.get("/documents/{document_id}/versions", response_model=VersionHistoryResponse,
-            dependencies=[Depends(require_roles(["SuperAdmin", "Manager", "HR", "Employee"]))])
+            dependencies=[Depends(require_roles(EMPLOYEE_PLUS_ROLES))])
 async def get_version_history(document_id: str):
     """Get version history - original working implementation."""
     try:
@@ -516,7 +503,7 @@ async def get_version_history(document_id: str):
 
 
 @router.get("/documents/{document_id}/versions/{version}", response_model=DocumentVersionResponse,
-            dependencies=[Depends(require_roles(["SuperAdmin", "Manager", "HR", "Employee"]))])
+            dependencies=[Depends(require_roles(EMPLOYEE_PLUS_ROLES))])
 async def get_specific_version(document_id: str, version: str):
     """Get specific version - original working implementation."""
     try:
@@ -534,7 +521,7 @@ async def get_specific_version(document_id: str, version: str):
 
 
 @router.get("/documents/{document_id}/compare", response_model=CompareVersionsResponse,
-            dependencies=[Depends(require_roles(["SuperAdmin", "Manager", "HR", "Employee"]))])
+            dependencies=[Depends(require_roles(EMPLOYEE_PLUS_ROLES))])
 async def compare_versions(document_id: str, version1: str, version2: str):
     """Compare versions - original working implementation."""
     try:
@@ -552,7 +539,7 @@ async def compare_versions(document_id: str, version1: str, version2: str):
 
 
 @router.post("/documents/{document_id}/archive", response_model=AddResponse,
-             dependencies=[Depends(require_roles(["SuperAdmin", "Manager", "HR"]))])
+             dependencies=[Depends(require_roles(HR_PLUS_ROLES))])
 async def archive_version(document_id: str, version: str):
     """Archive version - original working implementation."""
     try:
@@ -572,7 +559,7 @@ async def archive_version(document_id: str, version: str):
 # ---------------------------
 # Sentiment Analysis (use original working services)
 # ---------------------------
-@router.post("/sentiment", dependencies=[Depends(require_roles(["SuperAdmin"]))])
+@router.post("/sentiment", dependencies=[Depends(require_roles(SUPER_ADMIN_ROLES))])
 def api_sentiment(req: SentimentRequest) -> Dict[str, Any]:
     """Analyze sentiment - original working implementation."""
     # from app.services.legacy.sentiment_classifier import get_global_sentiment
@@ -582,7 +569,7 @@ def api_sentiment(req: SentimentRequest) -> Dict[str, Any]:
     return {"ok": True, "result": result}
 
 
-@router.get("/sentiment/stats", dependencies=[Depends(require_roles(["SuperAdmin"]))])
+@router.get("/sentiment/stats", dependencies=[Depends(require_roles(SUPER_ADMIN_ROLES))])
 def sentiment_stats_api() -> Dict[str, Any]:
     """Get sentiment stats - original working implementation."""
     # Get modular services for user management
@@ -597,7 +584,7 @@ def sentiment_stats_api() -> Dict[str, Any]:
 # ---------------------------
 # System Status (use original working services)
 # ---------------------------
-@router.get("/embedding/status", dependencies=[Depends(require_roles(["SuperAdmin", "Manager"]))])
+@router.get("/embedding/status", dependencies=[Depends(require_roles(MANAGER_PLUS_ROLES))])
 def embedding_model_status():
     """Get embedding model status - refactored to use EmbeddingManager."""
     from app.modules.vector_db.embedding_manager import EmbeddingManager
