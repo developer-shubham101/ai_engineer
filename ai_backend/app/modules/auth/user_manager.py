@@ -310,3 +310,35 @@ class SQLiteUserManager(IUserManager):
                 conn.rollback()
                 logger.exception(f"Error setting user meta: {e}")
                 return False
+
+    async def authenticate(self, username: str, password: str) -> Optional[Dict[str, Any]]:
+        """
+        Authenticates a user by username and password.
+
+        Args:
+            username (str): The username of the user.
+            password (str): The plain-text password to verify.
+
+        Returns:
+            Optional[Dict[str, Any]]: The user dictionary if authentication is successful,
+                                      otherwise None. The returned dictionary will not
+                                      contain the password hash.
+        """
+        with self._connect() as conn:
+            cursor = conn.execute("SELECT * FROM users WHERE username = ?", (username,))
+            row = cursor.fetchone()
+
+            if row:
+                user_data = dict(row)
+                stored_hashed_password = user_data['password'].encode('utf-8')
+                
+                if bcrypt.checkpw(password.encode('utf-8'), stored_hashed_password):
+                    # Authentication successful
+                    logger.info(f"User '{username}' authenticated successfully.")
+                    return await self._row_to_user_dict(row) # _row_to_user_dict already removes password
+                else:
+                    logger.warning(f"Authentication failed for user '{username}': Incorrect password.")
+            else:
+                logger.warning(f"Authentication failed: User '{username}' not found.")
+            
+            return None

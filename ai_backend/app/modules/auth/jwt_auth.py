@@ -32,21 +32,16 @@ class JWTAuthenticator(IAuthenticator):
     async def authenticate(self, username: str, password: str) -> Optional[Dict[str, Any]]:
         """
         Authenticate user against the UserManager.
-        (Placeholder logic, requires a working IUserManager implementation for password verification)
         """
         if not self.user_manager:
             raise RuntimeError("UserManager not initialized in JWTAuthenticator")
 
-        user = await self.user_manager.get_user_by_username(username)
-
+        user = await self.user_manager.authenticate(username, password)
+        
         if user:
-            # NOTE: In a real implementation, you would need to securely verify the password
-            # against the hash stored in the database (e.g., using bcrypt).
-            # This is a conceptual placeholder.
-            if username == "admin" and password == "admin123": # Mock check
-                # Remove password hash for safety before returning
-                user.pop('password', None)
-                return user
+            # Remove password hash for safety before returning
+            user.pop('password', None) # user_manager.authenticate already removes it, but as a safeguard.
+            return user
 
         return None
 
