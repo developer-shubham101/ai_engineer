@@ -57,6 +57,7 @@ User Request → FastAPI Router → Container → Modular Services → Response
 - `rag_orchestrator.py` - RAG workflow orchestration
 - `providers.py` - LLM provider implementations (Local, Google, GPT, HF)
 - `prompt_manager.py` - Optimized prompt construction with token budgeting
+- `prompt_chain.py` - Chain of Responsibility pattern for dynamic prompt building
 - `interfaces.py` - LLM and RAG interfaces
 
 **🗄️ Vector DB Module** (`app/modules/vector_db/`)
@@ -550,6 +551,8 @@ A comprehensive test suite validates temperature parameter acceptance:
 - **Context Truncation**: Smart truncation when content exceeds model limits
 - **Compressed Prefixes**: Ultra-compact system instructions (60-80 tokens vs 200+ previously)
 - **Debug Exposure**: `final_prompt` field in API responses for optimization analysis
+- **Chain of Responsibility**: Dynamic prompt building with modular handlers for different contexts
+- **Personalization**: Context-aware prompt enhancement based on user profile and session history
 
 ### Enhanced Logging & Debugging
 - **Performance Metrics**: Token usage, response times, efficiency ratios
@@ -577,7 +580,136 @@ A comprehensive test suite validates temperature parameter acceptance:
 
 ---
 
-## 8. Model Training Service
+## 8. Prompt Chain Architecture
+
+### Chain of Responsibility Pattern
+
+The system uses a **Chain of Responsibility pattern** for dynamic prompt building, allowing flexible composition of prompt components based on available context.
+
+### Core Components
+
+**PromptContext** - Data container passed through the chain:
+```python
+@dataclass
+class PromptContext:
+    user: Optional[Dict[str, Any]] = None
+    question: str = ""
+    context: str = ""
+    category: Optional[str] = None
+    session_id: Optional[str] = None
+    enhanced_query: str = ""
+    system_prompt: str = ""
+    user_prompt: str = ""
+    final_prompt: str = ""
+    metadata: Dict[str, Any] = None
+```
+
+**Available Handlers:**
+- `SystemPromptHandler` - Builds role-based system instructions
+- `PersonalizationHandler` - Adds user-specific personalization
+- `SecurityHandler` - Injects security constraints based on role
+- `QueryEnhancementHandler` - Enhances queries with user context and sentiment
+- `UserPromptHandler` - Formats the final user prompt
+- `FinalPromptHandler` - Combines all components into final prompt
+
+### Dynamic Chain Building
+
+The chain is built dynamically based on available context:
+
+```python
+def _build_dynamic_chain(self, context: PromptContext) -> PromptHandler:
+    handlers = []
+    
+    # Always start with system
+    handlers.append(self.available_handlers['system'])
+    
+    # Add personalization if user exists
+    if context.user:
+        handlers.append(self.available_handlers['personalization'])
+        handlers.append(self.available_handlers['security'])
+    
+    # Add query enhancement if we have user or session
+    if context.user or context.session_id or context.category:
+        handlers.append(self.available_handlers['query_enhancement'])
+    
+    # Always add user prompt and final
+    handlers.append(self.available_handlers['user_prompt'])
+    handlers.append(self.available_handlers['final'])
+    
+    # Chain them together
+    for i in range(len(handlers) - 1):
+        handlers[i].set_next(handlers[i + 1])
+    
+    return handlers[0]
+```
+
+### Usage Examples
+
+**Basic Query (Guest User):**
+```python
+chain = PromptChain()
+final_prompt = await chain.build_prompt(
+    question="What are the company policies?",
+    context="Policy documents..."
+)
+# Chain: System → User Prompt → Final
+```
+
+**Authenticated User with Session:**
+```python
+final_prompt = await chain.build_prompt(
+    question="What are my benefits?",
+    context="HR documents...",
+    user={"role": "Employee", "department": "Engineering"},
+    session_id="session_123"
+)
+# Chain: System → Personalization → Security → Query Enhancement → User Prompt → Final
+```
+
+**Enhanced Query for Document Retrieval:**
+```python
+enhanced_query = await chain.build_enhanced_query(
+    question="vacation policy",
+    user={"role": "Employee", "department": "HR"},
+    session_id="session_123",
+    category="benefits"
+)
+# Result: "vacation policy [User: Employee in HR] [Mood: positive] [Category: benefits]"
+```
+
+### Benefits
+
+- **Flexibility**: Add/remove handlers based on context
+- **Modularity**: Each handler has single responsibility
+- **Extensibility**: Easy to add new prompt enhancement logic
+- **Testability**: Each handler can be tested independently
+- **Performance**: Only necessary handlers are executed
+- **Maintainability**: Clear separation of prompt building concerns
+
+### Integration with RAG Services
+
+The prompt chain integrates seamlessly with existing RAG services:
+
+```python
+# In BaseRAGService or provider services
+from app.modules.llm.prompt_chain import PromptChain
+
+class BaseRAGService:
+    def __init__(self):
+        self.prompt_chain = PromptChain(session_manager=self.session_manager)
+    
+    async def build_final_prompt(self, query_text, context, user, session_id):
+        return await self.prompt_chain.build_prompt(
+            question=query_text,
+            context=context,
+            user=user,
+            session_id=session_id
+        )
+```
+
+---
+
+## 9. Model Training Service
 
 ### Training Capabilities
 - **Base Model**: Llama 3.2 1B (meta-llama/Llama-3.2-1B)
