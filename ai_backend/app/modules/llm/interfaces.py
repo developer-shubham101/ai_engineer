@@ -28,6 +28,11 @@ class RAGRequest:
     debug: bool = False
     provider: str = "local"
     provider_specific: Optional[Dict[str, Any]] = None
+    metadata: Optional[Dict[str, Any]] = None
+    
+    def __post_init__(self):
+        if self.metadata is None:
+            self.metadata = {}
 
 
 @dataclass

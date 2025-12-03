@@ -6,7 +6,9 @@ from typing import List, Dict, Any, Optional
 from .interfaces import IRAGOrchestrator, RAGRequest, RAGResponse, RetrievedDocument
 
 from .prompt_manager import PromptManager
-from .providers.providers import ProviderFactory
+from .prompt_chain import PromptChain
+from .provider_factory import create_provider
+from .middleware import create_default_middleware_stack
 
 from ..vector_db.interfaces import IVectorStore
 from ..auth.interfaces import ISessionManager
@@ -21,11 +23,28 @@ class RAGOrchestrator(IRAGOrchestrator):
         self.vector_store = vector_store
         self.session_manager = session_manager
         self.prompt_manager = PromptManager()
+        self.prompt_chain = PromptChain(session_manager)
+        self.middleware_stack = create_default_middleware_stack()
     
     async def process_query(self, request: RAGRequest) -> RAGResponse:
         """Process RAG query end-to-end."""
+        # Process request through middleware
+        request = await self.middleware_stack.process_request(request)
+        
+        # Check for cached response
+        if request.metadata and "_cached_response" in request.metadata:
+            return await self.middleware_stack.process_response(request, request.metadata["_cached_response"])
+        
         try:
-            # 1. Retrieve documents
+            # 1. Enhance query using chain
+            enhanced_query = await self.prompt_chain.build_enhanced_query(
+                question=request.question,
+                user=request.user,
+                session_id=request.session_id,
+                category=request.category
+            )
+            
+            # 2. Retrieve documents
             documents = await self.retrieve_documents(
                 query=request.question,
                 user=request.user,
@@ -40,11 +59,16 @@ class RAGOrchestrator(IRAGOrchestrator):
             answer = None
             final_prompt = None
             if request.use_llm:
-                provider = ProviderFactory.create_provider(request.provider, request.provider_specific.get("model_name") if request.provider_specific else None)
+                provider_config = request.provider_specific or {}
+                provider = await create_provider(request.provider, provider_config)
                 
-                system_prompt = await self.prompt_manager.build_system_prompt(request.user, context, request.category)
-                user_prompt = await self.prompt_manager.build_user_prompt(request.question, context)
-                final_prompt = await self.prompt_manager.build_full_prompt(system_prompt, user_prompt)
+                final_prompt = await self.prompt_chain.build_prompt(
+                    question=request.question,
+                    context=context,
+                    user=request.user,
+                    session_id=request.session_id,
+                    category=request.category
+                )
                 
                 response = await self.generate_response(final_prompt, provider, request.max_tokens, request.temperature)
                 answer = response.text if response else "I found relevant documents but couldn't generate a response."
@@ -60,7 +84,7 @@ class RAGOrchestrator(IRAGOrchestrator):
                 for doc in documents
             ]
             
-            return RAGResponse(
+            response = RAGResponse(
                 answer=answer,
                 retrieved_documents=retrieved_docs,
                 context=context,
@@ -68,14 +92,18 @@ class RAGOrchestrator(IRAGOrchestrator):
                 metadata={"provider": request.provider}
             )
             
+            # Process response through middleware
+            return await self.middleware_stack.process_response(request, response)
+            
         except Exception as e:
             logger.exception("RAG processing failed: %s", e)
-            return RAGResponse(
+            error_response = RAGResponse(
                 answer="Sorry, I encountered an error processing your request.",
                 retrieved_documents=[],
                 context="",
                 metadata={"error": str(e)}
             )
+            return await self.middleware_stack.process_response(request, error_response)
     
     async def retrieve_documents(self, query: str, user: Dict[str, Any], top_k: int = 5, category: Optional[str] = None) -> List[Dict[str, Any]]:
         """Retrieve relevant documents."""
