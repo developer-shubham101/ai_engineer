@@ -18,6 +18,7 @@ export default function RAGChat({ onLogout }){
   })
   const [useLlm, setUseLlm] = useState(false)
   const [topK, setTopK] = useState(3)
+  const [temperature, setTemperature] = useState(() => parseFloat(localStorage.getItem('temperature')) || 0.1)
   const [composer, setComposer] = useState('')
   const [messages, setMessages] = useState(()=> JSON.parse(localStorage.getItem('chat_history_v1') || '[]'))
   const [inFlight, setInFlight] = useState(false)
@@ -33,6 +34,7 @@ export default function RAGChat({ onLogout }){
   useEffect(()=> { localStorage.setItem('chat_history_v1', JSON.stringify(messages)) }, [messages])
   useEffect(()=> { localStorage.setItem('model_provider', modelProvider) }, [modelProvider])
   useEffect(()=> { localStorage.setItem('local_llm_model', localLlmModel) }, [localLlmModel])
+  useEffect(()=> { localStorage.setItem('temperature', temperature.toString()) }, [temperature])
   useEffect(()=>{
     localStorage.setItem('theme', theme)
     if (theme === 'system') {
@@ -74,7 +76,7 @@ export default function RAGChat({ onLogout }){
     pushMessage(userMsg)
     setComposer('')
 
-    const payload = { question: composer, top_k: Number(topK||3), use_llm: !!useLlm }
+    const payload = { question: composer, top_k: Number(topK||3), use_llm: !!useLlm, temperature: temperature }
     if (modelProvider === 'local' && localLlmModel) {
       payload.local_llm_model = localLlmModel
     }
@@ -273,6 +275,18 @@ export default function RAGChat({ onLogout }){
               max={20}
               value={topK}
               onChange={(e) => setTopK(Number(e.target.value))}
+            />
+          </div>
+          <div className="input-group input-group-sm" style={{ width: 150 }} title="Temperature controls randomness. Low = accurate and predictable. High = creative and unpredictable.">
+            <span className="input-group-text">Temp ({temperature.toFixed(1)})</span>
+            <input
+              type="range"
+              className="form-range"
+              min="0.0"
+              max="1.0"
+              step="0.1"
+              value={temperature}
+              onChange={(e) => setTemperature(parseFloat(e.target.value))}
             />
           </div>
           <select
@@ -577,7 +591,7 @@ export default function RAGChat({ onLogout }){
                       </button>
                     </div>
                     <div className="small text-muted">
-                      Top K: {topK} • Use LLM: {useLlm ? "on" : "off"}
+                      Top K: {topK} • Use LLM: {useLlm ? "on" : "off"} • Temp: {temperature.toFixed(1)}
                       {modelProvider === 'local' && ` • Model: ${localLlmModel}`}
                     </div>
                   </div>

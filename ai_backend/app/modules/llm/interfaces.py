@@ -23,12 +23,12 @@ class RAGRequest:
     top_k: int = 3
     use_llm: bool = True
     max_tokens: int = 256
-    temperature: float = 0.1
+    temperature: float = 0.1 # Temperature controls randomness. Low = accurate and predictable. High = creative and unpredictable.
     category: Optional[str] = None
     debug: bool = False
     provider: str = "local"
     provider_specific: Optional[Dict[str, Any]] = None
-    metadata: Optional[Dict[str, Any]] = None
+    metadata: Optional[Dict[str, Any]] = None #not coming from font end
     
     def __post_init__(self):
         if self.metadata is None:

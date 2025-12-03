@@ -83,7 +83,7 @@ curl -X POST "http://localhost:5444/api/auth/token" \
 - `top_k` (integer, default: 3): Number of documents to retrieve
 - `use_llm` (boolean, default: false): Whether to use LLM for response generation
 - `max_tokens` (integer, default: 256): Maximum tokens for LLM response
-- `temperature` (float, default: 0.1): Controls response creativity (0.0-1.0)
+- `temperature` (float, default: 0.1): Controls response creativity (0.0-1.0). Accepted for all LLM providers.
   - `0.0`: Deterministic, factual responses
   - `0.1`: Default balanced responses
   - `0.5`: Moderate creativity
