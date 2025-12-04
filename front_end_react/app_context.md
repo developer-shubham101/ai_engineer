@@ -184,7 +184,8 @@
 {
   "question": "string",
   "top_k": 3,
-  "use_llm": false
+  "use_llm": false,
+  "use_documents": true
 }
 ```
 
@@ -236,6 +237,9 @@
 - `hf` - Hugging Face Inference API
 
 **New UI Features:**
+
+**Use Docs toggle:**
+- A checkbox to enable or disable document retrieval for RAG queries.
 
 **Enhanced Document Management:**
 - Document version history viewing

@@ -69,6 +69,7 @@ curl -X POST "http://localhost:5444/api/auth/token" \
 {
   "question": "What are the company leave policies?",
   "top_k": 3,
+  "use_documents": true,
   "use_llm": true,
   "max_tokens": 256,
   "temperature": 0.1,
@@ -81,6 +82,7 @@ curl -X POST "http://localhost:5444/api/auth/token" \
 **Request Parameters:**
 - `question` (string, required): The user's question or query
 - `top_k` (integer, default: 3): Number of documents to retrieve
+- `use_documents` (boolean, default: true): Whether to retrieve documents from the vector store. If false, the query will be sent directly to the LLM without RAG.
 - `use_llm` (boolean, default: false): Whether to use LLM for response generation
 - `max_tokens` (integer, default: 256): Maximum tokens for LLM response
 - `temperature` (float, default: 0.1): Controls response creativity (0.0-1.0). Accepted for all LLM providers.
@@ -107,6 +109,7 @@ curl -X POST "http://localhost:5444/api/rag/local/query" \
 -d '{
   "question": "What are the company leave policies?",
   "top_k": 3,
+  "use_documents": true,
   "use_llm": true,
   "temperature": 0.1
 }'

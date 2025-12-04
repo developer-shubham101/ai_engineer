@@ -349,6 +349,7 @@ Response: {
 Request: {
   "question": "string",
   "top_k": 3,
+  "use_documents": true,
   "use_llm": true,
   "max_tokens": 256,
   "temperature": 0.1,  // NEW: Temperature control (0.0-1.0)

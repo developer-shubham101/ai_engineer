@@ -17,6 +17,7 @@ export default function RAGChat({ onLogout }){
     return storedToken ? getSessionIdFromToken(storedToken) : '';
   })
   const [useLlm, setUseLlm] = useState(false)
+  const [useDocuments, setUseDocuments] = useState(true)
   const [topK, setTopK] = useState(3)
   const [temperature, setTemperature] = useState(() => parseFloat(localStorage.getItem('temperature')) || 0.1)
   const [composer, setComposer] = useState('')
@@ -76,7 +77,7 @@ export default function RAGChat({ onLogout }){
     pushMessage(userMsg)
     setComposer('')
 
-    const payload = { question: composer, top_k: Number(topK||3), use_llm: !!useLlm, temperature: temperature }
+    const payload = { question: composer, top_k: Number(topK||3), use_llm: !!useLlm, use_documents: !!useDocuments, temperature: temperature }
     if (modelProvider === 'local' && localLlmModel) {
       payload.local_llm_model = localLlmModel
     }
@@ -265,6 +266,15 @@ export default function RAGChat({ onLogout }){
               onChange={(e) => setUseLlm(e.target.checked)}
             />
             <label className="form-check-label">Use LLM</label>
+          </div>
+          <div className="form-check form-switch">
+            <input
+              className="form-check-input"
+              type="checkbox"
+              checked={useDocuments}
+              onChange={(e) => setUseDocuments(e.target.checked)}
+            />
+            <label className="form-check-label">Use Docs</label>
           </div>
           <div className="input-group input-group-sm" style={{ width: 110 }}>
             <span className="input-group-text">Top K</span>
@@ -591,7 +601,7 @@ export default function RAGChat({ onLogout }){
                       </button>
                     </div>
                     <div className="small text-muted">
-                      Top K: {topK} • Use LLM: {useLlm ? "on" : "off"} • Temp: {temperature.toFixed(1)}
+                      Top K: {topK} • Use LLM: {useLlm ? "on" : "off"} • Use Docs: {useDocuments ? "on" : "off"} • Temp: {temperature.toFixed(1)}
                       {modelProvider === 'local' && ` • Model: ${localLlmModel}`}
                     </div>
                   </div>
