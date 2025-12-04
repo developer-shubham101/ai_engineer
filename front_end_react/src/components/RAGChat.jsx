@@ -9,7 +9,7 @@ import { BASE_API_URL } from '../utility/const.js'
 import { getStoredToken, getStoredUser, getSessionIdFromToken, clearAuth } from '../utility/auth.js'
 
 
-export default function RAGChat({ onLogout }){
+export default function RAGChat({ onLogout }) {
   const [token, setToken] = useState(getStoredToken())
   const [user, setUser] = useState(getStoredUser())
   const [sessionId, setSessionId] = useState(() => {
@@ -21,10 +21,10 @@ export default function RAGChat({ onLogout }){
   const [topK, setTopK] = useState(3)
   const [temperature, setTemperature] = useState(() => parseFloat(localStorage.getItem('temperature')) || 0.1)
   const [composer, setComposer] = useState('')
-  const [messages, setMessages] = useState(()=> JSON.parse(localStorage.getItem('chat_history_v1') || '[]'))
+  const [messages, setMessages] = useState(() => JSON.parse(localStorage.getItem('chat_history_v1') || '[]'))
   const [inFlight, setInFlight] = useState(false)
   const [selectedFile, setSelectedFile] = useState(null)
-  const [fileMeta, setFileMeta] = useState({ department:'', sensitivity:'public_internal', tags:'' })
+  const [fileMeta, setFileMeta] = useState({ department: '', sensitivity: 'public_internal', tags: '' })
   const [toasts, setToasts] = useState([])
   const [modelProvider, setModelProvider] = useState(localStorage.getItem('model_provider') || 'local')
   const [localLlmModel, setLocalLlmModel] = useState(localStorage.getItem('local_llm_model') || 'llama32-1b')
@@ -32,11 +32,11 @@ export default function RAGChat({ onLogout }){
   const [showAdminPanel, setShowAdminPanel] = useState(false)
   const messagesRef = useRef(null)
 
-  useEffect(()=> { localStorage.setItem('chat_history_v1', JSON.stringify(messages)) }, [messages])
-  useEffect(()=> { localStorage.setItem('model_provider', modelProvider) }, [modelProvider])
-  useEffect(()=> { localStorage.setItem('local_llm_model', localLlmModel) }, [localLlmModel])
-  useEffect(()=> { localStorage.setItem('temperature', temperature.toString()) }, [temperature])
-  useEffect(()=>{
+  useEffect(() => { localStorage.setItem('chat_history_v1', JSON.stringify(messages)) }, [messages])
+  useEffect(() => { localStorage.setItem('model_provider', modelProvider) }, [modelProvider])
+  useEffect(() => { localStorage.setItem('local_llm_model', localLlmModel) }, [localLlmModel])
+  useEffect(() => { localStorage.setItem('temperature', temperature.toString()) }, [temperature])
+  useEffect(() => {
     localStorage.setItem('theme', theme)
     if (theme === 'system') {
       const systemIsDark = window.matchMedia('(prefers-color-scheme: dark)').matches
@@ -56,10 +56,10 @@ export default function RAGChat({ onLogout }){
       return () => mediaQuery.removeEventListener('change', handleChange)
     }
   }, [theme])
-  useEffect(()=> { if (messagesRef.current) messagesRef.current.scrollTop = messagesRef.current.scrollHeight }, [messages])
+  useEffect(() => { if (messagesRef.current) messagesRef.current.scrollTop = messagesRef.current.scrollHeight }, [messages])
 
-  function addToast(text, kind='danger', title=''){ const id=Date.now(); setToasts(t=>[...t,{id,text,kind,title}]); setTimeout(()=>setToasts(t=>t.filter(x=>x.id!==id)),5000) }
-  function pushMessage(msg){ setMessages(m=>[...m,{...msg, ts: new Date().toLocaleString()}]) }
+  function addToast(text, kind = 'danger', title = '') { const id = Date.now(); setToasts(t => [...t, { id, text, kind, title }]); setTimeout(() => setToasts(t => t.filter(x => x.id !== id)), 5000) }
+  function pushMessage(msg) { setMessages(m => [...m, { ...msg, ts: new Date().toLocaleString() }]) }
 
   function handleLogout() {
     clearAuth();
@@ -68,16 +68,16 @@ export default function RAGChat({ onLogout }){
     if (onLogout) onLogout();
   }
 
-  async function sendQuery(){
+  async function sendQuery() {
     if (inFlight) return
     if (!composer.trim()) return addToast('Please enter a question', 'warning', 'Validation')
 
     setInFlight(true)
-    const userMsg = { role:'user', text: composer }
+    const userMsg = { role: 'user', text: composer }
     pushMessage(userMsg)
     setComposer('')
 
-    const payload = { question: composer, top_k: Number(topK||3), use_llm: !!useLlm, use_documents: !!useDocuments, temperature: temperature }
+    const payload = { question: composer, top_k: Number(topK || 3), use_llm: !!useLlm, use_documents: !!useDocuments, temperature: temperature }
     if (modelProvider === 'local' && localLlmModel) {
       payload.local_llm_model = localLlmModel
     }
@@ -93,69 +93,69 @@ export default function RAGChat({ onLogout }){
         headers: headers,
         body: JSON.stringify(payload),
       });
-      if (!res.ok){ const txt = await res.text().catch(()=>res.statusText); throw new Error(`Server error: ${res.status} - ${txt}`) }
+      if (!res.ok) { const txt = await res.text().catch(() => res.statusText); throw new Error(`Server error: ${res.status} - ${txt}`) }
       const data = await res.json()
       const botMsg = {
-        role:'bot', answer: data.answer || 'No answer returned', retrieved: data.retrieved||[], context: data.context||'', filtered_out_count: data.filtered_out_count||0, public_summaries: data.public_summaries||[], filtered_details: data.filtered_details||null
+        role: 'bot', answer: data.answer || 'No answer returned', retrieved: data.retrieved || [], context: data.context || '', filtered_out_count: data.filtered_out_count || 0, public_summaries: data.public_summaries || [], filtered_details: data.filtered_details || null
       }
       pushMessage(botMsg)
       if (botMsg.filtered_out_count > 0) addToast(`${botMsg.filtered_out_count} results filtered for your role`, 'warning', 'Filtered')
-    } catch(err){
+    } catch (err) {
       addToast(err.message || 'Network error', 'danger', 'Error')
-      pushMessage({ role:'bot', answer: 'Error: ' + (err.message || 'Network error') })
+      pushMessage({ role: 'bot', answer: 'Error: ' + (err.message || 'Network error') })
     } finally {
-      setTimeout(()=>setInFlight(false), 2000)
+      setTimeout(() => setInFlight(false), 2000)
     }
   }
 
-  async function postAddJson({ source_name, text, metadata }){
-    const headers = { 'Content-Type':'application/json' };
+  async function postAddJson({ source_name, text, metadata }) {
+    const headers = { 'Content-Type': 'application/json' };
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
       if (sessionId) headers['X-Session-ID'] = sessionId;
     }
     try {
-      const res = await fetch(BASE_API_URL + `/api/rag/documents/add`, { method:'POST', headers: headers, body: JSON.stringify({ source_name, text, metadata }) })
-      if (!res.ok){ const txt = await res.text().catch(()=>res.statusText); throw new Error(txt || 'Server error') }
+      const res = await fetch(BASE_API_URL + `/api/rag/documents/add`, { method: 'POST', headers: headers, body: JSON.stringify({ source_name, text, metadata }) })
+      if (!res.ok) { const txt = await res.text().catch(() => res.statusText); throw new Error(txt || 'Server error') }
       const data = await res.json(); addToast('Document added', 'success'); return data
-    } catch(err){ addToast(err.message || 'Add error','danger'); throw err }
+    } catch (err) { addToast(err.message || 'Add error', 'danger'); throw err }
   }
 
-  async function postUploadFile(formData){
+  async function postUploadFile(formData) {
     const headers = {};
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
       if (sessionId) headers['X-Session-ID'] = sessionId;
     }
     try {
-      const res = await fetch(BASE_API_URL + `/api/rag/documents/add-file`, { method:'POST', headers: headers, body: formData })
-      if (!res.ok){ const txt = await res.text().catch(()=>res.statusText); throw new Error(txt || 'Upload error') }
+      const res = await fetch(BASE_API_URL + `/api/rag/documents/add-file`, { method: 'POST', headers: headers, body: formData })
+      if (!res.ok) { const txt = await res.text().catch(() => res.statusText); throw new Error(txt || 'Upload error') }
       const data = await res.json(); addToast('File uploaded', 'success'); return data
-    } catch(err){ addToast(err.message || 'Upload error','danger'); throw err }
+    } catch (err) { addToast(err.message || 'Upload error', 'danger'); throw err }
   }
 
-  async function requestAccess({ document_id, source_name, reason }){
+  async function requestAccess({ document_id, source_name, reason }) {
     if (!token) return addToast('Please login first', 'warning', 'Auth')
-    const headers = { 'Content-Type':'application/json', 'Authorization': `Bearer ${token}` };
+    const headers = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` };
     if (sessionId) headers['X-Session-ID'] = sessionId;
     try {
-      const res = await fetch(BASE_API_URL + '/request-access', { method:'POST', headers: headers, body: JSON.stringify({ document_id, source_name, reason }) })
-      if (!res.ok){ const txt = await res.text().catch(()=>res.statusText); throw new Error(txt || 'Request error') }
+      const res = await fetch(BASE_API_URL + '/request-access', { method: 'POST', headers: headers, body: JSON.stringify({ document_id, source_name, reason }) })
+      if (!res.ok) { const txt = await res.text().catch(() => res.statusText); throw new Error(txt || 'Request error') }
       const data = await res.json(); addToast('Access request submitted', 'success'); return data
-    } catch(err){ addToast(err.message || 'Request error','danger'); throw err }
+    } catch (err) { addToast(err.message || 'Request error', 'danger'); throw err }
   }
 
-  async function fetchAccessRequests(){
+  async function fetchAccessRequests() {
     if (!token) return addToast('Please login first', 'warning', 'Auth')
     const headers = { 'Authorization': `Bearer ${token}` };
     if (sessionId) headers['X-Session-ID'] = sessionId;
     try {
       const res = await fetch(BASE_API_URL + '/access-requests', { headers: headers })
       if (!res.ok) throw new Error('Failed to fetch'); const data = await res.json(); return data
-    } catch(err){ addToast(err.message || 'Fetch error','danger'); return [] }
+    } catch (err) { addToast(err.message || 'Fetch error', 'danger'); return [] }
   }
 
-  async function listDocuments(filters = {}){
+  async function listDocuments(filters = {}) {
     if (!token) return addToast('Please login first', 'warning', 'Auth')
     const headers = { 'Authorization': `Bearer ${token}` };
     if (sessionId) headers['X-Session-ID'] = sessionId;
@@ -163,42 +163,42 @@ export default function RAGChat({ onLogout }){
     try {
       const res = await fetch(BASE_API_URL + `/api/rag/documents/list${params ? '?' + params : ''}`, { headers: headers })
       if (!res.ok) throw new Error('Failed to fetch documents'); const data = await res.json(); return data
-    } catch(err){ addToast(err.message || 'List error','danger'); return [] }
+    } catch (err) { addToast(err.message || 'List error', 'danger'); return [] }
   }
 
-  async function getDocumentVersions(documentId){
+  async function getDocumentVersions(documentId) {
     if (!token) return addToast('Please login first', 'warning', 'Auth')
     const headers = { 'Authorization': `Bearer ${token}` };
     if (sessionId) headers['X-Session-ID'] = sessionId;
     try {
       const res = await fetch(BASE_API_URL + `/api/rag/documents/${documentId}/versions`, { headers: headers })
       if (!res.ok) throw new Error('Failed to fetch versions'); const data = await res.json(); return data
-    } catch(err){ addToast(err.message || 'Versions error','danger'); return [] }
+    } catch (err) { addToast(err.message || 'Versions error', 'danger'); return [] }
   }
 
-  async function updateDocument({ document_id, text, version_notes, status = 'published' }){
+  async function updateDocument({ document_id, text, version_notes, status = 'published' }) {
     if (!token) return addToast('Please login first', 'warning', 'Auth')
-    const headers = { 'Content-Type':'application/json', 'Authorization': `Bearer ${token}` };
+    const headers = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` };
     if (sessionId) headers['X-Session-ID'] = sessionId;
     try {
-      const res = await fetch(BASE_API_URL + `/api/rag/documents/update`, { method:'POST', headers: headers, body: JSON.stringify({ document_id, text, version_notes, status }) })
-      if (!res.ok){ const txt = await res.text().catch(()=>res.statusText); throw new Error(txt || 'Update error') }
+      const res = await fetch(BASE_API_URL + `/api/rag/documents/update`, { method: 'POST', headers: headers, body: JSON.stringify({ document_id, text, version_notes, status }) })
+      if (!res.ok) { const txt = await res.text().catch(() => res.statusText); throw new Error(txt || 'Update error') }
       const data = await res.json(); addToast('Document updated', 'success'); return data
-    } catch(err){ addToast(err.message || 'Update error','danger'); throw err }
+    } catch (err) { addToast(err.message || 'Update error', 'danger'); throw err }
   }
 
-  async function seedDocuments(){
+  async function seedDocuments() {
     if (!token) return addToast('Please login first', 'warning', 'Auth')
     const headers = { 'Authorization': `Bearer ${token}` };
     if (sessionId) headers['X-Session-ID'] = sessionId;
     try {
-      const res = await fetch(BASE_API_URL + `/api/rag/documents/seed`, { method:'POST', headers: headers })
-      if (!res.ok){ const txt = await res.text().catch(()=>res.statusText); throw new Error(txt || 'Seed error') }
+      const res = await fetch(BASE_API_URL + `/api/rag/documents/seed`, { method: 'POST', headers: headers })
+      if (!res.ok) { const txt = await res.text().catch(() => res.statusText); throw new Error(txt || 'Seed error') }
       const data = await res.json(); addToast('Documents seeded', 'success'); return data
-    } catch(err){ addToast(err.message || 'Seed error','danger'); throw err }
+    } catch (err) { addToast(err.message || 'Seed error', 'danger'); throw err }
   }
 
-  async function compareDocumentVersions(documentId, version1, version2){
+  async function compareDocumentVersions(documentId, version1, version2) {
     if (!token) return addToast('Please login first', 'warning', 'Auth')
     const headers = { 'Authorization': `Bearer ${token}` };
     if (sessionId) headers['X-Session-ID'] = sessionId;
@@ -206,22 +206,22 @@ export default function RAGChat({ onLogout }){
     try {
       const res = await fetch(BASE_API_URL + `/api/rag/documents/${documentId}/compare?${params}`, { headers: headers })
       if (!res.ok) throw new Error('Failed to compare versions'); const data = await res.json(); return data
-    } catch(err){ addToast(err.message || 'Compare error','danger'); return null }
+    } catch (err) { addToast(err.message || 'Compare error', 'danger'); return null }
   }
 
-  async function archiveDocumentVersion(documentId, version){
+  async function archiveDocumentVersion(documentId, version) {
     if (!token) return addToast('Please login first', 'warning', 'Auth')
     const headers = { 'Authorization': `Bearer ${token}` };
     if (sessionId) headers['X-Session-ID'] = sessionId;
     const params = new URLSearchParams({ version }).toString();
     try {
-      const res = await fetch(BASE_API_URL + `/api/rag/documents/${documentId}/archive?${params}`, { method:'POST', headers: headers })
-      if (!res.ok){ const txt = await res.text().catch(()=>res.statusText); throw new Error(txt || 'Archive error') }
+      const res = await fetch(BASE_API_URL + `/api/rag/documents/${documentId}/archive?${params}`, { method: 'POST', headers: headers })
+      if (!res.ok) { const txt = await res.text().catch(() => res.statusText); throw new Error(txt || 'Archive error') }
       const data = await res.json(); addToast('Version archived', 'success'); return data
-    } catch(err){ addToast(err.message || 'Archive error','danger'); throw err }
+    } catch (err) { addToast(err.message || 'Archive error', 'danger'); throw err }
   }
 
-  async function testRBACAccess(){
+  async function testRBACAccess() {
     if (!token) return addToast('Please login first', 'warning', 'Auth')
     try {
       // Test creating a highly confidential document
@@ -236,7 +236,7 @@ export default function RAGChat({ onLogout }){
       const result = await postAddJson(testDoc);
       addToast('RBAC Test: Document created successfully', 'success');
       return result;
-    } catch(err) {
+    } catch (err) {
       if (err.message.includes('403') || err.message.includes('forbidden')) {
         addToast('RBAC Test: Access denied (expected for non-admin users)', 'warning');
       } else {
@@ -246,206 +246,22 @@ export default function RAGChat({ onLogout }){
     }
   }
 
-  function truncate(text, n=200){ if (!text) return ''; return text.length<=n?text:text.slice(0,n)+'...' }
+  function truncate(text, n = 200) { if (!text) return ''; return text.length <= n ? text : text.slice(0, n) + '...' }
 
   return (
-    <div>
-      <div className="d-flex justify-content-between align-items-center mb-2">
-        <h3>RAG Chat (React)</h3>
-        <div className="d-flex gap-2 align-items-center">
-          {user && (
-            <div className="badge bg-primary">
-              {user.username} ({user.role})
-            </div>
-          )}
-          <div className="form-check form-switch">
-            <input
-              className="form-check-input"
-              type="checkbox"
-              checked={useLlm}
-              onChange={(e) => setUseLlm(e.target.checked)}
-            />
-            <label className="form-check-label">Use LLM</label>
-          </div>
-          <div className="form-check form-switch">
-            <input
-              className="form-check-input"
-              type="checkbox"
-              checked={useDocuments}
-              onChange={(e) => setUseDocuments(e.target.checked)}
-            />
-            <label className="form-check-label">Use Docs</label>
-          </div>
-          <div className="input-group input-group-sm" style={{ width: 110 }}>
-            <span className="input-group-text">Top K</span>
-            <input
-              type="number"
-              className="form-control"
-              min={1}
-              max={20}
-              value={topK}
-              onChange={(e) => setTopK(Number(e.target.value))}
-            />
-          </div>
-          <div className="input-group input-group-sm" style={{ width: 150 }} title="Temperature controls randomness. Low = accurate and predictable. High = creative and unpredictable.">
-            <span className="input-group-text">Temp ({temperature.toFixed(1)})</span>
-            <input
-              type="range"
-              className="form-range"
-              min="0.0"
-              max="1.0"
-              step="0.1"
-              value={temperature}
-              onChange={(e) => setTemperature(parseFloat(e.target.value))}
-            />
-          </div>
-          <select
-            className="form-select form-select-sm"
-            style={{ width: 160 }}
-            value={modelProvider}
-            onChange={(e) => setModelProvider(e.target.value)}
-          >
-            <option value="local">Local</option>
-            <option value="google">Google</option>
-            <option value="gpt">OpenAI GPT</option>
-            <option value="hf">Hugging Face</option>
-          </select>
-          {modelProvider === 'local' && (
-            <select
-              className="form-select form-select-sm"
-              style={{ width: 140 }}
-              value={localLlmModel}
-              onChange={(e) => setLocalLlmModel(e.target.value)}
-            >
-              <option value="llama32-1b">Llama 3.2 1B</option>
-              <option value="llama32-3b">Llama 3.2 3B</option>
-              <option value="llama31-8b">Llama 3.1 8B</option>
-              <option value="phi3-mini">Phi-3 Mini</option>
-              <option value="gemma2-2b">Gemma 2 2B</option>
-              <option value="distilgpt2-company-tuned">DistilGPT2 Company Tuned</option>
-            </select>
-          )}
-          <select
-            className="form-select form-select-sm"
-            style={{ width: 120 }}
-            value={theme}
-            onChange={(e) => setTheme(e.target.value)}
-          >
-            <option value="system">System</option>
-            <option value="light">Light</option>
-            <option value="dark">Dark</option>
-          </select>
-          <button
-            className="btn btn-sm btn-outline-secondary me-2"
-            onClick={() => setShowAdminPanel(!showAdminPanel)}
-          >
-            {showAdminPanel ? 'Hide' : 'Show'} Admin
-          </button>
-          <button
-            className="btn btn-sm btn-outline-danger"
-            onClick={handleLogout}
-          >
-            Logout
-          </button>
-        </div>
-      </div>
-
+    <div style={{ height: '100vh', overflow: 'hidden' }}>
       <div className="row g-3">
-        {showAdminPanel && (
-          <div className="col-md-3">
-            <div className="card mb-3">
-              <div className="card-header">Admin Panel</div>
-              <div className="card-body">
-                <div className="d-grid gap-2">
-                  <button
-                    className="btn btn-outline-primary"
-                    onClick={async () => {
-                      const list = await listDocuments();
-                      console.log("Documents:", list);
-                      addToast("Documents listed (console)", "info");
-                    }}
-                  >
-                    List Documents
-                  </button>
-                  <button
-                    className="btn btn-outline-success"
-                    onClick={async () => {
-                      await seedDocuments();
-                    }}
-                  >
-                    Seed Documents
-                  </button>
-                  <button
-                    className="btn btn-outline-warning"
-                    data-bs-toggle="modal"
-                    data-bs-target="#updateMetadataModal"
-                  >
-                    Update Metadata
-                  </button>
-                  <button
-                    className="btn btn-outline-danger"
-                    onClick={testRBACAccess}
-                  >
-                    Test RBAC
-                  </button>
-                  <button
-                    className="btn btn-outline-secondary"
-                    data-bs-toggle="modal"
-                    data-bs-target="#documentVersionModal"
-                  >
-                    Version Manager
-                  </button>
-                  <button
-                    className="btn btn-outline-primary"
-                    data-bs-toggle="modal"
-                    data-bs-target="#personalizedTestModal"
-                  >
-                    Test Personalization
-                  </button>
-                </div>
-                <hr />
-                <div className="small text-muted">
-                  Messages: {messages.length}
-                </div>
-                <div className="small text-muted">
-                  Last activity:{" "}
-                  {messages.length ? messages[messages.length - 1].ts : "-"}
-                </div>
-              </div>
-            </div>
-
-            <div className="card">
-              <div className="card-header">Add Document</div>
-              <div className="card-body">
-                <button
-                  className="btn btn-success w-100 mb-2"
-                  data-bs-toggle="modal"
-                  data-bs-target="#addJsonModal"
-                >
-                  Add JSON Doc
-                </button>
-                <button
-                  className="btn btn-info w-100"
-                  data-bs-toggle="modal"
-                  data-bs-target="#uploadFileModal"
-                >
-                  Upload File
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-        <div className={showAdminPanel ? "col-md-9" : "col-md-12"}>
+        <div className="col-md-9">
           <div className="card h-100">
             <div className="card-body d-flex flex-column">
               <div className="d-flex justify-content-between mb-2">
-                <h5>Chat</h5>
+                <h5>RAG Chat (React)</h5>
                 <small className="text-muted">Session: {sessionId || 'none'}</small>
               </div>
               <div
                 ref={messagesRef}
                 style={{
-                  height: "60vh",
+                  height: "73vh",
                   overflowY: "auto",
                   padding: 12,
                   borderRadius: 8,
@@ -454,16 +270,14 @@ export default function RAGChat({ onLogout }){
                 {messages.map((m, idx) => (
                   <div
                     key={idx}
-                    className={`d-flex mb-3 ${
-                      m.role === "user"
-                        ? "justify-content-end"
-                        : "justify-content-start"
-                    }`}
+                    className={`d-flex mb-3 ${m.role === "user"
+                      ? "justify-content-end"
+                      : "justify-content-start"
+                      }`}
                   >
                     <div
-                      className={`p-3 rounded ${
-                        m.role === "user" ? "text-white" : ""
-                      }`}
+                      className={`p-3 rounded ${m.role === "user" ? "text-white" : ""
+                        }`}
                       style={{
                         background: m.role === "user" ? "#0d6efd" : "#2d702fff",
                         maxWidth: "75%",
@@ -510,7 +324,7 @@ export default function RAGChat({ onLogout }){
                                   {r.metadata &&
                                     (r.metadata.sensitivity === "restricted" ||
                                       r.metadata.sensitivity ===
-                                        "confidential") && (
+                                      "confidential") && (
                                       <button
                                         className="btn btn-sm btn-outline-primary mt-2"
                                         onClick={() =>
@@ -558,7 +372,6 @@ export default function RAGChat({ onLogout }){
                   </div>
                 ))}
               </div>
-
               <div className="mt-3">
                 <div className="d-flex gap-2">
                   <textarea
@@ -577,91 +390,202 @@ export default function RAGChat({ onLogout }){
                       >
                         {inFlight ? "Sending..." : "Send"}
                       </button>
-                      <label className="btn btn-outline-secondary mb-0 ms-2">
-                        Attach{" "}
-                        <input
-                          type="file"
-                          style={{ display: "none" }}
-                          onChange={(e) => setSelectedFile(e.target.files[0])}
-                        />
-                      </label>
-                      <button
-                        className="btn btn-outline-success ms-2"
-                        data-bs-toggle="modal"
-                        data-bs-target="#addJsonModal"
-                      >
-                        Add JSON
-                      </button>
-                      <button
-                        className="btn btn-outline-info ms-2"
-                        data-bs-toggle="modal"
-                        data-bs-target="#uploadFileModal"
-                      >
-                        Upload File
-                      </button>
-                    </div>
-                    <div className="small text-muted">
-                      Top K: {topK} • Use LLM: {useLlm ? "on" : "off"} • Use Docs: {useDocuments ? "on" : "off"} • Temp: {temperature.toFixed(1)}
-                      {modelProvider === 'local' && ` • Model: ${localLlmModel}`}
                     </div>
                   </div>
                 </div>
-
-                {selectedFile && (
-                  <div className="mt-2">
-                    <strong>Selected:</strong> {selectedFile.name}{" "}
-                    <button
-                      className="btn btn-sm btn-outline-danger ms-2"
-                      onClick={() => setSelectedFile(null)}
-                    >
-                      Remove
-                    </button>
-                    <div className="mt-2 d-flex gap-2">
-                      <input
-                        className="form-control form-control-sm"
-                        placeholder="Department"
-                        value={fileMeta.department}
-                        onChange={(e) =>
-                          setFileMeta({
-                            ...fileMeta,
-                            department: e.target.value,
-                          })
-                        }
-                      />
-                      <select
-                        className="form-select form-select-sm"
-                        value={fileMeta.sensitivity}
-                        onChange={(e) =>
-                          setFileMeta({
-                            ...fileMeta,
-                            sensitivity: e.target.value,
-                          })
-                        }
-                      >
-                        <option value="public_internal">Public Internal</option>
-                        <option value="department_confidential">Department Confidential</option>
-                        <option value="role_confidential">Role Confidential</option>
-                        <option value="highly_confidential">Highly Confidential</option>
-                        <option value="personal">Personal</option>
-                      </select>
-                      <input
-                        className="form-control form-control-sm"
-                        placeholder="tags"
-                        value={fileMeta.tags}
-                        onChange={(e) =>
-                          setFileMeta({ ...fileMeta, tags: e.target.value })
-                        }
-                      />
-                    </div>
-                  </div>
-                )}
               </div>
             </div>
           </div>
         </div>
+        <div className="col-md-3" style={{ height: '100vh', overflowY: 'auto' }}>
+          <div className="card mb-3">
+            <div className="card-header d-flex justify-content-between">
+              Controls
+              <button
+                className="btn btn-sm btn-outline-secondary"
+                onClick={() => setShowAdminPanel(!showAdminPanel)}
+              >
+                {showAdminPanel ? 'Hide' : 'Show'} Admin
+              </button>
+            </div>
+            <div className="card-body">
+              <div className="d-flex flex-column gap-2">
+                {user && (
+                  <div className="badge bg-primary">
+                    {user.username} ({user.role})
+                  </div>
+                )}
+                <div className="form-check form-switch">
+                  <input
+                    className="form-check-input"
+                    type="checkbox"
+                    checked={useLlm}
+                    onChange={(e) => setUseLlm(e.target.checked)}
+                  />
+                  <label className="form-check-label">Use LLM</label>
+                </div>
+                <div className="form-check form-switch">
+                  <input
+                    className="form-check-input"
+                    type="checkbox"
+                    checked={useDocuments}
+                    onChange={(e) => setUseDocuments(e.target.checked)}
+                  />
+                  <label className="form-check-label">Use Docs</label>
+                </div>
+                <div className="input-group input-group-sm">
+                  <span className="input-group-text">Top K</span>
+                  <input
+                    type="number"
+                    className="form-control"
+                    min={1}
+                    max={20}
+                    value={topK}
+                    onChange={(e) => setTopK(Number(e.target.value))}
+                  />
+                </div>
+                <div className="input-group input-group-sm" title="Temperature controls randomness. Low = accurate and predictable. High = creative and unpredictable.">
+                  <span className="input-group-text">Temp ({temperature.toFixed(1)})</span>
+                  <input
+                    type="range"
+                    className="form-range"
+                    min="0.0"
+                    max="1.0"
+                    step="0.1"
+                    value={temperature}
+                    onChange={(e) => setTemperature(parseFloat(e.target.value))}
+                  />
+                </div>
+                <select
+                  className="form-select form-select-sm"
+                  value={modelProvider}
+                  onChange={(e) => setModelProvider(e.target.value)}
+                >
+                  <option value="local">Local</option>
+                  <option value="google">Google</option>
+                  <option value="gpt">OpenAI GPT</option>
+                  <option value="hf">Hugging Face</option>
+                </select>
+                {modelProvider === 'local' && (
+                  <select
+                    className="form-select form-select-sm"
+                    value={localLlmModel}
+                    onChange={(e) => setLocalLlmModel(e.target.value)}
+                  >
+                    <option value="llama32-1b">Llama 3.2 1B</option>
+                    <option value="llama32-3b">Llama 3.2 3B</option>
+                    <option value="llama31-8b">Llama 3.1 8B</option>
+                    <option value="phi3-mini">Phi-3 Mini</option>
+                    <option value="gemma2-2b">Gemma 2 2B</option>
+                    <option value="distilgpt2-company-tuned">DistilGPT2 Company Tuned</option>
+                  </select>
+                )}
+                <select
+                  className="form-select form-select-sm"
+                  value={theme}
+                  onChange={(e) => setTheme(e.target.value)}
+                >
+                  <option value="system">System</option>
+                  <option value="light">Light</option>
+                  <option value="dark">Dark</option>
+                </select>
+                <button
+                  className="btn btn-sm btn-outline-danger"
+                  onClick={handleLogout}
+                >
+                  Logout
+                </button>
+              </div>
+            </div>
+          </div>
 
+          {showAdminPanel && (
+            <div>
+              <div className="card mb-3">
+                <div className="card-header">Admin Panel</div>
+                <div className="card-body">
+                  <div className="d-grid gap-2">
+                    <button
+                      className="btn btn-outline-primary"
+                      onClick={async () => {
+                        const list = await listDocuments();
+                        console.log("Documents:", list);
+                        addToast("Documents listed (console)", "info");
+                      }}
+                    >
+                      List Documents
+                    </button>
+                    <button
+                      className="btn btn-outline-success"
+                      onClick={async () => {
+                        await seedDocuments();
+                      }}
+                    >
+                      Seed Documents
+                    </button>
+                    <button
+                      className="btn btn-outline-warning"
+                      data-bs-toggle="modal"
+                      data-bs-target="#updateMetadataModal"
+                    >
+                      Update Metadata
+                    </button>
+                    <button
+                      className="btn btn-outline-danger"
+                      onClick={testRBACAccess}
+                    >
+                      Test RBAC
+                    </button>
+                    <button
+                      className="btn btn-outline-secondary"
+                      data-bs-toggle="modal"
+                      data-bs-target="#documentVersionModal"
+                    >
+                      Version Manager
+                    </button>
+                    <button
+                      className="btn btn-outline-primary"
+                      data-bs-toggle="modal"
+                      data-bs-target="#personalizedTestModal"
+                    >
+                      Test Personalization
+                    </button>
+                  </div>
+                  <hr />
+                  <div className="small text-muted">
+                    Messages: {messages.length}
+                  </div>
+                  <div className="small text-muted">
+                    Last activity:{" "}
+                    {messages.length ? messages[messages.length - 1].ts : "-"}
+                  </div>
+                </div>
+              </div>
 
+              <div className="card">
+                <div className="card-header">Add Document</div>
+                <div className="card-body">
+                  <button
+                    className="btn btn-success w-100 mb-2"
+                    data-bs-toggle="modal"
+                    data-bs-target="#addJsonModal"
+                  >
+                    Add JSON Doc
+                  </button>
+                  <button
+                    className="btn btn-info w-100"
+                    data-bs-toggle="modal"
+                    data-bs-target="#uploadFileModal"
+                  >
+                    Upload File
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
+
 
       {/* Modals */}
       <div

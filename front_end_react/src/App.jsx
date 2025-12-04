@@ -3,7 +3,7 @@ import RAGChat from './components/RAGChat.jsx'
 import Login from './components/Login.jsx'
 import { getStoredToken, getStoredUser, setStoredToken, setStoredUser } from './utility/auth.js'
 
-export default function App(){ 
+export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [loading, setLoading] = useState(true)
 
@@ -11,7 +11,7 @@ export default function App(){
     // Check if user is already logged in
     const token = getStoredToken()
     const user = getStoredUser()
-    
+
     if (token && user) {
       setIsAuthenticated(true)
     }
@@ -35,7 +35,7 @@ export default function App(){
 
   if (loading) {
     return (
-      <div className="container-fluid p-3 d-flex justify-content-center align-items-center" style={{ minHeight: '100vh' }}>
+      <div className="container-fluid d-flex justify-content-center align-items-center" style={{ minHeight: '100vh' }}>
         <div className="spinner-border" role="status">
           <span className="visually-hidden">Loading...</span>
         </div>
@@ -44,7 +44,7 @@ export default function App(){
   }
 
   return (
-    <div className="container-fluid p-3">
+    <div className="container-fluid">
       {isAuthenticated ? (
         <RAGChat onLogout={handleLogout} />
       ) : (
