@@ -45,8 +45,15 @@ DUMMY_USERS = [
         "password": "emp123",
         "user_id": "u_emp_1",
         "role": "Employee",
-        "department": "Sales"
-    }
+        "department": "Engineering"
+    },
+    {
+        "username": "guest",
+        "password": "guest123",
+        "user_id": "u_guest_1",
+        "role": "Guest",
+        "department": "General"
+    },
 ]
 
 # Database path (moved from user_service.py)
