@@ -93,11 +93,17 @@ class RAGOrchestrator(IRAGOrchestrator):
                 provider_config = request.provider_specific or {}
                 provider = await create_provider(request.provider, provider_config)
                 
+                # Format history
+                history_str = ""
+                if session_history:
+                    history_str = self.session_manager.render_history(session_history)
+
                 final_prompt = await self.prompt_chain.build_prompt(
                     question=request.question,
                     context=context,
                     user=request.user,
                     session_id=session_id,
+                    history=history_str,
                     category=request.category
                 )
                 logger.info("Generated final prompt: ====START==== \n%s\n====END===", final_prompt)

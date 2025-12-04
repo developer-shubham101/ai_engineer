@@ -12,6 +12,7 @@ class PromptContext:
     user: Optional[Dict[str, Any]] = None
     question: str = ""
     context: str = ""
+    history: str = ""
     category: Optional[str] = None
     session_id: Optional[str] = None
     enhanced_query: str = ""
@@ -113,7 +114,8 @@ class UserPromptHandler(PromptHandler):
     """Builds user prompt."""
     
     async def process(self, context: PromptContext) -> PromptContext:
-        context.user_prompt = f"Question: {context.enhanced_query}\n\nContext:\n{context.context}"
+        history_section = f"Conversation History:\n{context.history}\n\n" if context.history else ""
+        context.user_prompt = f"{history_section}Question: {context.enhanced_query}\n\nContext:\n{context.context}"
         return context
 
 
@@ -199,12 +201,14 @@ class PromptChain:
     async def build_prompt(self, question: str, context: str = "", 
                           user: Optional[Dict[str, Any]] = None,
                           session_id: Optional[str] = None,
+                          history: str = "",
                           category: Optional[str] = None) -> str:
         """Build prompt with dynamic chain based on available data."""
         prompt_context = PromptContext(
             user=user,
             question=question,
             context=context,
+            history=history,
             category=category,
             session_id=session_id
         )

@@ -595,6 +595,7 @@ class PromptContext:
     user: Optional[Dict[str, Any]] = None
     question: str = ""
     context: str = ""
+    history: str = ""  # Added history field
     category: Optional[str] = None
     session_id: Optional[str] = None
     enhanced_query: str = ""
@@ -685,6 +686,34 @@ enhanced_query = await chain.build_enhanced_query(
 - **Testability**: Each handler can be tested independently
 - **Performance**: Only necessary handlers are executed
 - **Maintainability**: Clear separation of prompt building concerns
+
+### Session History Integration
+
+The prompt chain automatically includes conversation history when available, enabling context-aware responses:
+
+**How It Works:**
+1. `RAGOrchestrator` fetches recent messages from `session_manager.fetch_recent_messages(session_id, limit=5)`
+2. History is rendered to string format using `session_manager.render_history(messages)`
+3. History is passed to `prompt_chain.build_prompt(history=history_str)`
+4. `UserPromptHandler` prepends history to the user prompt if available
+
+**History Format:**
+```
+Conversation History:
+[2024-01-01T12:00:00Z] USER: My name is Alice.
+[2024-01-01T12:00:05Z] ASSISTANT: Hello Alice!
+
+Question: What is my name?
+
+Context:
+[Retrieved documents...]
+```
+
+**Benefits:**
+- **Context Retention**: AI remembers previous conversation turns
+- **Follow-up Questions**: Users can ask "What about that?" and AI understands references
+- **Personalized Responses**: AI can reference earlier user statements
+- **Session Continuity**: Works across all LLM providers (Local, Google, GPT, HuggingFace)
 
 ### Integration with RAG Services
 
