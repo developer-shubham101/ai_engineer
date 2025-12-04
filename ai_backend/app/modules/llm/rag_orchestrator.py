@@ -263,7 +263,7 @@ class RAGOrchestrator(IRAGOrchestrator):
     
     async def _get_session_history(self, session_id: Optional[str]) -> List[Dict[str, Any]]:
         """Get session conversation history."""
-        if not session_id or not hasattr(self.session_manager, 'get_recent_messages'):
+        if not session_id or not hasattr(self.session_manager, 'fetch_recent_messages'):
             return []
         return self.session_manager.fetch_recent_messages(session_id, limit=5) or []
     

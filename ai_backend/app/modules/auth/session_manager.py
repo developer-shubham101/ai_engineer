@@ -234,6 +234,8 @@ class SQLiteSessionManager(ISessionManager):
         # Reverse to chronological order and ensure fields are present
         messages = [dict(row) for row in reversed(rows)]
 
+        logger.info("Fetched messages for session %s: %s", session_id, messages)
+
         for m in messages:
             # Parse sentiment_meta JSON if present
             meta_str = m.get("sentiment_meta")
