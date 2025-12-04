@@ -4,8 +4,10 @@ from typing import Dict, Type, Optional, Any
 from abc import ABC, abstractmethod
 import logging
 
-logger = logging.getLogger(__name__)
+from dotenv import load_dotenv
 
+logger = logging.getLogger(__name__)
+load_dotenv()
 
 class ProviderPlugin(ABC):
     """Base class for provider plugins."""
@@ -74,7 +76,8 @@ class GoogleProviderPlugin(ProviderPlugin):
     
     def is_available(self) -> bool:
         import os
-        return bool(os.getenv("GOOGLE_API_KEY"))
+        google_api_key = os.getenv("GOOGLE_API_KEY")
+        return bool(google_api_key)
 
 
 class ProviderRegistry:

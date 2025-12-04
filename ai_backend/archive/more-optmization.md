@@ -5,6 +5,7 @@ These are grouped into **Core RAG**, **Security**, **Support Chat**, **LLM Layer
 
 # 🚀 **1. Core RAG Enhancements**
 
+
 ### ✅ **A. Relevance Re-ranking (Cross-encoder / MiniLM reranker)**
 
 After Chroma returns top_k chunks, pass them through a **local reranker** to boost accuracy.

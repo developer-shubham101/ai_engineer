@@ -72,15 +72,18 @@ class RAGOrchestrator(IRAGOrchestrator):
             if request.user:
                 request.user.update(profile)
             
-            # Retrieve documents
-            documents = await self.retrieve_documents(
-                query=request.question,
-                user=request.user or {},
-                top_k=request.top_k,
-                category=request.category
-            )
-            
-            logger.info("Retrieved documents for query:\n %s", documents)
+            # Retrieve documents only if use_documents is True
+            documents = []
+            if request.use_documents:
+                documents = await self.retrieve_documents(
+                    query=request.question,
+                    user=request.user or {},
+                    top_k=request.top_k,
+                    category=request.category
+                )
+                logger.info("Retrieved documents for query:\n %s", documents)
+            else:
+                logger.info("Document retrieval skipped (use_documents=False)")
 
             # 2. Build context
             context = await self.build_context(documents)

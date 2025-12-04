@@ -22,13 +22,14 @@ class RAGRequest:
     session_id: Optional[str] = None
     top_k: int = 3
     use_llm: bool = True
+    use_documents: bool = True  # Flag to control document retrieval
     max_tokens: int = 256
-    temperature: float = 0.1 # Temperature controls randomness. Low = accurate and predictable. High = creative and unpredictable.
+    temperature: float = 0.1  # Temperature controls randomness. Low = accurate and predictable. High = creative and unpredictable.
     category: Optional[str] = None
     debug: bool = False
     provider: str = "local"
     provider_specific: Optional[Dict[str, Any]] = None
-    metadata: Optional[Dict[str, Any]] = None #not coming from font end
+    metadata: Optional[Dict[str, Any]] = None  # not coming from front end
     
     def __post_init__(self):
         if self.metadata is None:
@@ -42,6 +43,7 @@ class RetrievedDocument:
     text: str
     metadata: Dict[str, Any]
     distance: Optional[float] = None
+
 
 @dataclass
 class RAGResponse:
@@ -131,7 +133,7 @@ class IRAGOrchestrator(ABC):
         pass
     
     @abstractmethod
-    async def generate_response(self, prompt: str, provider: ILLMProvider, max_tokens: int = 256, temperature: float = 0.1) -> Optional[str]:
+    async def generate_response(self, prompt: str, provider, max_tokens: int = 256, temperature: float = 0.1) -> Optional[str]:
         """Generate response using LLM."""
         pass
     
