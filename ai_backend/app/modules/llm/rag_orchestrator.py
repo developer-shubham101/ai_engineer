@@ -8,6 +8,7 @@ from .interfaces import IRAGOrchestrator, RAGRequest, RAGResponse, RetrievedDocu
 
 from .prompt_manager import PromptManager
 from .prompt_chain import PromptChain
+from .langchain_prompt_selector import ConditionalPromptSelector
 from .provider_factory import create_provider
 from .middleware import create_default_middleware_stack
 
@@ -25,6 +26,7 @@ class RAGOrchestrator(IRAGOrchestrator):
         self.session_manager = session_manager
         self.prompt_manager = PromptManager()
         self.prompt_chain = PromptChain(session_manager)
+        self.langchain_selector = ConditionalPromptSelector()
         self.middleware_stack = create_default_middleware_stack()
     
     async def process_query(self, request: RAGRequest) -> RAGResponse:
@@ -111,18 +113,66 @@ class RAGOrchestrator(IRAGOrchestrator):
                 if session_history:
                     history_str = self.session_manager.render_history(session_history)
 
-                final_prompt = await self.prompt_chain.build_prompt(
-                    question=request.question,
-                    context=context,
-                    user=request.user,
-                    session_id=session_id,
-                    history=history_str,
-                    category=request.category
-                )
+                USE_CUSTOM_PROMPT_BUILDER = False
+                if USE_CUSTOM_PROMPT_BUILDER :
+                    final_prompt = await self.prompt_chain.build_prompt(
+                        question=request.question,
+                        context=context,
+                        user=request.user,
+                        session_id=session_id,
+                        history=history_str,
+                        category=request.category
+                    )
+                else:
+                    # Use LangChain dynamic prompt selector
+                    user_role = request.user.get("role", "Guest") if request.user else "Guest"
+                    department = request.user.get("department", "General") if request.user else "General"
+
+                    # Get context size from provider
+                    context_size = getattr(provider, 'context_size', 2048) if provider else 2048
+
+                    # Format source docs
+                    source_docs = "\n".join([f"[{doc.get('id', 'unknown')}]: {doc.get('text', '')[:200]}..."
+                                            for doc in documents[:5]])
+
+                    # Create dynamic prompt
+                    template = self.langchain_selector.get_prompt_template(
+                        context_size=context_size,
+                        user_role=user_role,
+                        department=department,
+                        user_question=request.question,
+                        max_tokens=request.max_tokens
+                    )
+
+                    final_prompt = self.langchain_selector.format_prompt(
+                        template=template,
+                        user_role=user_role,
+                        department=department,
+                        user_profile_summary=str(profile) if profile else "No profile",
+                        source_docs=source_docs,
+                        user_question=request.question,
+                        max_tokens=request.max_tokens
+                    )
                 logger.info("Generated final prompt: ====START==== \n%s\n====END===", final_prompt)
                 
                 response = await self.generate_response(final_prompt, provider, request.max_tokens, request.temperature)
-                answer = response.text if response else "I found relevant documents but couldn't generate a response."
+                
+                # Validate JSON response
+                if response and response.text:
+                    validated = self.langchain_selector.validate_response(response.text)
+                    if validated:
+                        answer = validated.model_dump_json()
+                    else:
+                        # Retry with fallback template
+                        fallback_template = self.langchain_selector.get_fallback_template()
+                        fallback_prompt = fallback_template.format(
+                            user_question=request.question,
+                            source_docs=source_docs
+                        )
+                        retry_response = await self.generate_response(fallback_prompt, provider, request.max_tokens, request.temperature)
+                        answer = retry_response.text if retry_response else '{"answer": "I could not process your request", "sources": [], "confidence": "low"}'
+                else:
+                    answer = '{"answer": "I found relevant documents but couldn\'t generate a response", "sources": [], "confidence": "low"}'
                 
                 log_timestamp = datetime.now().isoformat()
                 logger.info(f"""
