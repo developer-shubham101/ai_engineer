@@ -7,7 +7,8 @@ Tests the complete prompt construction flow without Unicode characters.
 import requests
 import json
 
-from .constants import BASE_URL
+# from .constants import BASE_URL # Removed relative import
+BASE_URL = "http://localhost:8000" # Directly define BASE_URL
 
 ADMIN_CREDENTIALS = {"username": "admin", "password": "admin123"}
 

@@ -135,24 +135,29 @@ class RAGOrchestrator(IRAGOrchestrator):
                     source_docs = "\n".join([f"[{doc.get('id', 'unknown')}]: {doc.get('text', '')[:200]}..."
                                             for doc in documents[:5]])
 
-                    # Create dynamic prompt
-                    template = self.langchain_selector.get_prompt_template(
-                        context_size=context_size,
-                        user_role=user_role,
-                        department=department,
-                        user_question=request.question,
-                        max_tokens=request.max_tokens
-                    )
+                    # Prepare prompt data
+                    prompt_data = {
+                        "context_size": context_size,
+                        "user_role": user_role,
+                        "department": department,
+                        "user_question": request.question,
+                        "max_tokens": request.max_tokens,
+                        "user_profile_summary": str(profile) if profile else "No profile",
+                        "source_docs": source_docs,
+                        "history": history_str  # Include history in prompt_data
+                    }
 
-                    final_prompt = self.langchain_selector.format_prompt(
-                        template=template,
-                        user_role=user_role,
-                        department=department,
-                        user_profile_summary=str(profile) if profile else "No profile",
-                        source_docs=source_docs,
-                        user_question=request.question,
-                        max_tokens=request.max_tokens
-                    )
+                    # Create dynamic prompt
+                    template = self.langchain_selector.get_prompt_template(prompt_data)
+
+                    if not template:
+                        logger.error("Failed to get prompt template.")
+                        final_prompt = f"Question: {request.question}\nSources: {source_docs}"
+                    else:
+                        final_prompt = self.langchain_selector.format_prompt(
+                            template=template,
+                            prompt_data=prompt_data
+                        )
                 logger.info("Generated final prompt: ====START==== \n%s\n====END===", final_prompt)
                 
                 response = await self.generate_response(final_prompt, provider, request.max_tokens, request.temperature)
@@ -166,8 +171,8 @@ class RAGOrchestrator(IRAGOrchestrator):
                         # Retry with fallback template
                         fallback_template = self.langchain_selector.get_fallback_template()
                         fallback_prompt = fallback_template.format(
-                            user_question=request.question,
-                            source_docs=source_docs
+                            user_question=prompt_data.get("user_question", ""),
+                            source_docs=prompt_data.get("source_docs", "")
                         )
                         retry_response = await self.generate_response(fallback_prompt, provider, request.max_tokens, request.temperature)
                         answer = retry_response.text if retry_response else '{"answer": "I could not process your request", "sources": [], "confidence": "low"}'
