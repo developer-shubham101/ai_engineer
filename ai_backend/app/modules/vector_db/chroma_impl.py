@@ -379,3 +379,19 @@ class ChromaVectorStore(IVectorStore):
             "document_count": len(collection_data.get("ids", [])),
             "embedding_dimension": self.embedding_manager.get_embedding_dimension()
         }
+
+    async def get_document_by_id(self, document_id: str) -> Optional[Dict[str, Any]]:
+        """Get document by its ID."""
+        try:
+            result = self.get_documents_by_ids(ids=[document_id])
+            if result and result.get("ids"):
+                doc_index = result["ids"].index(document_id)
+                return {
+                    "id": result["ids"][doc_index],
+                    "text": result["documents"][doc_index],
+                    "metadata": result["metadatas"][doc_index],
+                }
+            return None
+        except Exception as e:
+            logger.exception("Failed to get document by ID: %s", e)
+            return None

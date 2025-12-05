@@ -1,12 +1,14 @@
 """Dependency injection container for modular architecture."""
 
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, Union
 import logging
+import os
 
 from .auth.jwt_auth import JWTAuthenticator
 from .auth.user_manager import SQLiteUserManager
 from .auth.session_manager import SQLiteSessionManager
 from .vector_db.chroma_impl import ChromaVectorStore
+from .vector_db.faiss_vector_store import FaissVectorStore
 from .vector_db.embedding_manager import EmbeddingManager
 from .llm.rag_orchestrator import RAGOrchestrator
 from .core.document_manager import DocumentManager
@@ -33,7 +35,14 @@ class Container:
         self._instances["user_manager"] = SQLiteUserManager()
         self._instances["session_manager"] = SQLiteSessionManager()
         self._instances["embedding_manager"] = EmbeddingManager()
-        self._instances["vector_store"] = ChromaVectorStore(self._instances["embedding_manager"])
+        # Choose vector store based on environment variable
+        vector_store_type = os.getenv("VECTOR_STORE_TYPE", "faiss").lower()
+        if vector_store_type == "faiss":
+            self._instances["vector_store"] = FaissVectorStore(self._instances["embedding_manager"])
+            logger.info("Using FaissVectorStore")
+        else:
+            self._instances["vector_store"] = ChromaVectorStore(self._instances["embedding_manager"])
+            logger.info("Using ChromaVectorStore")
         self._instances["version_manager"] = VersionManager()
         self._instances["document_manager"] = DocumentManager(
             self._instances["vector_store"], 
@@ -67,7 +76,7 @@ class Container:
         """Get authenticator instance."""
         return self._instances.get("authenticator")
     
-    def get_vector_store(self) -> ChromaVectorStore:
+    def get_vector_store(self) -> Union[ChromaVectorStore, FaissVectorStore]:
         """Get vector store instance."""
         return self._instances.get("vector_store")
     

@@ -17,6 +17,7 @@ from app.modules.core.utils import (
     is_collection_empty,
 )
 from app.modules.config.settings import settings
+from app.modules.vector_db.interfaces import IVectorStore
 from app.utils.doc_parser import parse_file
 
 logger = logging.getLogger(__name__)
@@ -25,7 +26,7 @@ logger = logging.getLogger(__name__)
 class DocumentManager:
     """Document management implementation."""
 
-    def __init__(self, vector_store: ChromaVectorStore, version_manager: VersionManager, embedding_manager: EmbeddingManager):
+    def __init__(self, vector_store: IVectorStore, version_manager: VersionManager, embedding_manager: EmbeddingManager):
         self.vector_store = vector_store
         self.version_manager = version_manager
         self.embedding_manager = embedding_manager

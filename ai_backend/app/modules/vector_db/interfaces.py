@@ -7,6 +7,10 @@ from typing import List, Dict, Any, Optional
 class IVectorStore(ABC):
     """Interface for vector database operations."""
 
+    # =========================================================================
+    # Core CRUD Operations (Single Document)
+    # =========================================================================
+
     @abstractmethod
     async def add_document(self, text: str, metadata: Dict[str, Any]) -> str:
         """Add document to vector store."""
@@ -31,6 +35,70 @@ class IVectorStore(ABC):
     @abstractmethod
     def get_collection_info(self) -> Dict[str, Any]:
         """Get information about the collection."""
+        pass
+
+    @abstractmethod
+    async def get_document_by_id(self, document_id: str) -> Optional[Dict[str, Any]]:
+        """Get document by its ID."""
+        pass
+
+    # =========================================================================
+    # Batch Operations
+    # =========================================================================
+
+    @abstractmethod
+    def add_documents_to_collection(self,
+                                    documents: List[str],
+                                    metadatas: List[Dict[str, Any]],
+                                    ids: List[str],
+                                    embeddings: Optional[List[List[float]]] = None) -> None:
+        """Add multiple documents to the collection with optional pre-computed embeddings."""
+        pass
+
+    @abstractmethod
+    def get_documents_by_ids(self, ids: List[str]) -> Dict[str, Any]:
+        """Get multiple documents by their IDs."""
+        pass
+
+    @abstractmethod
+    def delete_ids(self, ids: List[str]) -> None:
+        """Delete multiple documents by their IDs."""
+        pass
+
+    @abstractmethod
+    def update_metadatas(self, ids: List[str], metadata: Dict[str, Any]) -> bool:
+        """Update metadata for multiple documents."""
+        pass
+
+    # =========================================================================
+    # Query Operations
+    # =========================================================================
+
+    @abstractmethod
+    def query_collection(self,
+                         query_embeddings: Optional[List[List[float]]] = None,
+                         query_texts: Optional[List[str]] = None,
+                         n_results: int = 3) -> Dict[str, Any]:
+        """Query the collection using embeddings or text."""
+        pass
+
+    # =========================================================================
+    # Collection Management
+    # =========================================================================
+
+    @abstractmethod
+    def get_collection_data(self) -> Dict[str, Any]:
+        """Get all data from the collection."""
+        pass
+
+    @abstractmethod
+    def delete_all_documents(self) -> None:
+        """Delete all documents from the collection."""
+        pass
+
+    @abstractmethod
+    def delete_collection_by_name(self) -> None:
+        """Delete the entire collection."""
         pass
 
 
