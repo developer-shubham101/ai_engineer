@@ -14,7 +14,7 @@ A **production-ready multi-provider RAG system** supporting both **offline-first
 ### Supported Providers
 - **Local Models**: Auto-selected from local_models.json (Mistral-7B, Phi-2, Llama-3.2, Gemma-2B via llama-cpp-python)
 - **Cloud APIs**: Google Gemini-2.5-Flash/Pro, OpenAI GPT-3.5/4, Hugging Face Inference API
-- **Shared Components**: ChromaDB vectors, BGE embeddings, SQLite sessions
+- **Shared Components**: Configurable Vector Store (ChromaDB or FAISS), BGE embeddings, SQLite sessions
 
 ### Key Features
 - ✅ **Multi-provider LLM support** with unified API
@@ -62,6 +62,7 @@ User Request → FastAPI Router → Container → Modular Services → Response
 
 **🗄️ Vector DB Module** (`app/modules/vector_db/`)
 - `chroma_impl.py` - ChromaDB implementation
+- `faiss_vector_store.py` - FAISS implementation (configurable via `VECTOR_STORE_TYPE` env var)
 - `embedding_manager.py` - Embedding model management
 - `interfaces.py` - Vector database interfaces
 
@@ -553,6 +554,7 @@ A comprehensive test suite validates temperature parameter acceptance:
 - **Compressed Prefixes**: Ultra-compact system instructions (60-80 tokens vs 200+ previously)
 - **Debug Exposure**: `final_prompt` field in API responses for optimization analysis
 - **Chain of Responsibility**: Dynamic prompt building with modular handlers for different contexts
+- **Dynamic Template Selection**: Context-aware template loading from external files (e.g., `prompt_templates/long_context_template.txt`)
 - **Personalization**: Context-aware prompt enhancement based on user profile and session history
 
 ### Enhanced Logging & Debugging

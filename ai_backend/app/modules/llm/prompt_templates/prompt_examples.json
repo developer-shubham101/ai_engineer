@@ -1,14 +1,14 @@
 {
     "HR": [
-        {"q": "What is the leave policy?", "a": "{\"answer\": \"Annual leave is 20 days per year\", \"sources\": [\"hr_policy_001\"], \"confidence\": \"high\"}"}, 
-        {"q": "How do I apply for sick leave?", "a": "{\"answer\": \"Submit form HR-101 to your manager\", \"sources\": [\"hr_forms_002\"], \"confidence\": \"high\"}"}
+        {"q": "What is the leave policy?", "a": "Annual leave is 20 days per year"},
+        {"q": "How do I apply for sick leave?", "a": "Submit form HR-101 to your manager"}
     ],
     "Engineering": [
-        {"q": "What are our coding standards?", "a": "{\"answer\": \"Follow PEP 8 for Python, ESLint for JS\", \"sources\": [\"dev_guide_001\"], \"confidence\": \"high\"}"}, 
-        {"q": "How do I deploy to production?", "a": "{\"answer\": \"Use CI/CD pipeline via Jenkins\", \"sources\": [\"deploy_guide_002\"], \"confidence\": \"medium\"}"}
+        {"q": "What are our coding standards?", "a": "Follow PEP 8 for Python, ESLint for JS"},
+        {"q": "How do I deploy to production?", "a": "Use CI/CD pipeline via Jenkins"}
     ],
     "Finance": [
-        {"q": "What is the expense limit?", "a": "{\"answer\": \"Up to $500 without approval\", \"sources\": [\"finance_policy_001\"], \"confidence\": \"high\"}"}, 
-        {"q": "How do I submit receipts?", "a": "{\"answer\": \"Upload to expense portal within 30 days\", \"sources\": [\"expense_guide_002\"], \"confidence\": \"high\"}"}
+        {"q": "What is the expense limit?", "a": "Up to $500 without approval"},
+        {"q": "How do I submit receipts?", "a": "Upload to expense portal within 30 days"}
     ]
 }

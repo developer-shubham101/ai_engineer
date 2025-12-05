@@ -16,6 +16,7 @@ database/*.db
 
 # ChromaDB storage
 chroma_storage/
+faiss_index.pkl
 
 # Logs
 logs/
