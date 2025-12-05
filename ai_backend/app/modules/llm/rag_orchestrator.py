@@ -2,6 +2,7 @@
 
 import logging
 from typing import List, Dict, Any, Optional
+from datetime import datetime
 
 from .interfaces import IRAGOrchestrator, RAGRequest, RAGResponse, RetrievedDocument, LLMResponse
 
@@ -62,12 +63,15 @@ class RAGOrchestrator(IRAGOrchestrator):
                 session_history = []
                 session_id = None
             
-            logger.info("Processing query for user: %s, session: %s", user_id, session_id)
-            logger.info("User role: %s", user_role)
-            logger.info("User profile: %s", profile)
-            logger.info("Session history: %s", session_history)
-            logger.info("Session ID: %s", session_id)
-            logger.info("User: %s", request.user) 
+            log_timestamp = datetime.now().isoformat()
+            logger.info(f"""
+            [DEBUG LOG - {log_timestamp}]
+            ==================================================
+            User Query: {request.question}
+            User Profile: {profile}
+            ==================================================
+            """)
+
             # Update request with profile and history
             if request.user:
                 request.user.update(profile)
@@ -81,7 +85,13 @@ class RAGOrchestrator(IRAGOrchestrator):
                     top_k=request.top_k,
                     category=request.category
                 )
-                logger.info("Retrieved documents for query:\n %s", documents)
+                log_timestamp = datetime.now().isoformat()
+                logger.info(f"""
+                [DEBUG LOG - {log_timestamp}]
+                ==================================================
+                Fetched Documents: {documents}
+                ==================================================
+                """)
             else:
                 logger.info("Document retrieval skipped (use_documents=False)")
 
@@ -114,6 +124,14 @@ class RAGOrchestrator(IRAGOrchestrator):
                 response = await self.generate_response(final_prompt, provider, request.max_tokens, request.temperature)
                 answer = response.text if response else "I found relevant documents but couldn't generate a response."
                 
+                log_timestamp = datetime.now().isoformat()
+                logger.info(f"""
+                [DEBUG LOG - {log_timestamp}]
+                ==================================================
+                Final AI Response: {answer}
+                ==================================================
+                """)
+
                 # Store conversation if session exists
                 if session_id:
                     await self._store_conversation(session_id, request.question, answer)
