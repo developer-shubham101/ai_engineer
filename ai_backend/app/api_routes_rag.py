@@ -48,6 +48,7 @@ class QueryRequest(BaseModel):
     question: str
     top_k: int = DEFAULT_TOP_K
     use_llm: bool = False
+    conversation_id: str
     use_documents: bool = True  # Flag to control document retrieval
     max_tokens: int = DEFAULT_MAX_TOKENS
     temperature: float = DEFAULT_TEMPERATURE
@@ -178,6 +179,7 @@ async def query_rag(
         question=req.question,
         user=requester,
         session_id=requester.get("session_id") if requester else None,
+        conversation_id=req.conversation_id,
         top_k=req.top_k,
         use_llm=req.use_llm,
         use_documents=req.use_documents,

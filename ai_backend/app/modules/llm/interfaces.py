@@ -20,6 +20,7 @@ class RAGRequest:
     question: str
     user: Dict[str, Any]
     session_id: Optional[str] = None
+    conversation_id: str = None
     top_k: int = 3
     use_llm: bool = True
     use_documents: bool = True  # Flag to control document retrieval

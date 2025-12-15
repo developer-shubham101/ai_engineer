@@ -77,6 +77,7 @@ class Settings:
         self.DB_CONFIG = db_config
         self.USERS_DB_NAME = db_config.USERS_DB
         self.SESSIONS_DB_NAME = db_config.SESSIONS_DB
+        self.CONVERSATIONS_DB_NAME = db_config.CONVERSATIONS_DB
         self.DOCUMENT_VERSIONS_DB_NAME = db_config.DOCUMENT_VERSIONS_DB
         self.DEFAULT_PERSIST_DIR = str(CHROMA_STORAGE_DIR)
         self.DEFAULT_COLLECTION_NAME = db_config.DEFAULT_COLLECTION_NAME

@@ -1,7 +1,34 @@
 """Core utility functions for the modular architecture."""
 from typing import List, Dict, Any, Optional
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+
 
 def chunk_text_basic(text: str, chunk_size: int = 512, overlap: int = 64) -> List[str]:
+    """
+    Produce overlapping chunks of the input text using LangChain's RecursiveCharacterTextSplitter.
+    
+    Args:
+        text: The input text to chunk
+        chunk_size: Maximum size of each chunk (default: 512)
+        overlap: Number of characters to overlap between chunks (default: 64)
+    
+    Returns:
+        List of text chunks
+    """
+    if not text:
+        return []
+    
+    text_splitter = RecursiveCharacterTextSplitter(
+        chunk_size=chunk_size,
+        chunk_overlap=overlap,
+        length_function=len,
+        is_separator_regex=False,
+    )
+    
+    chunks = text_splitter.split_text(text)
+    return chunks
+
+def deprecated_chunk_text_basic(text: str, chunk_size: int = 512, overlap: int = 64) -> List[str]:
     """
     Produce overlapping chunks of the input text.
     Fixed so we always make progress and produce expected overlaps.

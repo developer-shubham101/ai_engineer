@@ -2,9 +2,10 @@
 
 ## 1. Project Summary
 - A lightweight React frontend for testing and interacting with a role-based enterprise RAG (Retrieval-Augmented Generation) backend.
-- Provides a chat interface, file upload and JSON document ingestion UIs, admin panels for access-requests and metadata updates, and session persistence.
+- Provides a chat interface with **persistent conversation history**, file upload and JSON document ingestion UIs, admin panels for access-requests and metadata updates.
 - Uses JWT token-based authentication with username/password login. All requests include `Authorization: Bearer <token>` header.
 - User roles are determined by the backend based on credentials and embedded in the JWT token (Employee, Manager, HR, Legal, Executive, SuperAdmin).
+- **ChatGPT-like conversation management**: Users can create, switch between, rename, and delete conversations. All messages are persisted to the backend with full RAG pipeline logging.
 - Designed primarily as a developer tool to exercise backend endpoints and demonstrate RAG behavior (retrieved docs, filtered results, public summaries).
 
 ## 2. High-Level Architecture
@@ -12,8 +13,8 @@
 - `src/`
   - `main.jsx` — React entry.
   - `App.jsx` — top-level container with authentication routing.
-  - `components/` — reusable components (Login, RAGChat, AddJsonForm, UploadFileForm, UpdateMetadataForm, ToastList).
-  - `styles.css` — small project-specific styles.
+  - `components/` — reusable components (Login, RAGChat, ConversationSidebar, ConversationMessageDetail, AddJsonForm, UploadFileForm, UpdateMetadataForm, ToastList).
+  - `styles.css` — project styles including conversation sidebar, message details, and responsive layout.
   - `utility/const.js` - Defines constants like `BASE_API_URL`.
   - `utility/auth.js` - JWT token management utilities (encode/decode, localStorage operations).
 - Interacts with backend via REST endpoints at configurable `BASE_API_URL` (default `http://localhost:8000`).
@@ -26,6 +27,7 @@
   - Document management: comprehensive CRUD with versioning, RBAC filtering, and metadata validation.
   - Access workflow: `/request-access`, `/access-requests`, role-based document filtering.
   - Session management: automatic via JWT token (session_id embedded in token payload).
+  - Conversation management: `/api/conversations/*` endpoints for CRUD operations on conversations and messages.
 - Libraries & tools:
   - React 18, Vite, Bootstrap 5 (CDN), Tailwind (optional utilities CDN).
   - Fetch API for network requests (no jQuery in React version).
@@ -40,10 +42,20 @@
 **Authentication:**
 - `POST /api/auth/token` — `{ username, password }` → `{ access_token, token_type, user: { user_id, username, role, department, profile } }`
 
+**Conversation History (NEW - require Bearer token):**
+- `GET /api/conversations` — list all conversations for authenticated user
+- `POST /api/conversations` — create new conversation with optional title
+- `GET /api/conversations/{conversation_id}` — get conversation details
+- `PUT /api/conversations/{conversation_id}` — update conversation (rename)
+- `DELETE /api/conversations/{conversation_id}` — delete conversation (soft delete)
+- `GET /api/conversations/{conversation_id}/messages` — get all messages with full RAG logging
+- `POST /api/conversations/{conversation_id}/restore` — restore conversation to current session
+
 **RAG Operations (require Bearer token):**
-- `POST /api/rag/{model_provider}/query` — `{ question, top_k, use_llm, max_tokens?, category?, local_llm_model? }` → `{ answer, retrieved[], context, filtered_out_count?, public_summaries?, filtered_details? }`
+- `POST /api/rag/{model_provider}/query` — `{ question, top_k, use_llm, max_tokens?, category?, local_llm_model?, conversation_id? }` → `{ answer, retrieved[], context, filtered_out_count?, public_summaries?, filtered_details? }`
   - `model_provider`: `local`, `google`, `gpt`, `hf` (huggingface)
   - `local_llm_model`: Optional parameter for local provider (e.g., "llama32-1b", "llama32-3b", "llama31-8b", "phi3-mini", "gemma2-2b", "distilgpt2-company-tuned")
+  - `conversation_id`: Optional parameter to associate query with a conversation
 
 **Document Management (require Bearer token):**
 - `POST /api/rag/documents/add` — `{ source_name, text, metadata }` → add JSON doc with versioning
@@ -61,7 +73,13 @@
 
 **Client-side functions:**
 - `Login.handleLogin(username, password)` — authenticate and store JWT token
-- `RAGChat.sendQuery(question)` — client-side wrapper for network call to `/api/rag/{model_provider}/query` (includes local_llm_model when provider is 'local')
+- `RAGChat.sendQuery(question)` — client-side wrapper for network call to `/api/rag/{model_provider}/query` (includes local_llm_model and conversation_id)
+- `RAGChat.loadConversations()` — fetch all conversations for current user
+- `RAGChat.createNewConversation(title)` — create new conversation
+- `RAGChat.loadConversationMessages(conversationId)` — load messages from specific conversation
+- `RAGChat.switchConversation(conversationId)` — switch to different conversation
+- `RAGChat.renameConversation(conversationId, newTitle)` — rename conversation
+- `RAGChat.deleteConversation(conversationId)` — delete conversation
 - `RAGChat.postAddJson(payload)` — client-side wrapper for `/api/rag/documents/add`
 - `RAGChat.postUploadFile(formData)` — client-side wrapper for `/api/rag/documents/add-file`
 - `RAGChat.listDocuments(filters)` — client-side wrapper for `/api/rag/documents/list`
@@ -72,7 +90,7 @@
 - `RAGChat.archiveDocumentVersion(documentId, version)` — client-side wrapper for version archiving
 - `RAGChat.testRBACAccess()` — test RBAC restrictions by attempting to create highly confidential document
 - `RAGChat.requestAccess(payload)` — client-side wrapper for `/request-access`
-- `RAGChat.handleLogout()` — clear authentication, chat history, and return to login
+- `RAGChat.handleLogout()` — clear authentication, conversations, and return to login
 
 ## 4. Coding Conventions
 - Languages & versions:
@@ -97,7 +115,9 @@
 - `src/main.jsx` — application bootstrap, mounts React tree.
 - `src/App.jsx` — top-level app container with authentication routing (shows Login or RAGChat based on auth state).
 - `src/components/Login.jsx` — login form with username/password fields and "Login with Guest" button (auto-fills guest/guest123), calls `/api/auth/token` and stores JWT.
-- `src/components/RAGChat.jsx` — core chat UI and main network wrappers. Uses Bearer token authentication. Displays user info and logout button. Includes local LLM model selection for local provider.
+- `src/components/RAGChat.jsx` — core chat UI with conversation history integration. Uses Bearer token authentication. Manages conversations, messages, and sidebar state. Includes local LLM model selection for local provider.
+- `src/components/ConversationSidebar.jsx` — collapsible sidebar showing conversation list with create, rename, and delete functionality.
+- `src/components/ConversationMessageDetail.jsx` — expandable component showing RAG pipeline details (retrieved docs, LLM config, embeddings, sentiment/tone).
 - `src/components/AddJsonForm.jsx` — enhanced modal form to POST `/api/rag/documents/add` with RBAC metadata fields.
 - `src/components/UploadFileForm.jsx` — modal form to POST `/api/rag/documents/add-file` (multipart).
 - `src/components/UpdateMetadataForm.jsx` — modal to update chunk metadata.
@@ -110,6 +130,26 @@
 - `README.md` — run/build instructions; dev notes and backend expectations.
 
 ## 6. Enhanced UI Components
+
+**ConversationSidebar Features:**
+- List all conversations with title, date, and message count
+- Create new conversations with custom titles
+- Rename conversations inline
+- Delete conversations with confirmation
+- Active conversation highlighting
+- Responsive design (collapsible on mobile)
+- Relative time formatting ("2h ago", "3d ago")
+
+**ConversationMessageDetail Features:**
+- Expandable RAG pipeline logging for assistant messages
+- Retrieved documents with metadata and distance scores
+- LLM configuration (provider, model, temperature, tokens)
+- Embeddings information (model, dimensions)
+- Retrieval settings (top_k, use_documents, use_llm)
+- Full LLM prompt and raw response display
+- Sentiment and tone badges with color coding
+- Processing time metrics
+- Error message display
 
 **DocumentVersionModal Features:**
 - Get version history for any document ID

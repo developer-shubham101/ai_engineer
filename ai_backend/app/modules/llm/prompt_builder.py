@@ -293,7 +293,7 @@ async def _invoke_llm_with_chunk_budget(
     try:
         logger.debug("Calling LLM with estimated total tokens=%s (remaining budget=%s). Selected chunks=%d",
                      used_est, remaining, len(selected_chunks))
-        output = await run_in_threadpool(llm_instance, prompt, max_tokens=max_tokens, temperature=0.0)
+        output = await run_in_threadpool(lambda: llm_instance.invoke(prompt, max_tokens=max_tokens, temperature=0.0))
     except ValueError as ve:
         # If the model still complains, attempt a fallback: shrink selected chunks count (drop lowest-scored half) and retry once.
         msg = str(ve)
@@ -310,7 +310,7 @@ async def _invoke_llm_with_chunk_budget(
                 [(c.get(chunk_text_key) if isinstance(c, dict) else str(c)) for c in top_selected])
             retry_prompt = build_prompt_with_selected_chunks(prefix_text, top_selected_text, question_text)
             logger.warning("Retrying LLM with fewer chunks (kept %d of %d)", keep_count, len(selected_chunks))
-            return await run_in_threadpool(llm_instance, retry_prompt, max_tokens=max_tokens, temperature=0.0), {
+            return await run_in_threadpool(lambda: llm_instance.invoke(retry_prompt, max_tokens=max_tokens, temperature=0.0)), {
                 "selected_count": keep_count,
                 "original_selected": len(selected_chunks),
                 "retry": "dropped_low_half"
@@ -360,8 +360,8 @@ async def _call_llm_with_retry(
     """
 
     try:
-        # First attempt
-        return await run_in_threadpool(llm_instance, prompt, max_tokens=max_tokens, temperature=temperature)
+        # First attempt - use invoke() method for LangChain LlamaCpp
+        return await run_in_threadpool(lambda: llm_instance.invoke(prompt, max_tokens=max_tokens, temperature=temperature))
 
     except ValueError as ve:
         msg = str(ve)
@@ -394,7 +394,7 @@ async def _call_llm_with_retry(
                 )
 
                 # Retry now
-                return await run_in_threadpool(llm_instance, new_prompt, max_tokens=max_tokens, temperature=temperature)
+                return await run_in_threadpool(lambda: llm_instance.invoke(new_prompt, max_tokens=max_tokens, temperature=temperature))
 
             except Exception as e:
                 logger.exception("Failed during trim retry: %s", e)

@@ -7,6 +7,7 @@ import os
 from .auth.jwt_auth import JWTAuthenticator
 from .auth.user_manager import SQLiteUserManager
 from .auth.session_manager import SQLiteSessionManager
+from .conversation.conversation_manager import SQLiteConversationManager
 from .vector_db.chroma_impl import ChromaVectorStore
 from .vector_db.faiss_vector_store import FaissVectorStore
 from .vector_db.embedding_manager import EmbeddingManager
@@ -55,10 +56,11 @@ class Container:
         authenticator.user_manager = self._instances["user_manager"]
         self._instances["authenticator"] = authenticator
         
-        # Initialize RAG orchestrator
+        # Initialize RAG orchestrator with conversation manager
         self._instances["rag_orchestrator"] = RAGOrchestrator(
             self._instances["vector_store"],
-            self._instances["session_manager"]
+            self._instances["session_manager"],
+            conversation_manager=self.get_conversation_manager()  # NEW: Inject conversation manager
         )
         
         self._initialized = True
@@ -95,6 +97,15 @@ class Container:
     def get_rag_orchestrator(self) -> RAGOrchestrator:
         """Get RAG orchestrator instance."""
         return self._instances.get("rag_orchestrator")
+    
+    def get_conversation_manager(self) -> SQLiteConversationManager:
+        """Get conversation manager instance."""
+        if "conversation_manager" not in self._instances:
+            from .config.settings import settings
+            db_path = settings.DATABASE_DIR / settings.CONVERSATIONS_DB_NAME
+            self._instances["conversation_manager"] = SQLiteConversationManager(db_path)
+            logger.info(f"Initialized conversation manager with db at {db_path}")
+        return self._instances.get("conversation_manager")
     
     def override_instance(self, key: str, instance: Any) -> None:
         """Override an instance (useful for testing)."""

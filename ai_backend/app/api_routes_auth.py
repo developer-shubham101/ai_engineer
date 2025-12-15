@@ -76,6 +76,18 @@ async def login(request: TokenRequest):
     # Generate access token with session_id
     access_token = await authenticator.create_access_token(user_data, session_id=session_id)
 
+    # Create a new conversation for this login session
+    conversation_id = None
+    try:
+        conversation_manager = container.get_conversation_manager()
+        conversation_id = await conversation_manager.create_conversation(
+            user_id=user_data["user_id"],
+            title="New Conversation"
+        )
+        logger.info(f"Created conversation {conversation_id} for user {user_data['user_id']}")
+    except Exception as e:
+        logger.warning(f"Failed to create conversation: {e}")
+
     # Auto-create support chat session using the new session_id
     try:
         session_manager: ISessionManager = container.get_session_manager()

@@ -1,0 +1,15 @@
+SYSTEM:
+Answer briefly and precisely using SOURCE_DOCS only.
+
+Role: {user_role} | Dept: {department}
+
+SOURCE_DOCS:
+{source_docs}
+
+QUESTION:
+{user_question}
+
+RULES:
+- 3–6 sentences max
+- No filler text
+- Say "Not found in documents" if unsure

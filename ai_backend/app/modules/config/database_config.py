@@ -10,6 +10,7 @@ class DatabaseConfig:
     # Database file names
     USERS_DB = "users.db"
     SESSIONS_DB = "support_sessions.db"
+    CONVERSATIONS_DB = "conversations.db"  # NEW: Conversation history with RAG logging
     DOCUMENT_VERSIONS_DB = "document_versions.db"
     
     # Collection names
@@ -35,6 +36,7 @@ class DatabaseConfig:
         return {
             "users_db": cls.USERS_DB,
             "sessions_db": cls.SESSIONS_DB,
+            "conversations_db": cls.CONVERSATIONS_DB,
             "document_versions_db": cls.DOCUMENT_VERSIONS_DB,
             "default_collection_name": cls.DEFAULT_COLLECTION_NAME,
             "documents_collection": cls.DOCUMENTS_COLLECTION,

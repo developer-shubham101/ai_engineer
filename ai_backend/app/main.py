@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api_routes_auth import router as auth_router
 from app.api_routes_rag import router as rag_router
+from app.api_routes_conversations import router as conversations_router
 from app.logging_config import setup_logging
 from app.modules.integration import get_container
 from app.modules.config import API_PREFIX
@@ -53,6 +54,7 @@ app = FastAPI(
 # Register routers
 app.include_router(auth_router)
 app.include_router(rag_router)
+app.include_router(conversations_router)  # NEW: Conversation history routes
 # app.include_router(training_router)
 
 # CORS (for development only)

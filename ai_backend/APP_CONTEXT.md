@@ -86,6 +86,7 @@ User Request → FastAPI Router → Container → Modular Services → Response
 - `main.py` - FastAPI application with modular initialization
 - `api_routes_rag.py` - RAG endpoints using modular architecture
 - `api_routes_auth.py` - Authentication endpoints using container
+- `api_routes_conversations.py` - Conversation history endpoints (NEW)
 - `api_routes_models.py` - Model management endpoints
 - `dependencies.py` - Dependency injection using container
 - `modules/integration.py` - **Dependency injection container**
@@ -248,6 +249,178 @@ result = await query_local_rag(
 
 ---
 
+## 3.5 Conversation History Management (NEW)
+
+### Overview
+
+The system now supports **persistent conversation history** that is decoupled from ephemeral sessions. This enables ChatGPT-like conversation management where users can:
+- Access conversation history across different devices
+- View and restore previous conversations  
+- Continue conversations from where they left off
+- Full RAG pipeline logging for debugging and analytics
+
+### Architecture
+
+**Database**: `conversations.db` (separate from `support_sessions.db`)
+
+**Tables**:
+1. **conversations** - Conversation metadata
+   - `id` (TEXT PRIMARY KEY): Unique conversation ID (conv_xxx)
+   - `user_id` (TEXT NOT NULL): Owner of conversation
+   - `title` (TEXT): Conversation title (auto-generated or user-set)
+   - `created_at` (TEXT): Creation timestamp
+   - `updated_at` (TEXT): Last update timestamp
+   - `is_archived` (BOOLEAN): Soft delete flag
+   - `metadata` (TEXT): Additional JSON metadata
+
+2. **messages** - Messages with comprehensive RAG logging
+   - Basic fields: `id`, `conversation_id`, `speaker`, `content`, `created_at`
+   - Sentiment: `sentiment`, `tone`, `sentiment_meta`
+   - **RAG Pipeline Logging**:
+     - `user_query`: Original user question
+     - `retrieved_context`: Retrieved documents (JSON)
+     - `embeddings_used`: Embedding model metadata (JSON)
+     - `llm_prompt`: Final prompt sent to LLM
+     - `llm_response_raw`: Raw LLM response
+     - `llm_provider`: Provider used (local, google, hf)
+     - `llm_model`: Model name
+     - `llm_tokens_used`: Token count
+     - `llm_temperature`, `llm_max_tokens`: Parameters
+     - `retrieved_doc_ids`: Document IDs retrieved (comma-separated)
+     - `retrieval_top_k`: Top K parameter
+     - `use_documents`, `use_llm`: Flags
+     - `processing_time_ms`: Performance metric
+     - `error_message`: Error tracking
+
+### Conversation Manager
+
+**Location**: `app/modules/conversation/conversation_manager.py`
+
+**Interface**: `IConversationManager`
+
+**Implementation**: `SQLiteConversationManager`
+
+**Key Methods**:
+```python
+# Conversation CRUD
+async def create_conversation(user_id: str, title: Optional[str]) -> str
+async def get_conversation(conversation_id: str, user_id: str) -> Optional[Dict]
+async def list_conversations(user_id: str, limit: int, offset: int) -> List[Dict]
+async def update_conversation(conversation_id: str, user_id: str, **kwargs) -> bool
+async def delete_conversation(conversation_id: str, user_id: str) -> bool
+
+# Message Management
+async def add_message(conversation_id: str, speaker: str, content: str, ...) -> int
+async def add_rag_message(conversation_id: str, speaker: str, content: str, 
+                          user_query: str, retrieved_context: List[Dict], 
+                          embeddings_used: Dict, llm_prompt: str, ...) -> int
+async def get_messages(conversation_id: str, user_id: str, limit: Optional[int]) -> List[Dict]
+
+# Utilities
+async def generate_title(conversation_id: str) -> str
+```
+
+### API Endpoints
+
+**Base Path**: `/api/conversations`
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/conversations` | List all conversations for user |
+| POST | `/api/conversations` | Create new conversation |
+| GET | `/api/conversations/{id}` | Get specific conversation |
+| PUT | `/api/conversations/{id}` | Update conversation (rename) |
+| DELETE | `/api/conversations/{id}` | Delete conversation (soft delete) |
+| GET | `/api/conversations/{id}/messages` | Get messages with RAG logging |
+| POST | `/api/conversations/{id}/restore` | Restore conversation to session |
+
+### Integration with Authentication
+
+**Login Flow**:
+1. User authenticates via `/api/auth/token`
+2. System creates new conversation automatically
+3. System creates session
+4. Returns JWT with `session_id`
+
+**Code**:
+```python
+# In api_routes_auth.py
+conversation_manager = container.get_conversation_manager()
+conversation_id = await conversation_manager.create_conversation(
+    user_id=user_data["user_id"],
+    title="New Conversation"
+)
+```
+
+### RAG Pipeline Logging
+
+**Purpose**: Every RAG query logs complete pipeline execution for:
+- Debugging failed queries
+- Performance analysis
+- Model comparison
+- Conversation replay
+- Analytics and metrics
+
+**Logged Data**:
+- **Input**: User query, parameters (top_k, temperature, etc.)
+- **Retrieval**: Retrieved documents, embeddings used, document IDs
+- **Generation**: LLM prompt, raw response, provider, model
+- **Performance**: Processing time, token count
+- **Errors**: Error messages if query failed
+
+**Usage Example**:
+```python
+# In RAG query endpoint (future implementation)
+await conversation_manager.add_rag_message(
+    conversation_id=conversation_id,
+    speaker="assistant",
+    content=answer,
+    user_query=request.question,
+    retrieved_context=[{"id": doc.id, "text": doc.text, ...} for doc in docs],
+    embeddings_used={"model": "bge-small-en-v1.5", "dimensions": 384},
+    llm_prompt=final_prompt,
+    llm_response_raw=raw_response,
+    llm_provider="local",
+    llm_model="phi2",
+    llm_temperature=0.1,
+    llm_max_tokens=256,
+    retrieved_doc_ids=[doc.id for doc in docs],
+    retrieval_top_k=3,
+    use_documents=True,
+    use_llm=True,
+    processing_time_ms=1250,
+    error_message=None
+)
+```
+
+### Benefits
+
+✅ **Cross-Device Access**: Conversations tied to user_id, not session_id  
+✅ **Persistent History**: Survives session ends and server restarts  
+✅ **Complete Audit Trail**: Full RAG pipeline logging for every query  
+✅ **Debugging Support**: Replay queries with full context  
+✅ **Analytics Ready**: Query performance metrics and model comparison  
+✅ **ChatGPT-Like UX**: Familiar conversation management interface  
+
+### Migration from Session-Based Messages
+
+**Old Approach** (session_manager.py):
+- Messages stored in `support_sessions.db`
+- Tied to ephemeral sessions
+- Lost when session ends
+- No RAG logging
+
+**New Approach** (conversation_manager.py):
+- Messages stored in `conversations.db`
+- Tied to user accounts
+- Persistent across sessions
+- Comprehensive RAG logging
+
+**Backward Compatibility**: Session-based messages still supported for legacy flows. New RAG queries should use conversation manager.
+
+
+---
+
 ## 4. Directory Structure
 
 ```
@@ -260,6 +433,9 @@ ai_backend/
 │   │   │   ├── session_manager.py  # Session management
 │   │   │   ├── rbac.py            # Role-based access control
 │   │   │   └── interfaces.py      # Auth interfaces
+│   │   ├── conversation/    # Conversation history module (NEW)
+│   │   │   ├── conversation_manager.py # Conversation management with RAG logging
+│   │   │   └── __init__.py        # Module exports
 │   │   ├── llm/             # LLM module
 │   │   │   ├── rag_orchestrator.py # RAG orchestration
 │   │   │   ├── providers.py       # LLM providers
