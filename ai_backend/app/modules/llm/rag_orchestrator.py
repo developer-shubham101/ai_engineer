@@ -125,8 +125,9 @@ class RAGOrchestrator(IRAGOrchestrator):
 
                 # Format history
                 history_str = ""
-                if session_history:
-                    history_str = self.session_manager.render_history(session_history)
+                if request.use_conversation_history:
+                    if session_history:
+                        history_str = self.session_manager.render_history(session_history)
 
                 USE_CUSTOM_PROMPT_BUILDER = False
                 if USE_CUSTOM_PROMPT_BUILDER:
@@ -167,9 +168,18 @@ class RAGOrchestrator(IRAGOrchestrator):
                     }
 
                     logger.info("Prompt data: %s", prompt_data) 
-                    logger.info("Prompt template: %s", request.prompt_template)    
+                    logger.info("Prompt template: %s", request.prompt_template)
+                    logger.info("History string %s", history_str)
+
+                    if request.prompt_template == "raw_prompt":
+                        final_prompt = f"Question: {request.question}\nSources: {source_docs}" 
+                    elif request.prompt_template == "no_template":
+                        final_prompt = request.question 
+                    else:
+                        final_prompt = self.langchain_selector.format_prompt(prompt_data, request.prompt_template)
+                          
                     # Create dynamic prompt
-                    final_prompt = self.langchain_selector.format_prompt(prompt_data, request.prompt_template)
+                    # final_prompt = self.langchain_selector.format_prompt(prompt_data, request.prompt_template)
 
                     # if not template:
                     #     logger.error("Failed to get prompt template.")
@@ -181,7 +191,14 @@ class RAGOrchestrator(IRAGOrchestrator):
                     #     )
                 logger.info("Generated final prompt: ====START==== \n%s\n====END===", final_prompt)
 
-                response = await self.generate_response(final_prompt, provider, request.max_tokens, request.temperature)
+
+                # Use agentic mode if enabled
+                if request.enable_agentic_mode:
+                    # Agentic mode: Add reasoning and action planning to the prompt
+                    agentic_prompt = f"{final_prompt}\n\nThink step by step and provide a detailed response with reasoning."
+                    response = await self.generate_response(agentic_prompt, provider, request.max_tokens, request.temperature)
+                else:
+                    response = await self.generate_response(final_prompt, provider, request.max_tokens, request.temperature)
 
                 # Validate JSON response
                 if response and response.text:

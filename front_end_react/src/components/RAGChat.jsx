@@ -28,6 +28,7 @@ export default function RAGChat({ onLogout }) {
   // Existing state
   const [useLlm, setUseLlm] = useState(false)
   const [useDocuments, setUseDocuments] = useState(true)
+  const [useConversationHistory, setUseConversationHistory] = useState(true)
   const [topK, setTopK] = useState(3)
   const [temperature, setTemperature] = useState(() => parseFloat(localStorage.getItem('temperature')) || 0.1)
   const [composer, setComposer] = useState('')
@@ -263,10 +264,11 @@ export default function RAGChat({ onLogout }) {
     setComposer('')
 
     const payload = {
-      question: composer,
+      question: composer, // Use the captured variable where possible, or just question if that's what was there
       top_k: Number(topK || 3),
       use_llm: !!useLlm,
       use_documents: !!useDocuments,
+      use_conversation_history: !!useConversationHistory,
       temperature: temperature,
       conversation_id: activeConversationId // Include conversation ID
     }
@@ -789,6 +791,15 @@ export default function RAGChat({ onLogout }) {
                     />
                     <label className="form-check-label">Use Docs</label>
                   </div>
+                  <div className="form-check form-switch">
+                    <input
+                      className="form-check-input"
+                      type="checkbox"
+                      checked={useConversationHistory}
+                      onChange={(e) => setUseConversationHistory(e.target.checked)}
+                    />
+                    <label className="form-check-label">Use History</label>
+                  </div>
                   <div className="input-group input-group-sm">
                     <span className="input-group-text">Top K</span>
                     <input
@@ -830,7 +841,8 @@ export default function RAGChat({ onLogout }) {
                       onChange={e => setSelectedTemplate(e.target.value)}
                       placeholder="Select Template"
                     >
-                      <option>Default Prompt</option>
+                      <option key="no_template" value={"no_template"}>No Template</option>
+                      <option key="raw_prompt" value={"raw_prompt"}>Raw Prompt</option>
                       {promptTemplates.map(t => (
                         <option key={t.name} value={t.name}>{t.name}</option>
                       ))}

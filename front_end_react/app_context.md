@@ -150,6 +150,7 @@
 **RAGChat:**
 - Real-time chat interface with persistent history
 - **Prompt Template Selection**: Dropdown to choose different system prompts
+- **Conversation History Toggle**: Switch to enable/disable usage of past messages in context
 - Model selection (Provider + Local Models)
 - File upload and management integration
 - Admin panel access
@@ -244,7 +245,10 @@
   "question": "string",
   "top_k": 3,
   "use_llm": false,
-  "use_documents": true
+  "use_documents": true,
+  "use_conversation_history": true,
+  "conversation_id": "optional_string_uuid",
+  "prompt_template": "optional_string_name"
 }
 ```
 

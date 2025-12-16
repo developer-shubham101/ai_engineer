@@ -50,6 +50,8 @@ class QueryRequest(BaseModel):
     use_llm: bool = False
     conversation_id: str
     use_documents: bool = True  # Flag to control document retrieval
+    use_conversation_history: bool = True
+    enable_agentic_mode: bool = False # Flag to enable agentic mode
     max_tokens: int = DEFAULT_MAX_TOKENS
     temperature: float = DEFAULT_TEMPERATURE
     category: Optional[str] = None
@@ -184,6 +186,8 @@ async def query_rag(
         top_k=req.top_k,
         use_llm=req.use_llm,
         use_documents=req.use_documents,
+        use_conversation_history=req.use_conversation_history,
+        enable_agentic_mode=req.enable_agentic_mode,
         max_tokens=req.max_tokens,
         temperature=req.temperature,
         category=req.category,
