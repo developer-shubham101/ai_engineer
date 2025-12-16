@@ -21,12 +21,15 @@ A **production-ready multi-provider RAG system** supporting both **offline-first
 - ✅ **Enterprise RBAC** with flexible role overrides
 - ✅ **Document versioning** with non-destructive updates
 - ✅ **Session-aware conversations** with profile management
+- ✅ **Persistent conversation history** with cross-device access
+- ✅ **Agentic mode** with step-by-step reasoning capabilities
 - ✅ **Offline-first architecture** with cloud integration
 - ✅ **JWT authentication** with comprehensive audit logging
 - ✅ **Prompt optimization** with token budgeting and context truncation
 - ✅ **Debug capabilities** with final_prompt exposure for optimization
 - ✅ **Production-ready** with 8GB+ RAM support for local models
 - ✅ **Temperature control** - Unified temperature parameter across all providers
+- ✅ **Comprehensive RAG logging** - Full pipeline tracking for debugging
 
 ---
 
@@ -84,9 +87,9 @@ User Request → FastAPI Router → Container → Modular Services → Response
 
 **🌐 API Layer**
 - `main.py` - FastAPI application with modular initialization
-- `api_routes_rag.py` - RAG endpoints using modular architecture
+- `api_routes_rag.py` - RAG endpoints with agentic mode support
 - `api_routes_auth.py` - Authentication endpoints using container
-- `api_routes_conversations.py` - Conversation history endpoints (NEW)
+- `api_routes_conversations.py` - Conversation history with RAG logging
 - `api_routes_models.py` - Model management endpoints
 - `dependencies.py` - Dependency injection using container
 - `modules/integration.py` - **Dependency injection container**
@@ -525,13 +528,17 @@ Response: {
 ```json
 Request: {
   "question": "string",
+  "conversation_id": "string",  // Required: Links query to conversation
   "top_k": 3,
   "use_documents": true,
   "use_llm": true,
+  "use_conversation_history": true,  // Include conversation context
+  "enable_agentic_mode": false,  // NEW: Enable step-by-step reasoning
   "max_tokens": 256,
-  "temperature": 0.1,  // NEW: Temperature control (0.0-1.0)
+  "temperature": 0.1,  // Temperature control (0.0-1.0)
   "category": "string",
   "debug": false,
+  "prompt_template": "string",  // Template selection
   "local_llm_model": "llama32-1b"  // Local provider only
 }
 
@@ -542,6 +549,59 @@ Response: {
   "final_prompt": "string"  // Debug: actual prompt sent to LLM
 }
 ```
+
+### Conversation Management (`/api/conversations/`)
+
+**GET /api/conversations** - List user conversations
+```json
+Response: [{
+  "id": "conv_xxx",
+  "user_id": "string",
+  "title": "string",
+  "created_at": "2024-01-01T12:00:00Z",
+  "updated_at": "2024-01-01T12:05:00Z",
+  "message_count": 5
+}]
+```
+
+**POST /api/conversations** - Create new conversation
+```json
+Request: {"title": "Optional conversation title"}
+Response: {
+  "id": "conv_xxx",
+  "user_id": "string",
+  "title": "string",
+  "created_at": "2024-01-01T12:00:00Z",
+  "updated_at": "2024-01-01T12:00:00Z",
+  "message_count": 0
+}
+```
+
+**GET /api/conversations/{id}/messages** - Get conversation messages with RAG logging
+```json
+Response: [{
+  "id": 1,
+  "speaker": "user|assistant",
+  "content": "string",
+  "created_at": "2024-01-01T12:00:00Z",
+  "sentiment": "positive",
+  "tone": "professional",
+  // RAG Pipeline Logging
+  "user_query": "original question",
+  "retrieved_context": [{"id": "doc1", "text": "..."}],
+  "llm_prompt": "final prompt sent to LLM",
+  "llm_response_raw": "raw LLM response",
+  "llm_provider": "local|google|gpt|hf",
+  "llm_model": "model name",
+  "llm_temperature": 0.1,
+  "processing_time_ms": 1250,
+  "error_message": null
+}]
+```
+
+**PUT /api/conversations/{id}** - Update conversation (rename)
+**DELETE /api/conversations/{id}** - Delete conversation (soft delete)
+**POST /api/conversations/{id}/restore** - Restore conversation to session
 
 ### Document Management (`/api/rag/documents/`)
 
@@ -722,7 +782,61 @@ A comprehensive test suite validates temperature parameter acceptance:
 
 ---
 
-## 8. Recent Enhancements (Latest Commits)
+## 8. Agentic Mode Feature (NEW)
+
+### Overview
+
+The system now supports **agentic mode** - an enhanced reasoning capability that instructs the LLM to provide step-by-step analysis and detailed responses with explicit reasoning.
+
+### Implementation
+
+**Location**: `app/modules/llm/rag_orchestrator.py`
+
+**Activation**: Set `enable_agentic_mode: true` in query requests
+
+**Behavior**: When enabled, the system enhances the final prompt with reasoning instructions:
+```python
+if request.enable_agentic_mode:
+    # Agentic mode: Add reasoning and action planning to the prompt
+    agentic_prompt = f"{final_prompt}\n\nThink step by step and provide a detailed response with reasoning."
+    response = await self.generate_response(agentic_prompt, provider, request.max_tokens, request.temperature)
+else:
+    response = await self.generate_response(final_prompt, provider, request.max_tokens, request.temperature)
+```
+
+### API Integration
+
+**Request Parameter**: `enable_agentic_mode: boolean` (default: false)
+
+**Usage Example**:
+```bash
+curl -X POST "/api/rag/local/query" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "question": "What are our vacation policies?",
+    "conversation_id": "conv_123",
+    "use_llm": true,
+    "enable_agentic_mode": true
+  }'
+```
+
+### Benefits
+
+- **Enhanced Reasoning**: LLM provides step-by-step analysis
+- **Detailed Responses**: More comprehensive answers with explicit logic
+- **Debugging Support**: Clear reasoning chain for response validation
+- **Provider Agnostic**: Works with all LLM providers (local, Google, GPT, HuggingFace)
+- **Optional Feature**: Can be enabled/disabled per query
+
+### Use Cases
+
+- **Complex Analysis**: Multi-step problem solving
+- **Decision Support**: Detailed reasoning for business decisions
+- **Educational Content**: Step-by-step explanations
+- **Debugging**: Understanding AI reasoning process
+- **Quality Assurance**: Validating response logic
+
+## 9. Recent Enhancements (Latest Commits)
 
 ### Prompt Optimization System
 - **Token Budgeting**: Dynamic allocation between system instructions, context, and user query
@@ -957,7 +1071,7 @@ DELETE /api/training/models/{name} # Delete trained model
 
 ---
 
-## 9. Core Service Functions
+## 10. Core Service Functions
 
 ### BaseRAGService (Abstract)
 ```python
@@ -1039,7 +1153,7 @@ session_manager = container.get_session_manager()
 
 ---
 
-## 10. Data Models
+## 11. Data Models
 
 ### User/Requester
 ```python
@@ -1081,7 +1195,7 @@ session_manager = container.get_session_manager()
 
 ---
 
-## 11. Configuration
+## 12. Configuration
 
 ### Environment Variables
 ```bash
@@ -1129,7 +1243,7 @@ VALID_DEPARTMENTS = [
 
 ---
 
-## 12. Local Model Support
+## 13. Local Model Support
 
 ### Supported Models (GGUF Format)
 ```
@@ -1169,7 +1283,7 @@ python scripts/download_hf_model.py --all
 
 ---
 
-## 13. Logging & Monitoring
+## 14. Logging & Monitoring
 
 ### Security Events
 - `TOKEN_CREATED` - JWT token generation with context
@@ -1193,7 +1307,7 @@ python scripts/download_hf_model.py --all
 
 ---
 
-## 14. Development Guidelines
+## 15. Development Guidelines
 
 ### Code Conventions
 - **Python 3.10+** with type hints
@@ -1219,7 +1333,7 @@ python scripts/download_hf_model.py --all
 
 ---
 
-## 15. Usage Examples
+## 16. Usage Examples
 
 ### Authentication
 ```bash
@@ -1260,7 +1374,7 @@ curl "/api/rag/documents/list?department=HR&status=published"
 
 ---
 
-## 16. Deployment
+## 17. Deployment
 
 ### Quick Start
 ```bash
@@ -1292,7 +1406,7 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000
 
 ---
 
-## 17. Testing & Validation
+## 18. Testing & Validation
 
 ### Test Infrastructure
 
@@ -1363,7 +1477,7 @@ python tests/test_rbac_comprehensive.py
 - **Clear Output**: Detailed test results and failure reporting
 - **Documentation**: Comprehensive test coverage documentation
 
-## 18. AI Assistant Instructions
+## 19. AI Assistant Instructions
 
 **When generating code:**
 
@@ -1401,7 +1515,7 @@ python tests/test_rbac_comprehensive.py
 
 ---
 
-## 19. Migration Status Summary
+## 20. Migration Status Summary
 
 ### ✅ **COMPLETED MIGRATION**
 
