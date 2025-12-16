@@ -1,7 +1,6 @@
 """LangChain-based dynamic prompt template selector."""
 
 import logging
-import os
 import re
 from dataclasses import dataclass
 from typing import List
@@ -36,15 +35,16 @@ class ConditionalPromptSelector:
 
     def __init__(self, template_manager=None):
         self.template_manager = template_manager
-        self.prompt_template = self._load_prompt_template()
+        # self.prompt_template = self._load_prompt_template()
 
-    def _load_prompt_template(self) -> PromptTemplate:
+    def _load_prompt_template(self, prompt_template_name: str) -> PromptTemplate:
         """Load the single prompt template."""
         if self.template_manager:
-            template_data = self.template_manager.get_template("personalized_chat")
+            tmp_prompt_template_name = prompt_template_name or "personalized_chat"
+            template_data = self.template_manager.get_template(tmp_prompt_template_name)
             if template_data:
                 template_str = template_data["content"]
-                
+
                 template_vars = re.findall(r"\{(\w+)}", template_str)
                 input_variables = [var for var in template_vars if var != "examples"]
 
@@ -53,18 +53,18 @@ class ConditionalPromptSelector:
                     template=template_str,
                     partial_variables={"examples": ""}
                 )
-        
+
         # Fallback to loading from file if no manager or template not found
         logger.warning("Using fallback file template loading strategy")
-        template_path = "app/modules/llm/prompt_templates/personalized_chat.txt" # fallback path
+        template_path = "app/modules/llm/prompt_templates/personalized_chat.txt"  # fallback path
         try:
-             with open(template_path, "r") as f:
+            with open(template_path, "r") as f:
                 template_str = f.read()
-             
-             template_vars = re.findall(r"\{(\w+)}", template_str)
-             input_variables = [var for var in template_vars if var != "examples"]
-             
-             return PromptTemplate(
+
+            template_vars = re.findall(r"\{(\w+)}", template_str)
+            input_variables = [var for var in template_vars if var != "examples"]
+
+            return PromptTemplate(
                 input_variables=input_variables,
                 template=template_str,
                 partial_variables={"examples": ""}
@@ -73,14 +73,16 @@ class ConditionalPromptSelector:
             logger.error(f"Error loading template from {template_path}: {e}")
             return self.get_fallback_template()
 
-    def format_prompt(self, prompt_data: dict) -> str:
+    def format_prompt(self, prompt_data: dict, prompt_template_name: str) -> str:
         """Format the prompt with variables from a dataclass."""
 
+        prompt_template = self._load_prompt_template(prompt_template_name)
+
         # Filter for vars present in the template
-        final_vars = {k: v for k, v in prompt_data.items() if k in self.prompt_template.input_variables}
+        final_vars = {k: v for k, v in prompt_data.items() if k in prompt_template.input_variables}
 
         try:
-            return self.prompt_template.format(**final_vars)
+            return prompt_template.format(**final_vars)
         except KeyError as e:
             logger.error("Missing template variable: %s", e)
             return f"Question: {prompt_data['user_question']}\nSources: {prompt_data['source_docs']}"

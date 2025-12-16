@@ -166,8 +166,10 @@ class RAGOrchestrator(IRAGOrchestrator):
                         "history": history_str  # Include history in prompt_data
                     }
 
+                    logger.info("Prompt data: %s", prompt_data) 
+                    logger.info("Prompt template: %s", request.prompt_template)    
                     # Create dynamic prompt
-                    final_prompt = self.langchain_selector.format_prompt(prompt_data)
+                    final_prompt = self.langchain_selector.format_prompt(prompt_data, request.prompt_template)
 
                     # if not template:
                     #     logger.error("Failed to get prompt template.")

@@ -147,7 +147,12 @@
 - Responsive design (collapsible on mobile)
 - Relative time formatting ("2h ago", "3d ago")
 
-**ConversationMessageDetail Features:**
+**RAGChat:**
+- Real-time chat interface with persistent history
+- **Prompt Template Selection**: Dropdown to choose different system prompts
+- Model selection (Provider + Local Models)
+- File upload and management integration
+- Admin panel access
 - Expandable RAG pipeline logging for assistant messages
 - Retrieved documents with metadata and distance scores
 - LLM configuration (provider, model, temperature, tokens)

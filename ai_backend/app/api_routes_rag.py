@@ -55,6 +55,7 @@ class QueryRequest(BaseModel):
     category: Optional[str] = None
     debug: bool = False
     local_llm_model: Optional[str] = None
+    prompt_template: str
 
 
 class QueryResponse(BaseModel):
@@ -187,6 +188,7 @@ async def query_rag(
         temperature=req.temperature,
         category=req.category,
         debug=req.debug,
+        prompt_template=req.prompt_template,
         provider=model_provider,
         provider_specific={"model_name": req.local_llm_model} if req.local_llm_model else None
     )

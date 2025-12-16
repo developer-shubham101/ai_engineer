@@ -40,12 +40,18 @@ export default function RAGChat({ onLogout }) {
   const [localLlmModel, setLocalLlmModel] = useState(localStorage.getItem('local_llm_model') || 'llama32-1b')
   const [theme, setTheme] = useState(localStorage.getItem('theme') || 'system')
   const [showAdminPanel, setShowAdminPanel] = useState(false)
+
+  // Prompt Templates
+  const [promptTemplates, setPromptTemplates] = useState([])
+  const [selectedTemplate, setSelectedTemplate] = useState('')
+
   const messagesRef = useRef(null)
 
   // Load conversations on mount
   useEffect(() => {
     if (token) {
       loadConversations()
+      fetchPromptTemplates()
     }
   }, [token])
 
@@ -225,6 +231,21 @@ export default function RAGChat({ onLogout }) {
 
   // ========== Query and Document Functions ==========
 
+  async function fetchPromptTemplates() {
+    if (!token) return
+    try {
+      const res = await fetch(`${BASE_API_URL}/api/templates`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+      if (res.ok) {
+        const data = await res.json()
+        setPromptTemplates(data)
+      }
+    } catch (err) {
+      console.error("Failed to fetch templates", err)
+    }
+  }
+
   async function sendQuery() {
     if (inFlight) return
     if (!composer.trim()) return addToast('Please enter a question', 'warning', 'Validation')
@@ -249,6 +270,11 @@ export default function RAGChat({ onLogout }) {
       temperature: temperature,
       conversation_id: activeConversationId // Include conversation ID
     }
+
+    if (selectedTemplate) {
+      payload.prompt_template = selectedTemplate
+    }
+
     if (modelProvider === 'local' && localLlmModel) {
       payload.local_llm_model = localLlmModel
     }
@@ -796,6 +822,20 @@ export default function RAGChat({ onLogout }) {
                     <option value="gpt">OpenAI GPT</option>
                     <option value="hf">Hugging Face</option>
                   </select>
+
+                  <div className="mb-2">
+                    <select
+                      className="form-select form-select-sm"
+                      value={selectedTemplate}
+                      onChange={e => setSelectedTemplate(e.target.value)}
+                      placeholder="Select Template"
+                    >
+                      <option>Default Prompt</option>
+                      {promptTemplates.map(t => (
+                        <option key={t.name} value={t.name}>{t.name}</option>
+                      ))}
+                    </select>
+                  </div>
                   {modelProvider === 'local' && (
                     <select
                       className="form-select form-select-sm"

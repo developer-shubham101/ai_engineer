@@ -31,6 +31,7 @@ class RAGRequest:
     provider: str = "local"
     provider_specific: Optional[Dict[str, Any]] = None
     metadata: Optional[Dict[str, Any]] = None  # not coming from front end
+    prompt_template: str = ""
     
     def __post_init__(self):
         if self.metadata is None:
