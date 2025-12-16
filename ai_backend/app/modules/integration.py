@@ -13,7 +13,9 @@ from .vector_db.faiss_vector_store import FaissVectorStore
 from .vector_db.embedding_manager import EmbeddingManager
 from .llm.rag_orchestrator import RAGOrchestrator
 from .core.document_manager import DocumentManager
+from .core.document_manager import DocumentManager
 from .core.version_manager import VersionManager
+from .llm.template_manager import TemplateManager
 
 logger = logging.getLogger(__name__)
 
@@ -60,7 +62,8 @@ class Container:
         self._instances["rag_orchestrator"] = RAGOrchestrator(
             self._instances["vector_store"],
             self._instances["session_manager"],
-            conversation_manager=self.get_conversation_manager()  # NEW: Inject conversation manager
+            conversation_manager=self.get_conversation_manager(),
+            template_manager=self.get_template_manager()
         )
         
         self._initialized = True
@@ -106,6 +109,13 @@ class Container:
             self._instances["conversation_manager"] = SQLiteConversationManager(db_path)
             logger.info(f"Initialized conversation manager with db at {db_path}")
         return self._instances.get("conversation_manager")
+    
+    def get_template_manager(self) -> TemplateManager:
+        """Get template manager instance."""
+        if "template_manager" not in self._instances:
+            self._instances["template_manager"] = TemplateManager()
+            logger.info("Initialized template manager")
+        return self._instances.get("template_manager")
     
     def override_instance(self, key: str, instance: Any) -> None:
         """Override an instance (useful for testing)."""

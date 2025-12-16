@@ -20,13 +20,13 @@ logger = logging.getLogger(__name__)
 class RAGOrchestrator(IRAGOrchestrator):
     """RAG orchestrator implementation."""
 
-    def __init__(self, vector_store: IVectorStore, session_manager: ISessionManager, conversation_manager=None):
+    def __init__(self, vector_store: IVectorStore, session_manager: ISessionManager, conversation_manager=None, template_manager=None):
         self.vector_store = vector_store
         self.session_manager = session_manager
         self.conversation_manager = conversation_manager  # NEW: Conversation manager for persistent history
         self.prompt_manager = PromptManager()
         self.prompt_chain = PromptChain(session_manager)
-        self.langchain_selector = ConditionalPromptSelector()
+        self.langchain_selector = ConditionalPromptSelector(template_manager)
         self.middleware_stack = create_default_middleware_stack()
 
     async def process_query(self, request: RAGRequest) -> RAGResponse:

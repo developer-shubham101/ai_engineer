@@ -34,28 +34,44 @@ class PromptData:
 class ConditionalPromptSelector:
     """Selects prompt template based on LLM context and user profile."""
 
-    def __init__(self, templates_dir: str = "app/modules/llm/prompt_templates"):
-        self.templates_dir = templates_dir
+    def __init__(self, template_manager=None):
+        self.template_manager = template_manager
         self.prompt_template = self._load_prompt_template()
 
     def _load_prompt_template(self) -> PromptTemplate:
         """Load the single prompt template."""
-        template_path = os.path.join(self.templates_dir, "personalized_chat.txt")
+        if self.template_manager:
+            template_data = self.template_manager.get_template("personalized_chat")
+            if template_data:
+                template_str = template_data["content"]
+                
+                template_vars = re.findall(r"\{(\w+)}", template_str)
+                input_variables = [var for var in template_vars if var != "examples"]
+
+                return PromptTemplate(
+                    input_variables=input_variables,
+                    template=template_str,
+                    partial_variables={"examples": ""}
+                )
+        
+        # Fallback to loading from file if no manager or template not found
+        logger.warning("Using fallback file template loading strategy")
+        template_path = "app/modules/llm/prompt_templates/personalized_chat.txt" # fallback path
         try:
-            with open(template_path, "r") as f:
+             with open(template_path, "r") as f:
                 template_str = f.read()
+             
+             template_vars = re.findall(r"\{(\w+)}", template_str)
+             input_variables = [var for var in template_vars if var != "examples"]
+             
+             return PromptTemplate(
+                input_variables=input_variables,
+                template=template_str,
+                partial_variables={"examples": ""}
+            )
         except IOError as e:
             logger.error(f"Error loading template from {template_path}: {e}")
             return self.get_fallback_template()
-
-        template_vars = re.findall(r"\{(\w+)}", template_str)
-        input_variables = [var for var in template_vars if var != "examples"]
-
-        return PromptTemplate(
-            input_variables=input_variables,
-            template=template_str,
-            partial_variables={"examples": ""}
-        )
 
     def format_prompt(self, prompt_data: dict) -> str:
         """Format the prompt with variables from a dataclass."""

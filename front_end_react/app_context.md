@@ -13,7 +13,7 @@
 - `src/`
   - `main.jsx` — React entry.
   - `App.jsx` — top-level container with authentication routing.
-  - `components/` — reusable components (Login, RAGChat, ConversationSidebar, ConversationMessageDetail, AddJsonForm, UploadFileForm, UpdateMetadataForm, ToastList).
+  - `components/` — reusable components (Login, RAGChat, ConversationSidebar, ConversationMessageDetail, PromptTemplateManager, AddJsonForm, UploadFileForm, UpdateMetadataForm, ToastList).
   - `styles.css` — project styles including conversation sidebar, message details, and responsive layout.
   - `utility/const.js` - Defines constants like `BASE_API_URL`.
   - `utility/auth.js` - JWT token management utilities (encode/decode, localStorage operations).
@@ -41,6 +41,12 @@
 
 **Authentication:**
 - `POST /api/auth/token` — `{ username, password }` → `{ access_token, token_type, user: { user_id, username, role, department, profile } }`
+
+**Prompt Templates (require Bearer token):**
+- `GET /api/templates` — list all templates
+- `POST /api/templates` — create new template
+- `PUT /api/templates/{name}` — update template
+- `DELETE /api/templates/{name}` — delete template
 
 **Conversation History (NEW - require Bearer token):**
 - `GET /api/conversations` — list all conversations for authenticated user
@@ -118,6 +124,7 @@
 - `src/components/RAGChat.jsx` — core chat UI with conversation history integration. Uses Bearer token authentication. Manages conversations, messages, and sidebar state. Includes local LLM model selection for local provider.
 - `src/components/ConversationSidebar.jsx` — collapsible sidebar showing conversation list with create, rename, and delete functionality.
 - `src/components/ConversationMessageDetail.jsx` — expandable component showing RAG pipeline details (retrieved docs, LLM config, embeddings, sentiment/tone).
+- `src/components/PromptTemplateManager.jsx` — admin component to list, create, edit, and delete dynamic prompt templates.
 - `src/components/AddJsonForm.jsx` — enhanced modal form to POST `/api/rag/documents/add` with RBAC metadata fields.
 - `src/components/UploadFileForm.jsx` — modal form to POST `/api/rag/documents/add-file` (multipart).
 - `src/components/UpdateMetadataForm.jsx` — modal to update chunk metadata.
@@ -150,6 +157,13 @@
 - Sentiment and tone badges with color coding
 - Processing time metrics
 - Error message display
+
+**PromptTemplateManager Features:**
+- List all prompt templates
+- Create new templates with name and content
+- Update existing templates
+- Delete templates
+- Variables support: `{source_docs}`, `{user_question}`, `{chat_history}`
 
 **DocumentVersionModal Features:**
 - Get version history for any document ID

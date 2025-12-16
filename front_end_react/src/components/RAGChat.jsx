@@ -4,6 +4,7 @@ import UploadFileForm from './UploadFileForm.jsx'
 import UpdateMetadataForm from './UpdateMetadataForm.jsx'
 import DocumentVersionModal from './DocumentVersionModal.jsx'
 import PersonalizedTestModal from './PersonalizedTestModal.jsx'
+import PromptTemplateManager from './PromptTemplateManager.jsx'
 import ConversationSidebar from './ConversationSidebar.jsx'
 import ConversationMessageDetail from './ConversationMessageDetail.jsx'
 import ToastList from './ToastList.jsx'
@@ -880,6 +881,13 @@ export default function RAGChat({ onLogout }) {
                       >
                         Test Personalization
                       </button>
+                      <button
+                        className="btn btn-outline-primary"
+                        data-bs-toggle="modal"
+                        data-bs-target="#promptTemplateModal"
+                      >
+                        Manage Templates
+                      </button>
                     </div>
                     <hr />
                     <div className="small text-muted">
@@ -1045,6 +1053,24 @@ export default function RAGChat({ onLogout }) {
                 Close
               </button>
             </div>
+          </div>
+        </div>
+      </div>
+
+      <div
+        className="modal fade"
+        id="promptTemplateModal"
+        tabIndex={-1}
+        aria-hidden="true"
+      >
+        <div className="modal-dialog modal-xl">
+          <div className="modal-content" style={{ height: '80vh' }}>
+            <PromptTemplateManager onClose={() => {
+              // Close modal via Bootstrap API or just let the button do it
+              const el = document.getElementById('promptTemplateModal');
+              const modal = bootstrap.Modal.getInstance(el);
+              if (modal) modal.hide();
+            }} />
           </div>
         </div>
       </div>

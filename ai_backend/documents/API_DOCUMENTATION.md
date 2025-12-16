@@ -65,6 +65,60 @@ The system now supports persistent conversation history that is tied to user acc
 - Continue conversations from where they left off
 - Full RAG pipeline logging for debugging and analytics
 
+## 📝 Prompt Templates (NEW)
+
+### Overview
+Manage dynamic prompt templates stored in the database. These templates are used by the RAG orchestrator to generate context-aware prompts.
+
+### List Templates
+- **GET** `/api/templates` - List all templates
+
+```bash
+curl -X GET "http://localhost:5444/api/templates" \
+-H "Authorization: Bearer $TOKEN"
+```
+
+### Create Template
+- **POST** `/api/templates` - Create a new template
+
+```bash
+curl -X POST "http://localhost:5444/api/templates" \
+-H "Content-Type: application/json" \
+-H "Authorization: Bearer $TOKEN" \
+-d '{
+  "name": "creative_chat",
+  "content": "System: You are a creative assistant.\n\nContext: {source_docs}\n\nQuestion: {user_question}"
+}'
+```
+
+### Get Specific Template
+- **GET** `/api/templates/{name}` - Get template details
+
+```bash
+curl -X GET "http://localhost:5444/api/templates/personalized_chat" \
+-H "Authorization: Bearer $TOKEN"
+```
+
+### Update Template
+- **PUT** `/api/templates/{name}` - Update template content
+
+```bash
+curl -X PUT "http://localhost:5444/api/templates/personalized_chat" \
+-H "Content-Type: application/json" \
+-H "Authorization: Bearer $TOKEN" \
+-d '{
+  "content": "System: Updated system prompt...\n\nContext: {source_docs}\n\nQuestion: {user_question}"
+}'
+```
+
+### Delete Template
+- **DELETE** `/api/templates/{name}` - Delete a template
+
+```bash
+curl -X DELETE "http://localhost:5444/api/templates/old_template" \
+-H "Authorization: Bearer $TOKEN"
+```
+
 ### List Conversations
 - **GET** `/api/conversations` - List all conversations for the authenticated user
 
