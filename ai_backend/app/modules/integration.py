@@ -13,9 +13,9 @@ from .vector_db.faiss_vector_store import FaissVectorStore
 from .vector_db.embedding_manager import EmbeddingManager
 from .llm.rag_orchestrator import RAGOrchestrator
 from .core.document_manager import DocumentManager
-from .core.document_manager import DocumentManager
 from .core.version_manager import VersionManager
 from .llm.template_manager import TemplateManager
+from .agents.factories import AgentOrchestratorFactory
 
 logger = logging.getLogger(__name__)
 
@@ -116,6 +116,14 @@ class Container:
             self._instances["template_manager"] = TemplateManager()
             logger.info("Initialized template manager")
         return self._instances.get("template_manager")
+    
+    def get_agent_orchestrator(self):
+        """Get agent orchestrator instance."""
+        if "agent_orchestrator" not in self._instances:
+            vector_store = self.get_vector_store()
+            self._instances["agent_orchestrator"] = AgentOrchestratorFactory.create_orchestrator(vector_store)
+            logger.info("Initialized agent orchestrator")
+        return self._instances.get("agent_orchestrator")
     
     def override_instance(self, key: str, instance: Any) -> None:
         """Override an instance (useful for testing)."""

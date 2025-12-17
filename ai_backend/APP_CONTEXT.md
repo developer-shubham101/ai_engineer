@@ -87,6 +87,13 @@ User Request → FastAPI Router → Container → Modular Services → Response
 - `vision_providers.py` - Vision providers (Tesseract, PaddleOCR)
 - `emotion_providers.py` - Emotion detection from audio
 
+**🤖 Agents Module** (`app/modules/agents/`) - **NEW**
+- `interfaces.py` - Agent and tool interfaces following SOLID principles
+- `orchestrator.py` - Agent orchestrator with dependency injection
+- `tools.py` - Tool implementations following SRP
+- `factories.py` - Factory pattern for tools and orchestrators
+- `utils.py` - Utility classes for mock data and formatting
+
 **⚙️ Config Module** (`app/modules/config/`)
 - `settings.py` - Environment and application settings
 - `constants.py` - System constants and enums
@@ -106,6 +113,7 @@ User Request → FastAPI Router → Container → Modular Services → Response
 - `api_routes_vision.py` - **NEW: Vision processing (OCR, Image Analysis)**
 - `api_routes_media.py` - **NEW: Media file serving with RBAC**
 - `api_routes_models.py` - Model management endpoints
+- `api_routes_agents.py` - **NEW: Agent workflow endpoints**
 - `dependencies.py` - Dependency injection using container
 - `modules/integration.py` - **Dependency injection container**
 
@@ -584,6 +592,42 @@ Response: {
 }
 ```
 
+### Agents (`/api/agents/`) - **NEW**
+
+**POST /api/agents/query** - Execute agent workflows
+```json
+Request: {
+  "question": "What is the status of my tickets?",
+  "tools": ["get_user_tickets", "get_ticket_comments"],
+  "max_steps": 5,
+  "temperature": 0.1,
+  "debug": true
+}
+Response: {
+  "answer": "Based on my analysis:\n\nStep 1 (get_user_tickets): Found 2 tickets...",
+  "steps": [
+    {
+      "step": 1,
+      "tool": "get_user_tickets",
+      "input": "current",
+      "result": "Found 2 tickets for user...",
+      "timestamp": 1640995200.0
+    }
+  ],
+  "tools_used": ["get_user_tickets"],
+  "available_tools": ["search_documents", "get_user_tickets", ...],
+  "debug_info": {
+    "processing_time_ms": 1250,
+    "enabled_tools": ["get_user_tickets"],
+    "actual_steps": 1
+  }
+}
+```
+
+**GET /api/agents/status** - Get agent system status
+**GET /api/agents/tools** - List available tools
+**POST /api/agents/tools/{name}/test** - Test individual tools
+
 ### Audio Processing (`/api/audio/`) - **NEW**
 
 **POST /api/audio/stt** - Speech to Text
@@ -1023,61 +1067,131 @@ vision_provider = create_vision_provider("paddleocr")  # Switch to PaddleOCR
 - **Whisper.cpp**: Faster CPU inference
 - **Custom Emotion Models**: ML-based emotion detection
 
-## 9. Agentic Mode Feature
+## 9. Agents System (NEW)
 
 ### Overview
 
-The system now supports **agentic mode** - an enhanced reasoning capability that instructs the LLM to provide step-by-step analysis and detailed responses with explicit reasoning.
+The system now supports a **dedicated Agents module** with LangChain-style tool orchestration, following SOLID principles and factory patterns. This provides a sandbox environment for agent experimentation with safety constraints.
+
+### Architecture Principles
+
+**🏗️ SOLID Compliance:**
+- **Single Responsibility**: Each tool has one clear purpose
+- **Open/Closed**: Easy to extend with new tools without modifying existing code
+- **Liskov Substitution**: All tools implement ITool interface
+- **Interface Segregation**: Separate interfaces for tools, orchestrators, and utilities
+- **Dependency Inversion**: Orchestrator depends on abstractions, not concrete tools
+
+**🏭 Factory Pattern:**
+- `ToolFactory` - Creates individual tools with proper dependencies
+- `AgentOrchestratorFactory` - Creates orchestrators with tool sets
+- Easy switching between different tool implementations
+
+**💉 Dependency Injection:**
+- Integrated into main container (`integration.py`)
+- Tools receive dependencies through constructor injection
+- No hard-coded dependencies or singletons
+
+### Available Tools
+
+| Tool | Purpose | Dependencies |
+|------|---------|-------------|
+| `SearchDocumentsTool` | Search knowledge base | IVectorStore |
+| `GetUserTicketsTool` | Get support tickets | MockDataProvider |
+| `GetTicketCommentsTool` | Get ticket history | MockDataProvider |
+| `AnalyzeDataTool` | Analyze patterns | AnalysisProvider |
+| `ResearchDataTool` | Generate metrics | MockDataProvider |
+| `SummarizeStatusTool` | Compile information | None |
+
+### Safety Features
+
+**Following MOTIVATION.md Guidelines:**
+- ✅ **Hard Step Limit**: Maximum 5 steps (configurable)
+- ✅ **Tool Whitelisting**: Only registered tools allowed
+- ✅ **No Direct DB Access**: Tools use wrapped services
+- ✅ **Sandboxed Execution**: Isolated from production systems
+- ✅ **Error Handling**: Graceful failure recovery
+
+### Utility Classes
+
+**Separation of Concerns:**
+- `MockDataProvider` - Provides research data (tickets, comments, metrics)
+- `AnalysisProvider` - Handles data analysis logic
+- `DocumentFormatter` - Formats search results
+- `StepFormatter` - Formats execution steps and final answers
+
+### API Integration
+
+**Endpoints:**
+- `POST /api/agents/query` - Execute agent workflows
+- `GET /api/agents/status` - System status and available tools
+- `GET /api/agents/tools` - List all tools with descriptions
+- `POST /api/agents/tools/{name}/test` - Test individual tools
+
+**Usage Example:**
+```bash
+curl -X POST "/api/agents/query" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "question": "What is the status of my tickets?",
+    "tools": ["get_user_tickets", "get_ticket_comments"],
+    "max_steps": 3,
+    "debug": true
+  }'
+```
+
+### Research Applications
+
+**Learning Scenarios:**
+- Multi-step reasoning patterns
+- Tool orchestration strategies
+- Error handling and recovery
+- Agent decision making
+
+**Extensibility:**
+- Easy to add new tools via factory
+- Configurable step limits and timeouts
+- Pluggable data providers
+- Custom workflow patterns
+
+### Benefits
+
+- **Clean Architecture**: SOLID principles ensure maintainability
+- **Easy Testing**: Each component can be tested independently
+- **Research Friendly**: Safe sandbox for experimentation
+- **Production Ready**: Proper error handling and logging
+- **Extensible**: Factory pattern makes adding tools trivial
+
+## 10. Agentic Mode Feature (RAG Enhancement)
+
+### Overview
+
+The RAG system supports **agentic mode** - an enhanced reasoning capability that instructs the LLM to provide step-by-step analysis within the existing RAG workflow.
 
 ### Implementation
 
 **Location**: `app/modules/llm/rag_orchestrator.py`
 
-**Activation**: Set `enable_agentic_mode: true` in query requests
+**Activation**: Set `enable_agentic_mode: true` in RAG query requests
 
-**Behavior**: When enabled, the system enhances the final prompt with reasoning instructions:
+**Behavior**: Enhances prompts with reasoning instructions:
 ```python
 if request.enable_agentic_mode:
-    # Agentic mode: Add reasoning and action planning to the prompt
     agentic_prompt = f"{final_prompt}\n\nThink step by step and provide a detailed response with reasoning."
     response = await self.generate_response(agentic_prompt, provider, request.max_tokens, request.temperature)
-else:
-    response = await self.generate_response(final_prompt, provider, request.max_tokens, request.temperature)
 ```
 
-### API Integration
-
-**Request Parameter**: `enable_agentic_mode: boolean` (default: false)
-
-**Usage Example**:
-```bash
-curl -X POST "/api/rag/local/query" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "question": "What are our vacation policies?",
-    "conversation_id": "conv_123",
-    "use_llm": true,
-    "enable_agentic_mode": true
-  }'
-```
-
-### Benefits
-
-- **Enhanced Reasoning**: LLM provides step-by-step analysis
-- **Detailed Responses**: More comprehensive answers with explicit logic
-- **Debugging Support**: Clear reasoning chain for response validation
-- **Provider Agnostic**: Works with all LLM providers (local, Google, GPT, HuggingFace)
-- **Optional Feature**: Can be enabled/disabled per query
+**Difference from Agents System:**
+- **Agentic Mode**: Enhanced reasoning within RAG workflow
+- **Agents System**: Separate tool orchestration with multi-step execution
 
 ### Use Cases
 
-- **Complex Analysis**: Multi-step problem solving
-- **Decision Support**: Detailed reasoning for business decisions
-- **Educational Content**: Step-by-step explanations
-- **Debugging**: Understanding AI reasoning process
-- **Quality Assurance**: Validating response logic
+- **RAG Enhancement**: Better reasoning in document-based responses
+- **Complex Analysis**: Multi-step problem solving within RAG context
+- **Educational Content**: Step-by-step explanations with document context
 
-## 10. Recent Enhancements (Latest Commits)
+## 11. Recent Enhancements (Latest Commits)
 
 ### Prompt Optimization System
 - **Token Budgeting**: Dynamic allocation between system instructions, context, and user query
@@ -1114,7 +1228,7 @@ curl -X POST "/api/rag/local/query" \
 
 ---
 
-## 8. Prompt Chain Architecture
+## 12. Prompt Chain Architecture
 
 ### Chain of Responsibility Pattern
 
@@ -1272,7 +1386,7 @@ class BaseRAGService:
 
 ---
 
-## 9. Model Training Service
+## 13. Model Training Service
 
 ### Training Capabilities
 - **Base Model**: Llama 3.2 1B (meta-llama/Llama-3.2-1B)
@@ -1312,7 +1426,7 @@ DELETE /api/training/models/{name} # Delete trained model
 
 ---
 
-## 11. Core Service Functions
+## 14. Core Service Functions
 
 ### BaseRAGService (Abstract)
 ```python
@@ -1394,7 +1508,7 @@ session_manager = container.get_session_manager()
 
 ---
 
-## 12. Data Models
+## 15. Data Models
 
 ### User/Requester
 ```python
@@ -1436,7 +1550,7 @@ session_manager = container.get_session_manager()
 
 ---
 
-## 13. Configuration
+## 16. Configuration
 
 ### Environment Variables
 ```bash
@@ -1484,7 +1598,7 @@ VALID_DEPARTMENTS = [
 
 ---
 
-## 14. Local Model Support
+## 17. Local Model Support
 
 ### Supported Models (GGUF Format)
 ```
@@ -1524,7 +1638,7 @@ python scripts/download_hf_model.py --all
 
 ---
 
-## 15. Logging & Monitoring
+## 18. Logging & Monitoring
 
 ### Security Events
 - `TOKEN_CREATED` - JWT token generation with context
@@ -1548,7 +1662,7 @@ python scripts/download_hf_model.py --all
 
 ---
 
-## 16. Development Guidelines
+## 19. Development Guidelines
 
 ### Code Conventions
 - **Python 3.10+** with type hints
@@ -1574,7 +1688,7 @@ python scripts/download_hf_model.py --all
 
 ---
 
-## 17. Usage Examples
+## 20. Usage Examples
 
 ### Authentication
 ```bash
@@ -1660,6 +1774,50 @@ curl -X POST "/api/audio/tts" \
   -d "{\"text\": \"$ANSWER_TEXT\", \"conversation_id\": \"conv_123\"}"
 ```
 
+### Agent Workflows
+```bash
+# Ticket Status Query
+curl -X POST "/api/agents/query" \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "question": "What is the status of my tickets?",
+    "tools": ["get_user_tickets", "get_ticket_comments"],
+    "max_steps": 3,
+    "debug": true
+  }'
+
+# Document Search with Agent
+curl -X POST "/api/agents/query" \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "question": "Search for vacation policy documents",
+    "tools": ["search_documents"],
+    "max_steps": 2
+  }'
+
+# Research Data Analysis
+curl -X POST "/api/agents/query" \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "question": "Analyze user engagement trends",
+    "tools": ["research_data", "analyze_data"],
+    "debug": true
+  }'
+
+# Test Individual Tool
+curl -X POST "/api/agents/tools/search_documents/test" \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d "vacation policy"
+
+# Get Agent Status
+curl -X GET "/api/agents/status" \
+  -H "Authorization: Bearer <token>"
+```
+
 ### Document Management
 ```bash
 # Add document
@@ -1687,7 +1845,7 @@ curl -X POST "/api/rag/documents/add" \
 
 ---
 
-## 18. Deployment
+## 21. Deployment
 
 ### Quick Start
 ```bash
@@ -1719,7 +1877,7 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000
 
 ---
 
-## 19. Testing & Validation
+## 22. Testing & Validation
 
 ### Test Infrastructure
 
@@ -1790,7 +1948,7 @@ python tests/test_rbac_comprehensive.py
 - **Clear Output**: Detailed test results and failure reporting
 - **Documentation**: Comprehensive test coverage documentation
 
-## 20. AI Assistant Instructions
+## 23. AI Assistant Instructions
 
 **When generating code:**
 
@@ -1824,11 +1982,11 @@ python tests/test_rbac_comprehensive.py
 
 ---
 
-**Last Updated**: 2025-01-11 (Modular Architecture Complete - Updated Architecture Documentation)
+**Last Updated**: 2025-01-11 (Agents Module Added - SOLID Architecture Implementation)
 
 ---
 
-## 21. Migration Status Summary
+## 24. Migration Status Summary
 
 ### ✅ **COMPLETED MIGRATION**
 
@@ -1848,12 +2006,14 @@ python tests/test_rbac_comprehensive.py
 - ✅ `modules/core/` - Business logic and utilities
 - ✅ `modules/config/` - Configuration management
 - ✅ `modules/api/` - API layer components
+- ✅ `modules/agents/` - **NEW: Agent workflows with SOLID architecture**
 - ✅ `modules/integration.py` - Dependency injection container
 
 **API Endpoints:**
 - ✅ `api_routes_auth.py` - Uses modular auth services
 - ✅ `api_routes_rag.py` - RAG implementation using modular architecture
 - ✅ `api_routes_models.py` - Model management endpoints
+- ✅ `api_routes_agents.py` - **NEW: Agent workflows with factory pattern**
 - ✅ `dependencies.py` - Container-based dependency injection
 - ✅ `main.py` - Modular architecture initialization
 
