@@ -1,0 +1,23 @@
+# Multimodal AI Requirements
+# Add these to your main requirements.txt
+
+# Speech-to-Text
+vosk>=0.3.45
+openai-whisper>=20231117
+
+# Text-to-Speech  
+pyttsx3>=2.90
+
+# Vision/OCR
+pytesseract>=0.3.10
+Pillow>=10.0.0
+paddlepaddle>=2.5.0
+paddleocr>=2.7.0
+
+# Audio Processing
+librosa>=0.10.0
+soundfile>=0.12.0
+pydub>=0.25.0
+
+# Additional utilities
+python-multipart>=0.0.6

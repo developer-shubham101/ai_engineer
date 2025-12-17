@@ -1,0 +1,91 @@
+{
+  "stt_models": {
+    "vosk-small-en": {
+      "name": "Vosk Small English",
+      "size": "40MB",
+      "description": "Lightweight English speech recognition model",
+      "download_url": "https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip",
+      "model_path": "models/vosk-model-small-en-us-0.15",
+      "language": "en",
+      "recommended": true
+    },
+    "vosk-en": {
+      "name": "Vosk English",
+      "size": "1.8GB",
+      "description": "Full English speech recognition model with better accuracy",
+      "download_url": "https://alphacephei.com/vosk/models/vosk-model-en-us-0.22.zip",
+      "model_path": "models/vosk-model-en-us-0.22",
+      "language": "en"
+    }
+  },
+  "tts_models": {
+    "pyttsx3": {
+      "name": "pyttsx3 System TTS",
+      "size": "Built-in",
+      "description": "Uses system TTS engines (SAPI on Windows, espeak on Linux)",
+      "installation": "pip install pyttsx3",
+      "recommended": true
+    },
+    "espeak": {
+      "name": "eSpeak NG",
+      "size": "System",
+      "description": "Lightweight command-line TTS",
+      "installation": "System package: apt install espeak-ng (Linux) or choco install espeak (Windows)"
+    }
+  },
+  "vision_models": {
+    "auto": {
+      "name": "Auto-detect OCR",
+      "size": "Variable",
+      "description": "Automatically uses Tesseract if available, falls back to PaddleOCR",
+      "installation": "Automatic fallback system",
+      "recommended": true
+    },
+    "tesseract": {
+      "name": "Tesseract OCR",
+      "size": "System",
+      "description": "Industry standard OCR engine",
+      "installation": "System package + pip install pytesseract pillow"
+    },
+    "paddleocr": {
+      "name": "PaddleOCR",
+      "size": "~500MB",
+      "description": "Advanced OCR with better accuracy and multi-language support",
+      "installation": "pip install paddlepaddle paddleocr",
+      "auto_download": true
+    }
+  },
+  "emotion_models": {
+    "librosa-basic": {
+      "name": "Librosa Audio Features",
+      "size": "~100MB",
+      "description": "Basic emotion detection using audio feature analysis",
+      "installation": "pip install librosa soundfile",
+      "recommended": true
+    }
+  },
+  "whisper_models": {
+    "whisper-tiny": {
+      "name": "Whisper Tiny",
+      "size": "39MB",
+      "description": "Fastest Whisper model, good for real-time",
+      "model_name": "tiny",
+      "auto_download": true
+    },
+    "whisper-base": {
+      "name": "Whisper Base",
+      "size": "74MB", 
+      "description": "Balanced speed and accuracy",
+      "model_name": "base",
+      "auto_download": true,
+      "recommended": true
+    },
+    "whisper-small": {
+      "name": "Whisper Small",
+      "size": "244MB",
+      "description": "Better accuracy, slower processing",
+      "model_name": "small",
+      "auto_download": true
+    }
+  }
+}

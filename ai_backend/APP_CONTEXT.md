@@ -23,6 +23,10 @@ A **production-ready multi-provider RAG system** supporting both **offline-first
 - ✅ **Session-aware conversations** with profile management
 - ✅ **Persistent conversation history** with cross-device access
 - ✅ **Agentic mode** with step-by-step reasoning capabilities
+- ✅ **Multimodal AI capabilities** - Audio, Vision, and Media processing
+- ✅ **Speech-to-Text & Text-to-Speech** with multiple providers
+- ✅ **OCR and Image Analysis** with CPU-friendly implementations
+- ✅ **Emotion Detection** from audio inputs
 - ✅ **Offline-first architecture** with cloud integration
 - ✅ **JWT authentication** with comprehensive audit logging
 - ✅ **Prompt optimization** with token budgeting and context truncation
@@ -75,6 +79,14 @@ User Request → FastAPI Router → Container → Modular Services → Response
 - `profile_analyzer.py` - User profile analysis
 - `utils.py` - Shared utilities and sentiment analysis
 
+**🎭 Multimodal Module** (`app/modules/multimodal/`) - **NEW**
+- `interfaces.py` - Multimodal processing interfaces
+- `file_manager.py` - User file management with RBAC
+- `stt_providers.py` - Speech-to-Text providers (Vosk, Whisper)
+- `tts_providers.py` - Text-to-Speech providers (pyttsx3, espeak)
+- `vision_providers.py` - Vision providers (Tesseract, PaddleOCR)
+- `emotion_providers.py` - Emotion detection from audio
+
 **⚙️ Config Module** (`app/modules/config/`)
 - `settings.py` - Environment and application settings
 - `constants.py` - System constants and enums
@@ -90,6 +102,9 @@ User Request → FastAPI Router → Container → Modular Services → Response
 - `api_routes_rag.py` - RAG endpoints with agentic mode support
 - `api_routes_auth.py` - Authentication endpoints using container
 - `api_routes_conversations.py` - Conversation history with RAG logging
+- `api_routes_audio.py` - **NEW: Audio processing (STT, TTS, Emotion)**
+- `api_routes_vision.py` - **NEW: Vision processing (OCR, Image Analysis)**
+- `api_routes_media.py` - **NEW: Media file serving with RBAC**
 - `api_routes_models.py` - Model management endpoints
 - `dependencies.py` - Dependency injection using container
 - `modules/integration.py` - **Dependency injection container**
@@ -436,8 +451,16 @@ ai_backend/
 │   │   │   ├── session_manager.py  # Session management
 │   │   │   ├── rbac.py            # Role-based access control
 │   │   │   └── interfaces.py      # Auth interfaces
-│   │   ├── conversation/    # Conversation history module (NEW)
+│   │   ├── conversation/    # Conversation history module
 │   │   │   ├── conversation_manager.py # Conversation management with RAG logging
+│   │   │   └── __init__.py        # Module exports
+│   │   ├── multimodal/      # Multimodal AI module (NEW)
+│   │   │   ├── interfaces.py      # Multimodal interfaces
+│   │   │   ├── file_manager.py    # User file management
+│   │   │   ├── stt_providers.py   # Speech-to-Text providers
+│   │   │   ├── tts_providers.py   # Text-to-Speech providers
+│   │   │   ├── vision_providers.py # Vision/OCR providers
+│   │   │   ├── emotion_providers.py # Emotion detection
 │   │   │   └── __init__.py        # Module exports
 │   │   ├── llm/             # LLM module
 │   │   │   ├── rag_orchestrator.py # RAG orchestration
@@ -467,6 +490,10 @@ ai_backend/
 │   │   └── doc_parser.py    # Document parsing
 │   ├── api_routes_auth.py   # Authentication endpoints
 │   ├── api_routes_rag.py    # RAG endpoints
+│   ├── api_routes_conversations.py # Conversation history endpoints
+│   ├── api_routes_audio.py  # Audio processing endpoints (NEW)
+│   ├── api_routes_vision.py # Vision processing endpoints (NEW)
+│   ├── api_routes_media.py  # Media serving endpoints (NEW)
 │   ├── api_routes_models.py # Model management endpoints
 │   ├── dependencies.py      # FastAPI dependencies
 │   ├── logging_config.py    # Logging configuration
@@ -488,12 +515,19 @@ ai_backend/
 ├── database/                # SQLite databases
 ├── models/                  # Local LLM models (GGUF)
 ├── embeddings_models/       # Embedding models
+├── user_uploaded_files/     # User multimodal files (NEW)
+│   └── {user_id}/          # Per-user file isolation
+│       ├── audio_*.wav     # Audio files (STT input, TTS output)
+│       ├── image_*.jpg     # Image files (OCR input)
+│       └── doc_*.pdf       # Document files
 ├── chroma_data/            # ChromaDB storage
 ├── logs/                   # Application logs
 ├── scripts/                # Utility scripts
 ├── documents/              # Documentation
 ├── archive/                # Archived files
-└── requirements.txt        # Python dependencies
+├── requirements.txt        # Python dependencies
+├── requirements_multimodal.txt # Multimodal AI dependencies (NEW)
+└── validate_container_full.py
 ```
 
 ---
@@ -549,6 +583,98 @@ Response: {
   "final_prompt": "string"  // Debug: actual prompt sent to LLM
 }
 ```
+
+### Audio Processing (`/api/audio/`) - **NEW**
+
+**POST /api/audio/stt** - Speech to Text
+```json
+Request: FormData with audio file
+Parameters: {
+  "provider": "vosk|whisper",
+  "conversation_id": "string"
+}
+Response: {
+  "success": true,
+  "data": {
+    "text": "extracted text from audio",
+    "provider": "vosk",
+    "confidence": 0.8
+  },
+  "file_path": "user_uploaded_files/user123/audio_conv456_001.wav"
+}
+```
+
+**POST /api/audio/tts** - Text to Speech
+```json
+Request: {
+  "text": "Text to convert to speech",
+  "conversation_id": "string",
+  "provider": "pyttsx3|espeak"
+}
+Response: {
+  "success": true,
+  "data": {
+    "text": "original text",
+    "provider": "pyttsx3",
+    "duration": 5.2
+  },
+  "file_path": "user_uploaded_files/user123/tts_conv456_002.wav"
+}
+```
+
+**POST /api/audio/emotion** - Emotion Detection
+```json
+Request: FormData with audio file
+Response: {
+  "success": true,
+  "data": {
+    "emotion": "positive|neutral|excited|calm",
+    "confidence": 0.7,
+    "provider": "basic"
+  }
+}
+```
+
+### Vision Processing (`/api/vision/`) - **NEW**
+
+**POST /api/vision/ocr** - Extract Text from Images
+```json
+Request: FormData with image file
+Parameters: {
+  "provider": "tesseract|paddleocr",
+  "conversation_id": "string"
+}
+Response: {
+  "success": true,
+  "data": {
+    "text": "extracted text from image",
+    "provider": "tesseract",
+    "confidence": 0.8
+  },
+  "file_path": "user_uploaded_files/user123/image_conv456_003.jpg"
+}
+```
+
+**POST /api/vision/describe** - Image Description
+```json
+Request: FormData with image file
+Response: {
+  "success": true,
+  "data": {
+    "description": "Image: 1920x1080 pixels, RGB mode",
+    "width": 1920,
+    "height": 1080,
+    "mode": "RGB"
+  }
+}
+```
+
+### Media Serving (`/api/media/`) - **NEW**
+
+**GET /api/media/{user_id}/{filename}** - Serve Media Files
+- **RBAC**: Users can only access their own files
+- **Supported**: Audio (.mp3, .wav), Images (.jpg, .png), Documents (.pdf)
+- **Returns**: File with appropriate media type
 
 ### Conversation Management (`/api/conversations/`)
 
@@ -782,7 +908,122 @@ A comprehensive test suite validates temperature parameter acceptance:
 
 ---
 
-## 8. Agentic Mode Feature (NEW)
+## 8. Multimodal AI Features (NEW)
+
+### Overview
+
+The system now supports **multimodal AI capabilities** including audio processing, vision analysis, and media management. These features are designed with loose coupling, dependency injection, and factory patterns for easy extensibility.
+
+### Architecture Principles
+
+**🏗️ Design Patterns**:
+- **Factory Pattern**: Easy provider switching (STT, TTS, Vision)
+- **Dependency Injection**: Loose coupling between components
+- **Interface-Based**: All providers implement common interfaces
+- **CPU-Optimized**: Prioritizes CPU-friendly models and libraries
+
+**📁 File Management**:
+- **User Isolation**: Files stored in `user_uploaded_files/{user_id}/`
+- **Generated Filenames**: `{type}_{conversation_id}_{timestamp}.{ext}`
+- **RBAC Security**: Users can only access their own files
+- **Automatic Cleanup**: Old files cleaned up after 7 days
+
+### Audio Processing Module
+
+**Speech-to-Text Providers**:
+- **Vosk** (Default): CPU-friendly, offline, good accuracy
+- **Whisper**: Higher accuracy, slower processing
+- **Factory**: `create_stt_provider("vosk|whisper")`
+
+**Text-to-Speech Providers**:
+- **pyttsx3** (Default): Cross-platform, offline
+- **espeak**: Lightweight, command-line based
+- **Factory**: `create_tts_provider("pyttsx3|espeak")`
+
+**Emotion Detection**:
+- **Basic Provider**: Uses librosa for audio feature extraction
+- **Heuristic Classification**: Simple emotion detection (calm, excited, positive, neutral)
+- **Extensible**: Easy to add ML-based emotion models
+
+### Vision Processing Module
+
+**OCR Providers**:
+- **Tesseract** (Default): Widely supported, good for printed text
+- **PaddleOCR**: Better accuracy, supports multiple languages
+- **Factory**: `create_vision_provider("tesseract|paddleocr")`
+
+**Image Analysis**:
+- **Basic Description**: Image dimensions, color mode, file info
+- **Extensible**: Ready for CLIP, BLIP, or custom vision models
+
+### Workflow Integration
+
+**Typical Multimodal Workflow**:
+1. **User uploads audio/image** → Multimodal API processes → Returns extracted data
+2. **Frontend receives structured data** → Can display or use in text-based `/query`
+3. **Text-based RAG processing** → Uses existing `/api/rag/{provider}/query`
+4. **Optional TTS conversion** → AI response converted to audio
+
+**Example Flow**:
+```
+User Voice → /api/audio/stt → Text → /api/rag/local/query → AI Response → /api/audio/tts → Audio Response
+```
+
+### Provider Management
+
+**Easy Model Switching**:
+```python
+# Configuration-based provider selection
+stt_provider = create_stt_provider("whisper")  # Switch to Whisper
+tts_provider = create_tts_provider("espeak")   # Switch to espeak
+vision_provider = create_vision_provider("paddleocr")  # Switch to PaddleOCR
+```
+
+**Model Installation**:
+- **Vosk**: Download model to `models/vosk-model-small-en-us-0.15`
+- **Whisper**: Auto-downloads on first use
+- **Tesseract**: System installation required
+- **PaddleOCR**: Auto-downloads models on first use
+
+### Security & RBAC
+
+**File Access Control**:
+- Users can only upload/access files in their directory
+- Media serving endpoint validates user ownership
+- Generated filenames prevent path traversal attacks
+
+**Processing Isolation**:
+- Each user's files processed independently
+- No cross-user data leakage
+- Temporary processing files cleaned up
+
+### Performance Considerations
+
+**CPU Optimization**:
+- All providers selected for CPU efficiency
+- Lazy loading of models (loaded on first use)
+- Configurable processing parameters
+
+**File Management**:
+- Automatic cleanup of old files
+- Efficient file serving with proper media types
+- Minimal memory footprint for file operations
+
+### Extension Points
+
+**Adding New Providers**:
+1. Implement provider interface (`ISTTProvider`, `ITTSProvider`, etc.)
+2. Add to factory function
+3. Update configuration options
+4. No changes to API routes required
+
+**Future Enhancements**:
+- **CLIP Integration**: Semantic image search
+- **BLIP Captioning**: Advanced image descriptions
+- **Whisper.cpp**: Faster CPU inference
+- **Custom Emotion Models**: ML-based emotion detection
+
+## 9. Agentic Mode Feature
 
 ### Overview
 
@@ -836,7 +1077,7 @@ curl -X POST "/api/rag/local/query" \
 - **Debugging**: Understanding AI reasoning process
 - **Quality Assurance**: Validating response logic
 
-## 9. Recent Enhancements (Latest Commits)
+## 10. Recent Enhancements (Latest Commits)
 
 ### Prompt Optimization System
 - **Token Budgeting**: Dynamic allocation between system instructions, context, and user query
@@ -1071,7 +1312,7 @@ DELETE /api/training/models/{name} # Delete trained model
 
 ---
 
-## 10. Core Service Functions
+## 11. Core Service Functions
 
 ### BaseRAGService (Abstract)
 ```python
@@ -1153,7 +1394,7 @@ session_manager = container.get_session_manager()
 
 ---
 
-## 11. Data Models
+## 12. Data Models
 
 ### User/Requester
 ```python
@@ -1195,7 +1436,7 @@ session_manager = container.get_session_manager()
 
 ---
 
-## 12. Configuration
+## 13. Configuration
 
 ### Environment Variables
 ```bash
@@ -1243,7 +1484,7 @@ VALID_DEPARTMENTS = [
 
 ---
 
-## 13. Local Model Support
+## 14. Local Model Support
 
 ### Supported Models (GGUF Format)
 ```
@@ -1283,7 +1524,7 @@ python scripts/download_hf_model.py --all
 
 ---
 
-## 14. Logging & Monitoring
+## 15. Logging & Monitoring
 
 ### Security Events
 - `TOKEN_CREATED` - JWT token generation with context
@@ -1307,7 +1548,7 @@ python scripts/download_hf_model.py --all
 
 ---
 
-## 15. Development Guidelines
+## 16. Development Guidelines
 
 ### Code Conventions
 - **Python 3.10+** with type hints
@@ -1333,7 +1574,7 @@ python scripts/download_hf_model.py --all
 
 ---
 
-## 16. Usage Examples
+## 17. Usage Examples
 
 ### Authentication
 ```bash
@@ -1361,6 +1602,64 @@ curl -X POST "/api/rag/gpt/query" \
   -d '{"question": "What is our policy?", "use_llm": true}'
 ```
 
+### Multimodal Processing
+```bash
+# Speech to Text
+curl -X POST "/api/audio/stt" \
+  -H "Authorization: Bearer <token>" \
+  -F "file=@voice_question.wav" \
+  -F "provider=vosk" \
+  -F "conversation_id=conv_123"
+
+# Text to Speech
+curl -X POST "/api/audio/tts" \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"text": "Here is your answer", "conversation_id": "conv_123", "provider": "pyttsx3"}'
+
+# OCR from Image
+curl -X POST "/api/vision/ocr" \
+  -H "Authorization: Bearer <token>" \
+  -F "file=@document.jpg" \
+  -F "provider=tesseract" \
+  -F "conversation_id=conv_123"
+
+# Emotion Detection
+curl -X POST "/api/audio/emotion" \
+  -H "Authorization: Bearer <token>" \
+  -F "file=@voice_sample.wav" \
+  -F "provider=basic"
+
+# Serve Media File
+curl "/api/media/user123/tts_conv_123_1640995200.wav" \
+  -H "Authorization: Bearer <token>"
+```
+
+### Complete Multimodal Workflow
+```bash
+# 1. Upload voice question
+STT_RESPONSE=$(curl -X POST "/api/audio/stt" \
+  -H "Authorization: Bearer <token>" \
+  -F "file=@question.wav" \
+  -F "conversation_id=conv_123")
+
+# 2. Extract text from response
+QUESTION_TEXT=$(echo $STT_RESPONSE | jq -r '.data.text')
+
+# 3. Query RAG system
+RAG_RESPONSE=$(curl -X POST "/api/rag/local/query" \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d "{\"question\": \"$QUESTION_TEXT\", \"conversation_id\": \"conv_123\", \"use_llm\": true}")
+
+# 4. Convert answer to speech
+ANSWER_TEXT=$(echo $RAG_RESPONSE | jq -r '.answer')
+curl -X POST "/api/audio/tts" \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d "{\"text\": \"$ANSWER_TEXT\", \"conversation_id\": \"conv_123\"}"
+```
+
 ### Document Management
 ```bash
 # Add document
@@ -1370,11 +1669,25 @@ curl -X POST "/api/rag/documents/add" \
 
 # List documents
 curl "/api/rag/documents/list?department=HR&status=published"
+
+# OCR + Document Addition Workflow
+# 1. Extract text from scanned document
+OCR_RESPONSE=$(curl -X POST "/api/vision/ocr" \
+  -H "Authorization: Bearer <token>" \
+  -F "file=@scanned_policy.jpg" \
+  -F "conversation_id=conv_123")
+
+# 2. Add extracted text to RAG system
+EXTRACTED_TEXT=$(echo $OCR_RESPONSE | jq -r '.data.text')
+curl -X POST "/api/rag/documents/add" \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d "{\"source_name\": \"Scanned Policy Document\", \"text\": \"$EXTRACTED_TEXT\", \"metadata\": {\"sensitivity\": \"public_internal\", \"department\": \"HR\"}}"
 ```
 
 ---
 
-## 17. Deployment
+## 18. Deployment
 
 ### Quick Start
 ```bash
@@ -1406,7 +1719,7 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000
 
 ---
 
-## 18. Testing & Validation
+## 19. Testing & Validation
 
 ### Test Infrastructure
 
@@ -1477,7 +1790,7 @@ python tests/test_rbac_comprehensive.py
 - **Clear Output**: Detailed test results and failure reporting
 - **Documentation**: Comprehensive test coverage documentation
 
-## 19. AI Assistant Instructions
+## 20. AI Assistant Instructions
 
 **When generating code:**
 
@@ -1515,7 +1828,7 @@ python tests/test_rbac_comprehensive.py
 
 ---
 
-## 20. Migration Status Summary
+## 21. Migration Status Summary
 
 ### ✅ **COMPLETED MIGRATION**
 

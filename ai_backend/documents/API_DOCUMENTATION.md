@@ -2,9 +2,24 @@
 
 ## Overview
 
-This document provides comprehensive API documentation and testing examples for the Multi-Provider Enterprise RAG System. The system provides both REST API endpoints and interactive testing capabilities.
+This document provides comprehensive API documentation and testing examples for the Multi-Provider Enterprise RAG System. The system provides both REST API endpoints and interactive testing capabilities, including new multimodal AI processing capabilities.
 
 **Base URL:** `http://localhost:8000` (or your configured host and port)
+
+## 📑 Table of Contents
+
+1. [General Endpoints](#-general-endpoints)
+2. [Authentication & Authorization](#-authentication--authorization)
+3. [Multimodal AI Processing](#-multimodal-ai-processing-new)
+   - [Audio Processing APIs](#-audio-processing-apis)
+   - [Vision Processing APIs](#-vision-processing-apis)
+   - [Media File Serving](#-media-file-serving)
+   - [Complete Multimodal Workflows](#-complete-multimodal-workflows)
+4. [Conversation History](#-conversation-history-new)
+5. [Prompt Templates](#-prompt-templates-new)
+6. [RAG Query APIs](#-rag-query-apis)
+7. [Document Management](#-document-management)
+8. [Model Management](#-model-management)
 
 ## 📋 General Endpoints
 
@@ -55,6 +70,359 @@ curl -X POST "http://localhost:5444/api/auth/token" \
 3. `role_confidential` - Specific roles or HR/Legal/Executive
 4. `highly_confidential` - Legal/Executive only
 5. `personal` - Owner or HR/Legal/Executive
+
+## 🎭 Multimodal AI Processing (NEW)
+
+### Overview
+The system now supports multimodal AI capabilities including:
+- **Speech-to-Text (STT)**: Convert audio to text using Vosk or Whisper
+- **Text-to-Speech (TTS)**: Convert text to audio using pyttsx3 or espeak
+- **Optical Character Recognition (OCR)**: Extract text from images using Tesseract or PaddleOCR
+- **Image Analysis**: Basic image description and analysis
+- **Emotion Detection**: Detect emotions from audio using audio feature analysis
+- **Secure File Management**: User-isolated file storage with RBAC
+
+### File Storage Structure
+```
+user_uploaded_files/
+├── user_123/
+│   ├── audio_conv_456_001.wav    # STT input
+│   ├── tts_conv_456_002.mp3      # TTS output  
+│   ├── image_conv_456_003.jpg    # Vision input
+│   └── doc_conv_456_004.pdf      # OCR input
+```
+
+## 🎙️ Audio Processing APIs
+
+### Speech-to-Text (STT)
+- **POST** `/api/audio/stt` - Convert speech to text
+
+```bash
+curl -X POST "http://localhost:8000/api/audio/stt" \
+-H "Authorization: Bearer $TOKEN" \
+-F "file=@voice_question.wav" \
+-F "provider=vosk" \
+-F "conversation_id=conv_123"
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "text": "What is our company vacation policy?",
+    "provider": "vosk",
+    "confidence": 0.8
+  },
+  "file_path": "user_uploaded_files/user123/audio_conv123_1640995200.wav",
+  "error": null
+}
+```
+
+**Supported Providers:**
+- `vosk` (default): CPU-friendly, offline, good accuracy
+- `whisper`: Higher accuracy, slower processing
+
+### Text-to-Speech (TTS)
+- **POST** `/api/audio/tts` - Convert text to speech
+
+```bash
+curl -X POST "http://localhost:8000/api/audio/tts" \
+-H "Content-Type: application/json" \
+-H "Authorization: Bearer $TOKEN" \
+-d '{
+  "text": "Here is your answer about the vacation policy",
+  "conversation_id": "conv_123",
+  "provider": "pyttsx3"
+}'
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "text": "Here is your answer about the vacation policy",
+    "provider": "pyttsx3",
+    "duration": 5.2
+  },
+  "file_path": "user_uploaded_files/user123/tts_conv123_1640995201.wav",
+  "error": null
+}
+```
+
+**Supported Providers:**
+- `pyttsx3` (default): Cross-platform, offline
+- `espeak`: Lightweight, command-line based
+
+### Emotion Detection
+- **POST** `/api/audio/emotion` - Detect emotion from audio
+
+```bash
+curl -X POST "http://localhost:8000/api/audio/emotion" \
+-H "Authorization: Bearer $TOKEN" \
+-F "file=@voice_sample.wav" \
+-F "provider=basic" \
+-F "conversation_id=conv_123"
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "emotion": "positive",
+    "confidence": 0.7,
+    "provider": "basic",
+    "features": {
+      "mean_mfcc": 0.15,
+      "mean_spectral": 1500.0,
+      "mean_zcr": 0.08
+    }
+  },
+  "file_path": "user_uploaded_files/user123/audio_conv123_1640995202.wav",
+  "error": null
+}
+```
+
+**Detected Emotions:**
+- `excited`: High spectral centroid + high zero crossing rate
+- `calm`: Low spectral centroid
+- `positive`: Positive MFCC features
+- `neutral`: Default classification
+
+## 👁️ Vision Processing APIs
+
+### Optical Character Recognition (OCR)
+- **POST** `/api/vision/ocr` - Extract text from images
+
+```bash
+curl -X POST "http://localhost:8000/api/vision/ocr" \
+-H "Authorization: Bearer $TOKEN" \
+-F "file=@document_scan.jpg" \
+-F "provider=tesseract" \
+-F "conversation_id=conv_123"
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "text": "Company Policy Document\n\nVacation Policy:\nEmployees are entitled to 20 days of annual leave...",
+    "provider": "tesseract",
+    "confidence": 0.8
+  },
+  "file_path": "user_uploaded_files/user123/image_conv123_1640995203.jpg",
+  "error": null
+}
+```
+
+**Supported Providers:**
+- `auto` (default): Auto-detects available OCR engine (Tesseract → PaddleOCR fallback)
+- `tesseract`: Industry standard OCR (requires system installation)
+- `paddleocr`: Advanced OCR with auto-download
+
+### Image Description
+- **POST** `/api/vision/describe` - Generate basic image description
+
+```bash
+curl -X POST "http://localhost:8000/api/vision/describe" \
+-H "Authorization: Bearer $TOKEN" \
+-F "file=@photo.jpg" \
+-F "provider=tesseract" \
+-F "conversation_id=conv_123"
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "description": "Image: 1920x1080 pixels, RGB mode",
+    "provider": "basic",
+    "width": 1920,
+    "height": 1080,
+    "mode": "RGB"
+  },
+  "file_path": "user_uploaded_files/user123/image_conv123_1640995204.jpg",
+  "error": null
+}
+```
+
+### Image Analysis
+- **POST** `/api/vision/analyze` - Analyze image (currently same as describe)
+
+```bash
+curl -X POST "http://localhost:8000/api/vision/analyze" \
+-H "Authorization: Bearer $TOKEN" \
+-F "file=@image.jpg" \
+-F "provider=tesseract" \
+-F "conversation_id=conv_123"
+```
+
+## 📁 Media File Serving
+
+### Serve Media Files
+- **GET** `/api/media/{user_id}/{filename}` - Serve uploaded media files with RBAC
+
+```bash
+# Serve audio file
+curl "http://localhost:8000/api/media/user123/tts_conv123_1640995201.wav" \
+-H "Authorization: Bearer $TOKEN"
+
+# Serve image file
+curl "http://localhost:8000/api/media/user123/image_conv123_1640995203.jpg" \
+-H "Authorization: Bearer $TOKEN"
+```
+
+**Security Features:**
+- Users can only access their own files
+- File path validation prevents directory traversal
+- Proper media type headers for different file types
+- Returns 403 Forbidden for unauthorized access
+- Returns 404 Not Found for non-existent files
+
+**Supported Media Types:**
+- Audio: `.mp3`, `.wav`, `.ogg` → `audio/mpeg`
+- Images: `.jpg`, `.jpeg`, `.png`, `.gif` → `image/jpeg`
+- Documents: `.pdf` → `application/pdf`
+- Other: `application/octet-stream`
+
+## 🔄 Complete Multimodal Workflows
+
+### Voice-to-Voice Conversation
+```bash
+# 1. Convert voice question to text
+STT_RESPONSE=$(curl -X POST "http://localhost:8000/api/audio/stt" \
+  -H "Authorization: Bearer $TOKEN" \
+  -F "file=@question.wav" \
+  -F "conversation_id=conv_123")
+
+# 2. Extract text from response
+QUESTION_TEXT=$(echo $STT_RESPONSE | jq -r '.data.text')
+
+# 3. Query RAG system with extracted text
+RAG_RESPONSE=$(curl -X POST "http://localhost:8000/api/rag/local/query" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "{\"question\": \"$QUESTION_TEXT\", \"conversation_id\": \"conv_123\", \"use_llm\": true}")
+
+# 4. Convert AI answer to speech
+ANSWER_TEXT=$(echo $RAG_RESPONSE | jq -r '.answer')
+TTS_RESPONSE=$(curl -X POST "http://localhost:8000/api/audio/tts" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "{\"text\": \"$ANSWER_TEXT\", \"conversation_id\": \"conv_123\"}")
+
+# 5. Get audio file path
+AUDIO_PATH=$(echo $TTS_RESPONSE | jq -r '.file_path')
+echo "Audio response saved to: $AUDIO_PATH"
+```
+
+### Document OCR to RAG Workflow
+```bash
+# 1. Extract text from scanned document
+OCR_RESPONSE=$(curl -X POST "http://localhost:8000/api/vision/ocr" \
+  -H "Authorization: Bearer $TOKEN" \
+  -F "file=@scanned_policy.jpg" \
+  -F "conversation_id=conv_123")
+
+# 2. Extract text from OCR response
+EXTRACTED_TEXT=$(echo $OCR_RESPONSE | jq -r '.data.text')
+
+# 3. Add extracted text to RAG document store
+curl -X POST "http://localhost:8000/api/rag/documents/add" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"source_name\": \"Scanned Policy Document\",
+    \"text\": \"$EXTRACTED_TEXT\",
+    \"metadata\": {
+      \"sensitivity\": \"public_internal\",
+      \"department\": \"HR\",
+      \"source_type\": \"ocr_scan\"
+    }
+  }"
+
+# 4. Query the newly added document
+curl -X POST "http://localhost:8000/api/rag/local/query" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "question": "What does the scanned document say about vacation policy?",
+    "conversation_id": "conv_123",
+    "use_llm": true
+  }'
+```
+
+### Error Handling
+
+All multimodal APIs return consistent error responses:
+
+```json
+{
+  "success": false,
+  "data": {},
+  "file_path": null,
+  "error": "Specific error message"
+}
+```
+
+**Common Error Cases:**
+- **Missing Dependencies**: "Vosk not installed. Run: pip install vosk"
+- **Invalid File Type**: "File must be audio format"
+- **Model Not Found**: "Vosk model not found. Please download vosk-model-small-en-us-0.15"
+- **Tesseract Not Found**: "Tesseract OCR not installed. Install: Windows: 'choco install tesseract'..."
+- **Processing Failed**: Specific error from underlying library
+- **Access Denied**: "Access denied" (403 status)
+- **File Not Found**: "File not found" (404 status)
+
+**Tesseract Installation Help:**
+```bash
+# Quick Windows installation
+python scripts/install_tesseract_windows.py
+# Or
+scripts/install_tesseract.bat
+
+# If Tesseract issues persist, the system will automatically use PaddleOCR
+```
+
+### Installation Requirements
+
+To use multimodal features, install additional dependencies:
+
+```bash
+# Install multimodal requirements
+pip install -r requirements_multimodal.txt
+
+# Or install individually:
+pip install vosk openai-whisper pyttsx3 pytesseract Pillow paddlepaddle paddleocr librosa soundfile
+```
+
+**System Dependencies:**
+
+**Tesseract OCR (Optional - auto-fallback to PaddleOCR):**
+```bash
+# Windows (Chocolatey)
+choco install tesseract
+
+# Windows (Manual)
+# Download from: https://github.com/UB-Mannheim/tesseract/wiki
+# Or run: python scripts/install_tesseract_windows.py
+
+# Ubuntu/Debian
+sudo apt install tesseract-ocr
+
+# macOS
+brew install tesseract
+```
+
+**Other Dependencies:**
+- **espeak**: Install system package (e.g., `apt install espeak-ng` on Ubuntu)
+- **Vosk Models**: Download to `models/vosk-model-small-en-us-0.15/`
+
+**Note**: If Tesseract is not installed, the system automatically falls back to PaddleOCR which downloads models automatically.
 
 ## 💬 Conversation History (NEW)
 
@@ -274,23 +642,412 @@ Every assistant message in a conversation includes comprehensive RAG pipeline lo
 
 ### Use Cases
 
-#### Cross-Device Access
+####### Cross-Device Access
 ```bash
 # Login from Device A
-curl -X POST "http://localhost:5444/api/auth/token" \
+curl -X POST "http://localhost:8000/api/auth/token" \
 -H "Content-Type: application/json" \
 -d '{"username": "admin", "password": "admin123"}'
 
 # Have a conversation...
 
 # Login from Device B with same credentials
-curl -X POST "http://localhost:5444/api/auth/token" \
+curl -X POST "http://localhost:8000/api/auth/token" \
 -H "Content-Type: application/json" \
 -d '{"username": "admin", "password": "admin123"}'
 
 # List conversations - shows all conversations from Device A
-curl -X GET "http://localhost:5444/api/conversations" \
--H "Authorization: Bearer $NEW_TOKEN"
+curl -X GET "http://localhost:8000/api/conversations" \
+-H "Authorization: Bearer $TOKEN"
+```
+
+## 🤖 RAG Query APIs
+
+### Multi-Provider Query Interface
+The system supports multiple LLM providers through a unified API interface.
+
+**Supported Providers:**
+- `local` - Local models (Mistral-7B, Phi-2, Llama-3.2, etc.)
+- `google` - Google Gemini API
+- `gpt` - OpenAI GPT API
+- `huggingface` or `hf` - Hugging Face Inference API
+
+### Query with Local Models
+- **POST** `/api/rag/local/query` - Query using local LLM models
+
+```bash
+curl -X POST "http://localhost:8000/api/rag/local/query" \
+-H "Content-Type: application/json" \
+-H "Authorization: Bearer $TOKEN" \
+-d '{
+  "question": "What is our company vacation policy?",
+  "conversation_id": "conv_123",
+  "top_k": 3,
+  "use_documents": true,
+  "use_llm": true,
+  "use_conversation_history": true,
+  "enable_agentic_mode": false,
+  "max_tokens": 256,
+  "temperature": 0.1,
+  "prompt_template": "personalized_chat",
+  "local_llm_model": "phi2"
+}'
+```
+
+### Query with Cloud Providers
+```bash
+# Google Gemini
+curl -X POST "http://localhost:8000/api/rag/google/query" \
+-H "Content-Type: application/json" \
+-H "Authorization: Bearer $TOKEN" \
+-d '{
+  "question": "What is our company vacation policy?",
+  "conversation_id": "conv_123",
+  "use_llm": true,
+  "temperature": 0.1
+}'
+
+# OpenAI GPT
+curl -X POST "http://localhost:8000/api/rag/gpt/query" \
+-H "Content-Type: application/json" \
+-H "Authorization: Bearer $TOKEN" \
+-d '{
+  "question": "What is our company vacation policy?",
+  "conversation_id": "conv_123",
+  "use_llm": true,
+  "temperature": 0.1
+}'
+
+# Hugging Face
+curl -X POST "http://localhost:8000/api/rag/huggingface/query" \
+-H "Content-Type: application/json" \
+-H "Authorization: Bearer $TOKEN" \
+-d '{
+  "question": "What is our company vacation policy?",
+  "conversation_id": "conv_123",
+  "use_llm": true,
+  "temperature": 0.1
+}'
+```
+
+### Query Parameters
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `question` | string | required | User question |
+| `conversation_id` | string | required | Conversation ID for history |
+| `top_k` | integer | 3 | Number of documents to retrieve |
+| `use_documents` | boolean | true | Whether to retrieve documents |
+| `use_llm` | boolean | false | Whether to use LLM for response |
+| `use_conversation_history` | boolean | true | Include conversation context |
+| `enable_agentic_mode` | boolean | false | Enable step-by-step reasoning |
+| `max_tokens` | integer | 256 | Maximum response tokens |
+| `temperature` | float | 0.1 | Response creativity (0.0-1.0) |
+| `category` | string | null | Document category filter |
+| `debug` | boolean | false | Include debug information |
+| `prompt_template` | string | "" | Template name to use |
+| `local_llm_model` | string | null | Specific local model (local provider only) |
+
+### Response Format
+
+```json
+{
+  "answer": "The company provides 20 days of annual leave per year...",
+  "retrieved": [
+    {
+      "id": "doc_123",
+      "text": "Leave policy document excerpt...",
+      "metadata": {
+        "department": "HR",
+        "sensitivity": "public_internal",
+        "source": "HR_policies_handbook.md"
+      },
+      "distance": 0.85
+    }
+  ],
+  "context": "Combined context from retrieved documents...",
+  "final_prompt": "System: You are an HR assistant...\n\nContext: Leave policy...\n\nQuestion: What is our company vacation policy?"
+}
+```
+
+### Agentic Mode (NEW)
+
+When `enable_agentic_mode` is set to `true`, the system enhances the prompt with reasoning instructions:
+
+```bash
+curl -X POST "http://localhost:8000/api/rag/local/query" \
+-H "Content-Type: application/json" \
+-H "Authorization: Bearer $TOKEN" \
+-d '{
+  "question": "What are the steps to request vacation time?",
+  "conversation_id": "conv_123",
+  "use_llm": true,
+  "enable_agentic_mode": true
+}'
+```
+
+**Agentic Mode Benefits:**
+- Step-by-step reasoning in responses
+- More detailed explanations
+- Explicit logic chains
+- Better for complex analysis
+
+## 📄 Document Management
+
+### Add Document (JSON)
+- **POST** `/api/rag/documents/add` - Add document via JSON
+
+```bash
+curl -X POST "http://localhost:8000/api/rag/documents/add" \
+-H "Content-Type: application/json" \
+-H "Authorization: Bearer $TOKEN" \
+-d '{
+  "source_name": "New Company Policy",
+  "text": "This document outlines the new remote work policy...",
+  "metadata": {
+    "department": "HR",
+    "sensitivity": "public_internal",
+    "document_type": "policy"
+  }
+}'
+```
+
+### Upload Document File
+- **POST** `/api/rag/documents/add-file` - Upload and add document file
+
+```bash
+curl -X POST "http://localhost:8000/api/rag/documents/add-file" \
+-H "Authorization: Bearer $TOKEN" \
+-F "file=@policy_document.pdf" \
+-F "department=HR" \
+-F "sensitivity=public_internal"
+```
+
+### List Documents
+- **GET** `/api/rag/documents/list` - List documents with filtering
+
+```bash
+curl -X GET "http://localhost:8000/api/rag/documents/list?department=HR&status=published&latest_only=true" \
+-H "Authorization: Bearer $TOKEN"
+```
+
+### Document Versioning
+
+```bash
+# Update document (creates new version)
+curl -X POST "http://localhost:8000/api/rag/documents/update" \
+-H "Content-Type: application/json" \
+-H "Authorization: Bearer $TOKEN" \
+-d '{
+  "document_id": "doc_123",
+  "text": "Updated policy content...",
+  "version_notes": "Updated remote work guidelines",
+  "status": "published"
+}'
+
+# Get version history
+curl -X GET "http://localhost:8000/api/rag/documents/doc_123/versions" \
+-H "Authorization: Bearer $TOKEN"
+
+# Compare versions
+curl -X GET "http://localhost:8000/api/rag/documents/doc_123/compare?version1=v1.0&version2=v2.0" \
+-H "Authorization: Bearer $TOKEN"
+```
+
+### Seed Sample Documents
+- **POST** `/api/rag/documents/seed` - Load sample company documents
+
+```bash
+curl -X POST "http://localhost:8000/api/rag/documents/seed?reseed=false" \
+-H "Authorization: Bearer $TOKEN"
+```
+
+## 🤖 Model Management
+
+### List Available Models
+- **GET** `/api/models/list` - List all available local models
+
+```bash
+curl -X GET "http://localhost:8000/api/models/list" \
+-H "Authorization: Bearer $TOKEN"
+```
+
+**Response:**
+```json
+{
+  "models": [
+    {
+      "key": "phi2",
+      "name": "Phi-2 Q4_K_M",
+      "file_path": "models/phi-2-q4_k_m.gguf",
+      "size_gb": 1.6,
+      "context_length": 2048,
+      "recommended_use": "General Q&A, reasoning tasks"
+    },
+    {
+      "key": "mistral7b",
+      "name": "Mistral-7B Instruct v0.2",
+      "file_path": "models/mistral-7b-instruct-v0.2.Q3_K_M.gguf",
+      "size_gb": 3.8,
+      "context_length": 4096,
+      "recommended_use": "Production RAG, instruction following"
+    }
+  ],
+  "count": 2,
+  "default_model": "phi2"
+}
+```
+
+### Get Best Available Model
+- **GET** `/api/models/best` - Get the best available model for current system
+
+```bash
+curl -X GET "http://localhost:8000/api/models/best" \
+-H "Authorization: Bearer $TOKEN"
+```
+
+### Refresh Model Cache
+- **POST** `/api/models/refresh` - Refresh the model cache (scan for new models)
+
+```bash
+curl -X POST "http://localhost:8000/api/models/refresh" \
+-H "Authorization: Bearer $TOKEN"
+```
+
+## 🔧 System Status
+
+### Embedding Model Status
+- **GET** `/api/rag/embedding/status` - Check embedding model status
+
+```bash
+curl -X GET "http://localhost:8000/api/rag/embedding/status" \
+-H "Authorization: Bearer $TOKEN"
+```
+
+### Module Status
+- **GET** `/api/modules/status` - Check modular architecture status
+
+```bash
+curl -X GET "http://localhost:8000/api/modules/status"
+```
+
+## 🧪 Testing & Examples
+
+### Complete RAG Workflow Test
+```bash
+#!/bin/bash
+
+# 1. Login and get token
+TOKEN_RESPONSE=$(curl -s -X POST "http://localhost:8000/api/auth/token" \
+  -H "Content-Type: application/json" \
+  -d '{"username": "admin", "password": "admin123"}')
+
+TOKEN=$(echo $TOKEN_RESPONSE | jq -r '.access_token')
+echo "Token: $TOKEN"
+
+# 2. Create new conversation
+CONV_RESPONSE=$(curl -s -X POST "http://localhost:8000/api/conversations" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{"title": "API Test Conversation"}')
+
+CONV_ID=$(echo $CONV_RESPONSE | jq -r '.id')
+echo "Conversation ID: $CONV_ID"
+
+# 3. Query RAG system
+RAG_RESPONSE=$(curl -s -X POST "http://localhost:8000/api/rag/local/query" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" \
+  -d "{
+    \"question\": \"What is our company vacation policy?\",
+    \"conversation_id\": \"$CONV_ID\",
+    \"use_llm\": true,
+    \"use_documents\": true
+  }")
+
+echo "RAG Response:"
+echo $RAG_RESPONSE | jq '.answer'
+
+# 4. Get conversation messages
+MESSAGES=$(curl -s -X GET "http://localhost:8000/api/conversations/$CONV_ID/messages" \
+  -H "Authorization: Bearer $TOKEN")
+
+echo "Message count: $(echo $MESSAGES | jq 'length')"
+```
+
+### Multimodal Workflow Test
+```bash
+#!/bin/bash
+
+# Assuming TOKEN and CONV_ID from previous example
+
+# 1. Test TTS (Text to Speech)
+TTS_RESPONSE=$(curl -s -X POST "http://localhost:8000/api/audio/tts" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" \
+  -d "{
+    \"text\": \"Hello, this is a test of the text to speech system\",
+    \"conversation_id\": \"$CONV_ID\",
+    \"provider\": \"pyttsx3\"
+  }")
+
+AUDIO_FILE=$(echo $TTS_RESPONSE | jq -r '.file_path')
+echo "Audio file created: $AUDIO_FILE"
+
+# 2. Test OCR (if you have an image file)
+# OCR_RESPONSE=$(curl -s -X POST "http://localhost:8000/api/vision/ocr" \
+#   -H "Authorization: Bearer $TOKEN" \
+#   -F "file=@test_document.jpg" \
+#   -F "conversation_id=$CONV_ID")
+# 
+# echo "OCR Result:"
+# echo $OCR_RESPONSE | jq '.data.text'
+```
+
+## 🚨 Error Handling
+
+### Common HTTP Status Codes
+- `200 OK` - Successful request
+- `400 Bad Request` - Invalid request parameters
+- `401 Unauthorized` - Missing or invalid authentication
+- `403 Forbidden` - Insufficient permissions (RBAC)
+- `404 Not Found` - Resource not found
+- `413 Payload Too Large` - File too large
+- `500 Internal Server Error` - Server error
+
+### Error Response Format
+```json
+{
+  "detail": "Specific error message",
+  "status_code": 400,
+  "error_type": "validation_error"
+}
+```
+
+### RBAC Error Examples
+```json
+{
+  "detail": "Your role 'Employee' (level 1) cannot create documents with sensitivity 'highly_confidential' (requires level 3+)",
+  "status_code": 403
+}
+```
+
+## 📝 Notes
+
+- All timestamps are in ISO 8601 format (UTC)
+- File uploads have a maximum size limit (configurable)
+- RBAC filtering is applied automatically based on user role and department
+- Conversation history is persistent across sessions
+- Multimodal files are automatically cleaned up after 7 days
+- Debug mode (`debug: true`) provides additional response details
+- Temperature parameter controls response creativity (0.0 = deterministic, 1.0 = creative)
+- Agentic mode provides step-by-step reasoning in responses
+
+---
+
+**Last Updated:** 2025-01-11  
+**API Version:** 1.0.0  
+**Documentation Version:** 2.0.0 (includes multimodal features)ization: Bearer $NEW_TOKEN"
 ```
 
 #### Analytics and Debugging

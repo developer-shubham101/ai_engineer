@@ -7,6 +7,7 @@ import PersonalizedTestModal from './PersonalizedTestModal.jsx'
 import PromptTemplateManager from './PromptTemplateManager.jsx'
 import ConversationSidebar from './ConversationSidebar.jsx'
 import ConversationMessageDetail from './ConversationMessageDetail.jsx'
+import AudioRecorder from './AudioRecorder.jsx'
 import ToastList from './ToastList.jsx'
 import { BASE_API_URL } from '../utility/const.js'
 import { getStoredToken, getStoredUser, getSessionIdFromToken, clearAuth } from '../utility/auth.js'
@@ -245,6 +246,130 @@ export default function RAGChat({ onLogout }) {
     } catch (err) {
       console.error("Failed to fetch templates", err)
     }
+  }
+
+  // ========== Multimodal Functions ==========
+
+  async function handleAudioRecorded(audioBlob) {
+    if (!token) return
+
+    addToast('Processing audio...', 'info', 'STT')
+
+    try {
+      const formData = new FormData()
+      formData.append('file', audioBlob, 'recording.webm')
+      formData.append('conversation_id', activeConversationId || 'temp')
+      formData.append('provider', 'vosk') // default
+
+      const res = await fetch(`${BASE_API_URL}/api/audio/stt`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` },
+        body: formData
+      })
+
+      if (!res.ok) throw new Error('STT Failed')
+
+      const data = await res.json()
+      if (data.success && data.data.text) {
+        setComposer(prev => (prev + ' ' + data.data.text).trim())
+        addToast('Audio transcribed', 'success')
+      } else {
+        throw new Error(data.error || 'Unknown STT error')
+      }
+    } catch (err) {
+      console.error("STT Error:", err)
+      addToast(err.message, 'danger', 'STT Error')
+    }
+  }
+
+  async function playTTS(text) {
+    if (!token || !text) return
+
+    try {
+      const res = await fetch(`${BASE_API_URL}/api/audio/tts`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          text: text,
+          conversation_id: activeConversationId,
+          provider: 'pyttsx3'
+        })
+      })
+
+      if (!res.ok) throw new Error('TTS Failed')
+
+      const data = await res.json()
+      if (data.success && data.file_path) {
+        // Construct full URL to play
+        // Ideally backend returns full URL or we construct it.
+        // Assuming file_path is relative like "user_uploaded_files/..."
+        // We need a media serving endpoint. API Docs say /api/media/{user_id}/{filename}
+        // But data.file_path might be full relative path.
+        // Let's assume we can play it if we get a URL.
+        // The API docs mention specific serving endpoint: /api/media/{user_id}/{filename}
+        // We'll parse the filename from the path.
+        const parts = data.file_path.split(/[/\\]/)
+        const filename = parts[parts.length - 1]
+        const userId = user.user_id || 'guest' // fallback
+
+        const audioUrl = `${BASE_API_URL}/api/media/${userId}/${filename}`
+        const audio = new Audio(audioUrl)
+        // Add auth header for playing? Audio element doesn't support headers easily.
+        // If endpoint requires header, we might need to fetch blob and play.
+
+        // Try fetching blob for playback
+        const audioRes = await fetch(audioUrl, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        })
+        if (audioRes.ok) {
+          const blob = await audioRes.blob()
+          const url = URL.createObjectURL(blob)
+          new Audio(url).play()
+        }
+      }
+    } catch (err) {
+      console.error("TTS Error:", err)
+      addToast("TTS Failed: " + err.message, 'danger')
+    }
+  }
+
+  async function handleImageUpload(e) {
+    const file = e.target.files[0]
+    if (!file || !token) return
+
+    addToast('Processing image...', 'info', 'OCR')
+
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+      formData.append('conversation_id', activeConversationId || 'temp')
+      formData.append('provider', 'tesseract') // default
+
+      const res = await fetch(`${BASE_API_URL}/api/vision/ocr`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` },
+        body: formData
+      })
+
+      if (!res.ok) throw new Error('OCR Failed')
+
+      const data = await res.json()
+      if (data.success && data.data.text) {
+        setComposer(prev => (prev + '\n\n[Image Text]: ' + data.data.text).trim())
+        addToast('Image text extracted', 'success')
+      } else {
+        throw new Error(data.error || 'Unknown OCR error')
+      }
+    } catch (err) {
+      console.error("OCR Error:", err)
+      addToast(err.message, 'danger', 'OCR Error')
+    }
+
+    // Reset input
+    e.target.value = ''
   }
 
   async function sendQuery() {
@@ -638,9 +763,20 @@ export default function RAGChat({ onLogout }) {
                         {/* RAG Debug Info */}
                         <ConversationMessageDetail message={m} />
 
-                        {m.role === "bot" && m.context && (
-                          <div className="small text-muted mt-2">
-                            Context: {truncate(m.context, 300)}
+                        {m.role === "bot" && (
+                          <div className="d-flex align-items-center gap-2 mt-1 mb-2">
+                            <button
+                              className="btn btn-sm btn-link p-0 text-decoration-none"
+                              onClick={() => playTTS(m.answer || m.text)}
+                              title="Read Aloud"
+                            >
+                              <i className="bi bi-volume-up"></i> Play Audio
+                            </button>
+                            {m.context && (
+                              <div className="small text-muted border-start ps-2">
+                                Context: {truncate(m.context, 100)}
+                              </div>
+                            )}
                           </div>
                         )}
                         {m.role === "bot" &&
@@ -724,19 +860,31 @@ export default function RAGChat({ onLogout }) {
 
                 <div className="mt-3">
                   <div className="d-flex gap-2">
-                    <textarea
-                      className="form-control"
-                      value={composer}
-                      onChange={(e) => setComposer(e.target.value)}
-                      placeholder="Type your question..."
-                      rows={2}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' && !e.shiftKey) {
-                          e.preventDefault()
-                          sendQuery()
-                        }
-                      }}
-                    />
+                    <div className="d-flex align-items-center gap-2 flex-grow-1">
+                      <AudioRecorder onRecordingComplete={handleAudioRecorded} />
+                      <label className="btn btn-outline-secondary btn-sm" title="Upload Image for OCR">
+                        <i className="bi bi-card-image"></i>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={handleImageUpload}
+                          style={{ display: 'none' }}
+                        />
+                      </label>
+                      <textarea
+                        className="form-control"
+                        value={composer}
+                        onChange={(e) => setComposer(e.target.value)}
+                        placeholder="Type your question..."
+                        rows={2}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && !e.shiftKey) {
+                            e.preventDefault()
+                            sendQuery()
+                          }
+                        }}
+                      />
+                    </div>
                     <div className="d-flex flex-column align-items-end">
                       <div className="mb-2">
                         <button

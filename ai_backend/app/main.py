@@ -10,6 +10,9 @@ from app.api_routes_auth import router as auth_router
 from app.api_routes_rag import router as rag_router
 from app.api_routes_conversations import router as conversations_router
 from app.api_routes_templates import router as templates_router
+from app.api_routes_audio import router as audio_router
+from app.api_routes_vision import router as vision_router
+from app.api_routes_media import router as media_router
 from app.logging_config import setup_logging
 from app.modules.integration import get_container
 from app.modules.config import API_PREFIX
@@ -55,8 +58,11 @@ app = FastAPI(
 # Register routers
 app.include_router(auth_router)
 app.include_router(rag_router)
-app.include_router(conversations_router)  # NEW: Conversation history routes
-app.include_router(templates_router)  # NEW: Template management
+app.include_router(conversations_router)  # Conversation history routes
+app.include_router(templates_router)  # Template management
+app.include_router(audio_router)  # NEW: Audio processing routes
+app.include_router(vision_router)  # NEW: Vision processing routes
+app.include_router(media_router)  # NEW: Media serving routes
 # app.include_router(training_router)
 
 # CORS (for development only)
