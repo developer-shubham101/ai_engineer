@@ -74,7 +74,8 @@ async def run_standalone_tests():
         vector_store = container.get_vector_store()
         
         print("[PASS] Vector store initialized successfully")
-        print(f"  Collection: {vector_store.collection_name}")
+        if hasattr(vector_store, 'collection_name'):
+            print(f"  Collection: {vector_store.collection_name}")
         
         print("All vector store tests passed!")
         

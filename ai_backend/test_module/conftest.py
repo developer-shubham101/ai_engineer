@@ -23,3 +23,17 @@ def fresh_container():
     container = get_container()
     container.initialize()
     return container
+
+
+# Exclude standalone scripts from pytest collection
+collect_ignore = [
+    "test_runner.py", 
+    "test_rbac_verification.py", 
+    "test_versioning_flow.py", 
+    "test_api_metadata_validation.py", 
+    "test_live_endpoints.py",
+    "test_optimized_prompt.py",
+    "test_conversation_context.py",
+    "test_temperature.py",
+    "test_simple_prompt.py"
+]

@@ -4,7 +4,7 @@
 
 This document provides comprehensive API documentation and testing examples for the Multi-Provider Enterprise RAG System. The system provides both REST API endpoints and interactive testing capabilities, including new multimodal AI processing capabilities.
 
-**Base URL:** `http://localhost:8000` (or your configured host and port)
+**Base URL:** `http://127.0.0.1:8000` (or your configured host and port)
 
 ## 📑 Table of Contents
 
@@ -33,7 +33,7 @@ This document provides comprehensive API documentation and testing examples for 
 - **POST** `/api/auth/token` - Login and get JWT token
 
 ```bash
-curl -X POST "http://localhost:5444/api/auth/token" \
+curl -X POST "http://127.0.0.1:8000/api/auth/token" \
 -H "Content-Type: application/json" \
 -d '{
   "username": "admin",

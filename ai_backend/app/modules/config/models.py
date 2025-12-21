@@ -3,6 +3,8 @@
 from typing import Dict, Any, Optional, List, Set
 from pydantic import BaseModel
 from dataclasses import dataclass
+from .database_config import db_config
+from ..config.settings import settings
 
 
 @dataclass
@@ -28,16 +30,16 @@ class ProviderConfig:
 
 class DatabaseConfig(BaseModel):
     """Database configuration."""
-    users_db: str = "users.db"
-    sessions_db: str = "support_sessions.db"
-    versions_db: str = "document_versions.db"
-    chroma_collection: str = "rag_documents"
+    users_db: str = db_config.USERS_DB
+    sessions_db: str = db_config.SESSIONS_DB
+    versions_db: str = db_config.DOCUMENT_VERSIONS_DB
+    chroma_collection: str = db_config.DOCUMENTS_COLLECTION
 
 
 class SecurityConfig(BaseModel):
     """Security configuration."""
     jwt_secret_key: str
-    jwt_algorithm: str = "HS256"
+    jwt_algorithm: str = settings.JWT_ALGORITHM
     jwt_expiration_days: int = 7
     password_min_length: int = 6
     max_login_attempts: int = 5
@@ -45,7 +47,7 @@ class SecurityConfig(BaseModel):
 
 class EmbeddingConfig(BaseModel):
     """Embedding model configuration."""
-    model_name: str = "bge-small-en-v1.5"
+    model_name: str = settings.EMBEDDING_MODEL_KEY
     model_path: Optional[str] = None
     dimension: int = 384
     batch_size: int = 32
