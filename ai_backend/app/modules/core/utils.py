@@ -3,6 +3,70 @@ from typing import List, Dict, Any, Optional
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 
+def chunk_by_sections(text: str) -> Optional[List[Dict[str, str]]]:
+    """
+    Attempt semantic chunking by detecting sections in text.
+    Returns list of {"section": str, "text": str} or None if no clear sections found.
+    """
+    import re
+    
+    # Look for markdown-style headers or numbered sections
+    header_patterns = [
+        r'^#{1,6}\s+(.+)$',  # Markdown headers
+        r'^\d+\.\s+(.+)$',   # Numbered sections
+        r'^[A-Z][A-Z\s]+:?$', # ALL CAPS headers
+        r'^\*\*(.+)\*\*$',    # Bold headers
+    ]
+    
+    sections = []
+    current_section = "Introduction"
+    current_text = []
+    
+    lines = text.split('\n')
+    found_headers = False
+    
+    for line in lines:
+        line = line.strip()
+        if not line:
+            current_text.append('')
+            continue
+            
+        # Check if line matches any header pattern
+        is_header = False
+        for pattern in header_patterns:
+            match = re.match(pattern, line, re.MULTILINE)
+            if match:
+                # Save previous section if it has content
+                if current_text and any(t.strip() for t in current_text):
+                    sections.append({
+                        "section": current_section,
+                        "text": '\n'.join(current_text).strip()
+                    })
+                    found_headers = True
+                
+                # Start new section
+                current_section = match.group(1) if match.groups() else line
+                current_text = []
+                is_header = True
+                break
+        
+        if not is_header:
+            current_text.append(line)
+    
+    # Add final section
+    if current_text and any(t.strip() for t in current_text):
+        sections.append({
+            "section": current_section,
+            "text": '\n'.join(current_text).strip()
+        })
+    
+    # Return None if no clear sections found or only one section
+    if not found_headers or len(sections) <= 1:
+        return None
+        
+    return sections
+
+
 def chunk_text_basic(text: str, chunk_size: int = 512, overlap: int = 64) -> List[str]:
     """
     Produce overlapping chunks of the input text using LangChain's RecursiveCharacterTextSplitter.
@@ -22,6 +86,13 @@ def chunk_text_basic(text: str, chunk_size: int = 512, overlap: int = 64) -> Lis
         chunk_size=chunk_size,
         chunk_overlap=overlap,
         length_function=len,
+        separators=[
+            "\n\n",  # paragraphs
+            "\n",  # lines
+            ". ",  # sentences
+            " ",  # words
+            ""  # characters (last resort)
+        ],
         is_separator_regex=False,
     )
     

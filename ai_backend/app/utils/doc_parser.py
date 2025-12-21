@@ -31,9 +31,7 @@ class RawFormat(str, Enum):
     HTML = "html"
     JSON = "json"
     PLAIN = "plain"
-    # Future extensions:
-    # PDF = "pdf"
-    # DOCX = "docx"
+    PDF = "pdf"
 
 def parse_text(data: str, format: RawFormat) -> str:
     """
@@ -61,6 +59,9 @@ def parse_text(data: str, format: RawFormat) -> str:
     elif format == RawFormat.JSON:
         # TODO: Implement JSON parsing logic (e.g., extract specific fields)
         raise NotImplementedError("JSON parsing is not yet implemented.")
+    
+    elif format == RawFormat.PDF:
+        return _parse_pdf(data)
         
     else:
         raise NotImplementedError(f"Parsing for format '{format}' is not yet implemented.")
@@ -87,11 +88,13 @@ def parse_file(path: str, format: Optional[RawFormat] = None) -> str:
     if format is None:
         format = _infer_format_from_extension(path)
         if format is None:
-             # Fallback to plain text or raise error? 
-             # For now, let's raise an error to be explicit, or default to PLAIN?
-             # User requirement said "Start with Markdown", so let's be strict.
              raise ValueError(f"Could not infer format for file: {path}. Please specify format explicitly.")
 
+    # Handle PDF files differently (binary mode)
+    if format == RawFormat.PDF:
+        return _parse_pdf(path)
+    
+    # Handle text-based formats
     with open(path, 'r', encoding='utf-8') as f:
         data = f.read()
 
@@ -108,6 +111,8 @@ def _infer_format_from_extension(path: str) -> Optional[RawFormat]:
         return RawFormat.JSON
     elif ext in ['.txt', '.text']:
         return RawFormat.PLAIN
+    elif ext in ['.pdf']:
+        return RawFormat.PDF
     return None
 
 def _parse_markdown(text: str) -> str:
@@ -143,3 +148,32 @@ def _parse_html(html_content: str) -> str:
     clean_text = '\n'.join(line for line in lines if line)
     
     return clean_text
+
+def _parse_pdf(file_path_or_bytes) -> str:
+    """Extract text from PDF file or bytes."""
+    try:
+        import PyPDF2
+        
+        if isinstance(file_path_or_bytes, str):
+            # File path provided
+            with open(file_path_or_bytes, 'rb') as file:
+                reader = PyPDF2.PdfReader(file)
+                text = ""
+                for page in reader.pages:
+                    text += page.extract_text() + "\n"
+                return text.strip()
+        else:
+            # Bytes provided (for parse_text function)
+            from io import BytesIO
+            reader = PyPDF2.PdfReader(BytesIO(file_path_or_bytes))
+            text = ""
+            for page in reader.pages:
+                text += page.extract_text() + "\n"
+            return text.strip()
+            
+    except ImportError:
+        logger.error("PyPDF2 not installed. Install with: pip install PyPDF2")
+        raise NotImplementedError("PDF parsing requires PyPDF2. Install with: pip install PyPDF2")
+    except Exception as e:
+        logger.error(f"PDF parsing failed: {e}")
+        raise ValueError(f"Failed to parse PDF: {e}")

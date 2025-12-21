@@ -13,6 +13,7 @@ from app.modules.vector_db.chroma_impl import ChromaVectorStore
 from app.modules.vector_db.embedding_manager import EmbeddingManager
 from app.modules.core.utils import (
     chunk_text_basic,
+    chunk_by_sections,
     sanitize_metadata_dict,
     is_collection_empty,
 )
@@ -71,18 +72,6 @@ class DocumentManager:
         if not version:
             version = self._calculate_next_version(document_id)
 
-        if not chunks:
-            chunks = chunk_text_basic(text)
-
-        if not chunks:
-            logger.warning("No chunks produced for document: %s", source_name)
-            return {
-                "ids": [],
-                "document_id": document_id,
-                "version": version,
-                "chunk_count": 0
-            }
-
         # sanitize metadata and ensure source is present
         base_meta = metadata or {}
         sanitized_base = sanitize_metadata_dict(base_meta)
@@ -103,7 +92,38 @@ class DocumentManager:
         if "ingested_at" not in sanitized_base:
             sanitized_base["ingested_at"] = datetime.utcnow().isoformat() + "Z"
 
-        metadatas = [dict(sanitized_base) for _ in chunks]
+        if not chunks:
+            # Try semantic chunking first, fallback to basic chunking
+            semantic_chunks = chunk_by_sections(text)
+            
+            if semantic_chunks:
+                chunks = []
+                metadatas = []
+                
+                for idx, c in enumerate(semantic_chunks):
+                    sub_chunks = chunk_text_basic(c["text"])
+                    
+                    for sc in sub_chunks:
+                        chunks.append(sc)
+                        chunk_meta = dict(sanitized_base)
+                        chunk_meta["section"] = c["section"]
+                        chunk_meta["chunk_type"] = "semantic"
+                        chunk_meta["chunk_index"] = idx
+                        metadatas.append(chunk_meta)
+            else:
+                chunks = chunk_text_basic(text)
+                metadatas = [dict(sanitized_base) for _ in chunks]
+        else:
+            metadatas = [dict(sanitized_base) for _ in chunks]
+
+        if not chunks:
+            logger.warning("No chunks produced for document: %s", source_name)
+            return {
+                "ids": [],
+                "document_id": document_id,
+                "version": version,
+                "chunk_count": 0
+            }
         ids = self._generate_ids(prefix=f"{document_id}_v{version}", n=len(chunks))
 
         log_user_action(

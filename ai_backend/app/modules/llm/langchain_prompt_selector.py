@@ -40,18 +40,27 @@ class ConditionalPromptSelector:
     def _load_prompt_template(self, prompt_template_name: str) -> PromptTemplate:
         """Load the single prompt template."""
         if self.template_manager:
+            logger.debug("Loading template from template manager")
             tmp_prompt_template_name = prompt_template_name or "personalized_chat"
+            logger.debug("Using template name: %s", tmp_prompt_template_name)
             template_data = self.template_manager.get_template(tmp_prompt_template_name)
+
             if template_data:
                 template_str = template_data["content"]
 
-                template_vars = re.findall(r"\{(\w+)}", template_str)
-                input_variables = [var for var in template_vars if var != "examples"]
+                # Use prompt_variables field if available, fallback to regex
+                if 'prompt_variables' in template_data and template_data['prompt_variables']:
+                    input_variables = [var.strip() for var in template_data['prompt_variables'].split('|') if var.strip()]
+                else:
+                    template_vars = re.findall(r"\{(\w+)}", template_str)
+                    input_variables = [var for var in template_vars if var != "examples"]
+                logger.debug("Extracted input variables: %s", input_variables)
+                logger.debug("Template string: %s", template_str)
 
                 return PromptTemplate(
                     input_variables=input_variables,
-                    template=template_str,
-                    partial_variables={"examples": ""}
+                    template=template_str
+                    # partial_variables={"examples": ""}
                 )
 
         # Fallback to loading from file if no manager or template not found
@@ -76,7 +85,10 @@ class ConditionalPromptSelector:
     def format_prompt(self, prompt_data: dict, prompt_template_name: str) -> str:
         """Format the prompt with variables from a dataclass."""
 
+        logger.debug("Formatting prompt with data: %s", prompt_data)
+        logger.debug("Using template name: %s", prompt_template_name)
         prompt_template = self._load_prompt_template(prompt_template_name)
+        logger.debug("Loaded prompt template: %s", prompt_template.template)
 
         # Filter for vars present in the template
         final_vars = {k: v for k, v in prompt_data.items() if k in prompt_template.input_variables}

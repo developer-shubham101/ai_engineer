@@ -9,7 +9,7 @@ export default function PromptTemplateManager({ onClose }) {
   const [editingTemplate, setEditingTemplate] = useState(null)
 
   // Form state
-  const [formData, setFormData] = useState({ name: '', content: '' })
+  const [formData, setFormData] = useState({ name: '', content: '', prompt_variables: '' })
   const [feedback, setFeedback] = useState('')
 
   const getAuthHeaders = () => {
@@ -46,13 +46,17 @@ export default function PromptTemplateManager({ onClose }) {
 
   const handleEdit = (tpl) => {
     setEditingTemplate(tpl)
-    setFormData({ name: tpl.name, content: tpl.content })
+    setFormData({
+      name: tpl.name,
+      content: tpl.content,
+      prompt_variables: tpl.prompt_variables || ''
+    })
     setFeedback('')
   }
 
   const handleCreateNew = () => {
     setEditingTemplate(null)
-    setFormData({ name: '', content: '' })
+    setFormData({ name: '', content: '', prompt_variables: '' })
     setFeedback('')
   }
 
@@ -87,7 +91,11 @@ export default function PromptTemplateManager({ onClose }) {
         res = await fetch(`${BASE_API_URL}/api/templates/${editingTemplate.name}`, {
           method: 'PUT',
           headers: getAuthHeaders(),
-          body: JSON.stringify({ content: formData.content })
+          headers: getAuthHeaders(),
+          body: JSON.stringify({
+            content: formData.content,
+            prompt_variables: formData.prompt_variables
+          })
         })
       } else {
         // Create
@@ -103,10 +111,18 @@ export default function PromptTemplateManager({ onClose }) {
         throw new Error(txt || 'Operation failed')
       }
 
-      const updatedOrNew = { name: formData.name, content: formData.content }
+      const updatedOrNew = {
+        name: formData.name,
+        content: formData.content,
+        prompt_variables: formData.prompt_variables
+      }
 
       if (editingTemplate) {
-        setTemplates(prev => prev.map(t => t.name === editingTemplate.name ? { ...t, content: formData.content } : t))
+        setTemplates(prev => prev.map(t => t.name === editingTemplate.name ? {
+          ...t,
+          content: formData.content,
+          prompt_variables: formData.prompt_variables
+        } : t))
         setFeedback('Template updated successfully')
       } else {
         setTemplates(prev => [...prev, updatedOrNew])
@@ -182,7 +198,7 @@ export default function PromptTemplateManager({ onClose }) {
                 <label className="form-label">Template Content</label>
                 <textarea
                   className="form-control flex-grow-1 font-monospace"
-                  style={{ minHeight: '300px', fontSize: '0.85rem' }}
+                  style={{ minHeight: '100px', fontSize: '0.85rem' }}
                   value={formData.content}
                   onChange={e => setFormData({ ...formData, content: e.target.value })}
                   placeholder="System: You are a helpful assistant..."
@@ -190,6 +206,20 @@ export default function PromptTemplateManager({ onClose }) {
                 ></textarea>
                 <div className="form-text">
                   Available variables: <code>{'{source_docs}'}</code>, <code>{'{user_question}'}</code>, <code>{'{chat_history}'}</code>
+                </div>
+              </div>
+
+              <div className="mb-3">
+                <label className="form-label">Prompt Variables (Optional)</label>
+                <input
+                  type="text"
+                  className="form-control"
+                  value={formData.prompt_variables}
+                  onChange={e => setFormData({ ...formData, prompt_variables: e.target.value })}
+                  placeholder="e.g. user_role|department|source_docs"
+                />
+                <div className="form-text">
+                  Pipe-separated list of variables used in the template. Leave empty for auto-detection.
                 </div>
               </div>
 

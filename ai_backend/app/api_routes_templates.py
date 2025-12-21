@@ -20,6 +20,7 @@ class TemplateResponse(BaseModel):
     id: int
     name: str
     content: str
+    prompt_variables: str
     created_at: str
     updated_at: str
 
@@ -27,10 +28,12 @@ class TemplateResponse(BaseModel):
 class TemplateCreateRequest(BaseModel):
     name: str
     content: str
+    prompt_variables: str = ''
 
 
 class TemplateUpdateRequest(BaseModel):
     content: str
+    prompt_variables: str = None
 
 
 # Endpoints
@@ -55,7 +58,7 @@ async def create_template(
         if manager.get_template(request.name):
             raise HTTPException(status_code=400, detail=f"Template '{request.name}' already exists")
 
-        return manager.create_template(request.name, request.content)
+        return manager.create_template(request.name, request.content, request.prompt_variables)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
@@ -81,7 +84,7 @@ async def update_template(
         manager: TemplateManager = Depends(get_template_manager)
 ):
     """Update a prompt template's content."""
-    updated = manager.update_template(name, request.content)
+    updated = manager.update_template(name, request.content, request.prompt_variables)
     if not updated:
         raise HTTPException(status_code=404, detail=f"Template '{name}' not found")
     return updated

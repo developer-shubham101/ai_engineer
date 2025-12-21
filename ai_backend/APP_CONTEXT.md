@@ -773,6 +773,37 @@ Response: [{
 **DELETE /api/conversations/{id}** - Delete conversation (soft delete)
 **POST /api/conversations/{id}/restore** - Restore conversation to session
 
+### Prompt Templates (`/api/templates/`) - **NEW**
+
+**POST /api/templates** - Create prompt template with variables
+```json
+Request: {
+  "name": "custom_chat",
+  "content": "System: You are a {user_role} assistant.\n\nContext: {source_docs}\n\nQuestion: {user_question}",
+  "prompt_variables": "user_role|department|source_docs|user_question"
+}
+Response: {
+  "id": 1,
+  "name": "custom_chat",
+  "content": "System: You are a {user_role} assistant...",
+  "prompt_variables": "user_role|department|source_docs|user_question",
+  "created_at": "2024-01-01T12:00:00Z",
+  "updated_at": "2024-01-01T12:00:00Z"
+}
+```
+
+**GET /api/templates** - List all templates
+**GET /api/templates/{name}** - Get specific template
+**PUT /api/templates/{name}** - Update template content and variables
+**DELETE /api/templates/{name}** - Delete template
+
+**Key Features:**
+- **`prompt_variables` field**: Pipe-separated variable names (e.g., `user_role|department|source_docs`)
+- **Explicit variable control**: No regex parsing, better performance
+- **Backward compatibility**: Empty `prompt_variables` falls back to automatic detection
+- **Supported variables**: `user_role`, `department`, `source_docs`, `user_question`, `history`, `user_profile_summary`, etc.
+- **Database migration**: Existing templates automatically get empty `prompt_variables` field
+
 ### Document Management (`/api/rag/documents/`)
 
 **POST /api/rag/documents/add** - Add document (JSON)

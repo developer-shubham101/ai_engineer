@@ -219,8 +219,9 @@ curl -X POST "http://localhost:8000/api/vision/ocr" \
 ```
 
 **Supported Providers:**
-- `tesseract` (default): Widely supported, good for printed text
-- `paddleocr`: Better accuracy, supports multiple languages
+- `auto` (default): Auto-detects available OCR engine (Tesseract → PaddleOCR fallback)
+- `tesseract`: Industry standard OCR (requires system installation)
+- `paddleocr`: Advanced OCR with auto-download
 
 ### Image Description
 - **POST** `/api/vision/describe` - Generate basic image description
@@ -372,9 +373,20 @@ All multimodal APIs return consistent error responses:
 - **Missing Dependencies**: "Vosk not installed. Run: pip install vosk"
 - **Invalid File Type**: "File must be audio format"
 - **Model Not Found**: "Vosk model not found. Please download vosk-model-small-en-us-0.15"
+- **Tesseract Not Found**: "Tesseract OCR not installed. Install: Windows: 'choco install tesseract'..."
 - **Processing Failed**: Specific error from underlying library
 - **Access Denied**: "Access denied" (403 status)
 - **File Not Found**: "File not found" (404 status)
+
+**Tesseract Installation Help:**
+```bash
+# Quick Windows installation
+python scripts/install_tesseract_windows.py
+# Or
+scripts/install_tesseract.bat
+
+# If Tesseract issues persist, the system will automatically use PaddleOCR
+```
 
 ### Installation Requirements
 
@@ -389,9 +401,28 @@ pip install vosk openai-whisper pyttsx3 pytesseract Pillow paddlepaddle paddleoc
 ```
 
 **System Dependencies:**
-- **Tesseract OCR**: Install system package (e.g., `apt install tesseract-ocr` on Ubuntu)
+
+**Tesseract OCR (Optional - auto-fallback to PaddleOCR):**
+```bash
+# Windows (Chocolatey)
+choco install tesseract
+
+# Windows (Manual)
+# Download from: https://github.com/UB-Mannheim/tesseract/wiki
+# Or run: python scripts/install_tesseract_windows.py
+
+# Ubuntu/Debian
+sudo apt install tesseract-ocr
+
+# macOS
+brew install tesseract
+```
+
+**Other Dependencies:**
 - **espeak**: Install system package (e.g., `apt install espeak-ng` on Ubuntu)
 - **Vosk Models**: Download to `models/vosk-model-small-en-us-0.15/`
+
+**Note**: If Tesseract is not installed, the system automatically falls back to PaddleOCR which downloads models automatically.
 
 ## 💬 Conversation History (NEW)
 
@@ -406,6 +437,12 @@ The system now supports persistent conversation history that is tied to user acc
 
 ### Overview
 Manage dynamic prompt templates stored in the database. These templates are used by the RAG orchestrator to generate context-aware prompts.
+
+**New Feature: `prompt_variables` Field**
+- Define template variables explicitly using pipe-separated format: `user_role|department|source_docs|user_question`
+- Replaces automatic regex detection for better control and performance
+- Supports variables like: `{user_role}`, `{department}`, `{source_docs}`, `{user_question}`, `{history}`, etc.
+- Empty string defaults to automatic variable detection (backward compatibility)
 
 ### List Templates
 - **GET** `/api/templates` - List all templates
@@ -424,7 +461,8 @@ curl -X POST "http://localhost:5444/api/templates" \
 -H "Authorization: Bearer $TOKEN" \
 -d '{
   "name": "creative_chat",
-  "content": "System: You are a creative assistant.\n\nContext: {source_docs}\n\nQuestion: {user_question}"
+  "content": "System: You are a creative assistant.\n\nContext: {source_docs}\n\nQuestion: {user_question}",
+  "prompt_variables": "user_role|department|source_docs|user_question"
 }'
 ```
 
@@ -444,7 +482,8 @@ curl -X PUT "http://localhost:5444/api/templates/personalized_chat" \
 -H "Content-Type: application/json" \
 -H "Authorization: Bearer $TOKEN" \
 -d '{
-  "content": "System: Updated system prompt...\n\nContext: {source_docs}\n\nQuestion: {user_question}"
+  "content": "System: Updated system prompt...\n\nContext: {source_docs}\n\nQuestion: {user_question}",
+  "prompt_variables": "user_role|department|source_docs|user_question|history"
 }'
 ```
 

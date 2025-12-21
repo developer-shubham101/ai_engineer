@@ -27,7 +27,7 @@ sentence-transformers
 
 # --- Vector DB / RAG ---
 chromadb
-pypdf
+PyPDF2
 tiktoken
 
 # --- External APIs & utilities ---

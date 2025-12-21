@@ -438,6 +438,12 @@ The system now supports persistent conversation history that is tied to user acc
 ### Overview
 Manage dynamic prompt templates stored in the database. These templates are used by the RAG orchestrator to generate context-aware prompts.
 
+**New Feature: `prompt_variables` Field**
+- Define template variables explicitly using pipe-separated format: `user_role|department|source_docs|user_question`
+- Replaces automatic regex detection for better control and performance
+- Supports variables like: `{user_role}`, `{department}`, `{source_docs}`, `{user_question}`, `{history}`, etc.
+- Empty string defaults to automatic variable detection (backward compatibility)
+
 ### List Templates
 - **GET** `/api/templates` - List all templates
 
@@ -455,7 +461,8 @@ curl -X POST "http://localhost:5444/api/templates" \
 -H "Authorization: Bearer $TOKEN" \
 -d '{
   "name": "creative_chat",
-  "content": "System: You are a creative assistant.\n\nContext: {source_docs}\n\nQuestion: {user_question}"
+  "content": "System: You are a creative assistant.\n\nContext: {source_docs}\n\nQuestion: {user_question}",
+  "prompt_variables": "user_role|department|source_docs|user_question"
 }'
 ```
 
@@ -475,7 +482,8 @@ curl -X PUT "http://localhost:5444/api/templates/personalized_chat" \
 -H "Content-Type: application/json" \
 -H "Authorization: Bearer $TOKEN" \
 -d '{
-  "content": "System: Updated system prompt...\n\nContext: {source_docs}\n\nQuestion: {user_question}"
+  "content": "System: Updated system prompt...\n\nContext: {source_docs}\n\nQuestion: {user_question}",
+  "prompt_variables": "user_role|department|source_docs|user_question|history"
 }'
 ```
 

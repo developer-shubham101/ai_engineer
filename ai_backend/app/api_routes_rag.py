@@ -12,16 +12,16 @@ from pydantic import BaseModel, Field
 from app.dependencies import get_current_user, get_current_user_optional, require_roles
 from app.modules.auth.interfaces import ISessionManager
 from app.modules.config import MANAGER_PLUS_ROLES
-from app.modules.core.document_manager import DocumentManager
-from app.modules.integration import get_container
-from app.modules.llm.rag_orchestrator import RAGOrchestrator
-from app.modules.llm.interfaces import RAGRequest
 from app.modules.config.constants import (
-    VALID_SENSITIVITY_LEVELS, VALID_DEPARTMENTS, VALID_ROLES, ROLE_LEVELS, SENSITIVITY_LEVELS,
+    VALID_SENSITIVITY_LEVELS, VALID_DEPARTMENTS, ROLE_LEVELS, SENSITIVITY_LEVELS,
     DEFAULT_DEPARTMENT, DEFAULT_SENSITIVITY, DEFAULT_TOP_K, DEFAULT_MAX_TOKENS, DEFAULT_TEMPERATURE,
     MAX_FILE_SIZE_BYTES, HTTP_MESSAGES, HR_LEVEL_THRESHOLD, EMPLOYEE_PLUS_ROLES, SUPER_ADMIN_ROLES,
     HR_PLUS_ROLES, MARKDOWN_EXTENSIONS, HTML_EXTENSIONS, JSON_EXTENSIONS
 )
+from app.modules.core.document_manager import DocumentManager
+from app.modules.integration import get_container
+from app.modules.llm.interfaces import RAGRequest
+from app.modules.llm.rag_orchestrator import RAGOrchestrator
 from app.utils.doc_parser import parse_text, RawFormat
 
 logger = logging.getLogger(__name__)
@@ -51,7 +51,7 @@ class QueryRequest(BaseModel):
     conversation_id: str
     use_documents: bool = True  # Flag to control document retrieval
     use_conversation_history: bool = True
-    enable_agentic_mode: bool = False # Flag to enable agentic mode
+    enable_agentic_mode: bool = False  # Flag to enable agentic mode
     max_tokens: int = DEFAULT_MAX_TOKENS
     temperature: float = DEFAULT_TEMPERATURE
     category: Optional[str] = None
@@ -79,6 +79,7 @@ class AddResponse(BaseModel):
 
 
 from app.modules.config.constants import DEFAULT_STATUS
+
 
 class UpdateDocumentRequest(BaseModel):
     document_id: str
@@ -123,9 +124,6 @@ class CompareVersionsResponse(BaseModel):
     version2: str
     diff: str
     summary: Dict[str, Any]
-
-
-
 
 
 def validate_metadata(meta: Optional[Dict[str, Any]], requester: Optional[Dict[str, Any]] = None) -> None:
@@ -349,7 +347,7 @@ async def add_document_file(
              dependencies=[Depends(require_roles(SUPER_ADMIN_ROLES))])
 async def seed_defaults(
         requester: Dict[str, Any] = Depends(get_current_user),
-        reseed: bool = False
+        reseed: bool = True
 ):
     """Seed default documents - original working implementation."""
     try:

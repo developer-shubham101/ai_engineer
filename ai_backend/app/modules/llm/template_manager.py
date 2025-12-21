@@ -28,10 +28,20 @@ class TemplateManager:
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     name TEXT UNIQUE NOT NULL,
                     content TEXT NOT NULL,
+                    prompt_variables TEXT DEFAULT '',
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL
                 )
             """)
+            
+            # Check if column exists, if not add it
+            cursor = conn.execute("PRAGMA table_info(templates)")
+            columns = [column[1] for column in cursor.fetchall()]
+            if 'prompt_variables' not in columns:
+                conn.execute("ALTER TABLE templates ADD COLUMN prompt_variables TEXT DEFAULT ''")
+                conn.commit()
+                logger.info("Added prompt_variables column to templates table")
+            
             conn.commit()
 
     def _seed_default_templates(self):
@@ -62,7 +72,7 @@ class TemplateManager:
     def _get_timestamp(self) -> str:
         return datetime.utcnow().isoformat() + "Z"
 
-    def create_template(self, name: str, content: str) -> Dict[str, Any]:
+    def create_template(self, name: str, content: str, prompt_variables: str = '') -> Dict[str, Any]:
         """Create a new template."""
         timestamp = self._get_timestamp()
         
@@ -70,9 +80,9 @@ class TemplateManager:
             with sqlite3.connect(self.db_path) as conn:
                 conn.row_factory = sqlite3.Row
                 cursor = conn.execute("""
-                    INSERT INTO templates (name, content, created_at, updated_at)
-                    VALUES (?, ?, ?, ?)
-                """, (name, content, timestamp, timestamp))
+                    INSERT INTO templates (name, content, prompt_variables, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?)
+                """, (name, content, prompt_variables, timestamp, timestamp))
                 conn.commit()
                 
                 return self.get_template(name)
@@ -95,17 +105,24 @@ class TemplateManager:
             rows = conn.execute("SELECT * FROM templates ORDER BY name ASC").fetchall()
             return [dict(row) for row in rows]
 
-    def update_template(self, name: str, content: str) -> Optional[Dict[str, Any]]:
+    def update_template(self, name: str, content: str, prompt_variables: str = None) -> Optional[Dict[str, Any]]:
         """Update an existing template."""
         timestamp = self._get_timestamp()
         
         with sqlite3.connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
-            cursor = conn.execute("""
-                UPDATE templates 
-                SET content = ?, updated_at = ?
-                WHERE name = ?
-            """, (content, timestamp, name))
+            if prompt_variables is not None:
+                cursor = conn.execute("""
+                    UPDATE templates 
+                    SET content = ?, prompt_variables = ?, updated_at = ?
+                    WHERE name = ?
+                """, (content, prompt_variables, timestamp, name))
+            else:
+                cursor = conn.execute("""
+                    UPDATE templates 
+                    SET content = ?, updated_at = ?
+                    WHERE name = ?
+                """, (content, timestamp, name))
             conn.commit()
             
             if cursor.rowcount > 0:
