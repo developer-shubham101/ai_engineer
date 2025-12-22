@@ -57,7 +57,7 @@ DUMMY_USERS = [
 ]
 
 # Database path (moved from user_service.py)
-USER_DB_PATH = settings.DATABASE_DIR / "users.db"
+USER_DB_PATH = settings.DATABASE_DIR / settings.USERS_DB_NAME
 
 
 class SQLiteUserManager(IUserManager):

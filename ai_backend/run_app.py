@@ -13,11 +13,11 @@ sys.path.insert(0, str(Path(__file__).parent))
 if __name__ == "__main__":
     print("🚀 Starting AI Backend with Modular Architecture")
     print("=" * 50)
-    
+    from app.modules.config.settings import settings
     uvicorn.run(
         "app.main:app",
-        host="0.0.0.0",
-        port=8000,
+        host=settings.HOST,
+        port=settings.PORT,
         reload=True,
         log_level="info"
     )

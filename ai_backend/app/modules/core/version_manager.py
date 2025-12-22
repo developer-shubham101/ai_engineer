@@ -15,7 +15,7 @@ class VersionManager:
     """Document version management service."""
     
     def __init__(self):
-        self.db_path = settings.DATABASE_DIR / "document_versions.db"
+        self.db_path = settings.DATABASE_DIR / settings.DOCUMENT_VERSIONS_DB_NAME
         self._init_database()
     
     def _init_database(self):

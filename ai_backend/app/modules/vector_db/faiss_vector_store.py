@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 class FaissVectorStore(IVectorStore):
     """FAISS implementation of vector store."""
 
-    def __init__(self, embedding_manager: IEmbeddingManager, file_path: str = "faiss_index.pkl"):
+    def __init__(self, embedding_manager: IEmbeddingManager, file_path: str = "vector_db/faiss_db/faiss_index.pkl"):
         self.embedding_manager = embedding_manager
         self.file_path = file_path
         self.index = None
@@ -22,6 +22,11 @@ class FaissVectorStore(IVectorStore):
         self._initialized = False
         self.dimension = self.embedding_manager.get_embedding_dimension()
         self._load_index()
+
+    @property
+    def collection_name(self) -> str:
+        """Get collection name."""
+        return "faiss_index"
 
     def _load_index(self):
         try:

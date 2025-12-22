@@ -14,31 +14,31 @@ os.environ["VECTOR_STORE_TYPE"] = "faiss"
 
 from app.modules.integration import get_container, reset_container
 
-@pytest.fixture(scope="module")
-def event_loop():
-    """Create an instance of the default event loop for the entire module."""
-    loop = asyncio.get_event_loop_policy().new_event_loop()
-    yield loop
-    loop.close()
+
 
 @pytest.fixture(scope="module")
-async def container():
+def faiss_container():
     """Setup container for tests."""
     # Reset container to ensure clean state
     reset_container()
     container = get_container()
     container.initialize()
     # Override file path for testing
-    container.get_vector_store().file_path = "test_faiss_index.pkl"
+    container.get_vector_store().file_path = "vector_db/faiss_db/test_faiss_index.pkl"
+    # Force reload to pick up the new path
+    container.get_vector_store()._load_index()
     yield container
     # Cleanup after tests
-    if os.path.exists("test_faiss_index.pkl"):
-        os.remove("test_faiss_index.pkl")
+    if os.path.exists("vector_db/faiss_db/test_faiss_index.pkl"):
+        try:
+            os.remove("vector_db/faiss_db/test_faiss_index.pkl")
+        except PermissionError:
+            pass
 
 @pytest.fixture(scope="module")
-async def vector_store(container):
+def vector_store(faiss_container):
     """Get vector store instance."""
-    return container.get_vector_store()
+    return faiss_container.get_vector_store()
 
 @pytest.mark.asyncio
 async def test_vector_store_initialization(vector_store):
@@ -65,18 +65,19 @@ async def test_add_and_search_document(vector_store):
     assert results[0]["metadata"]["source"] == "test"
 
 @pytest.mark.asyncio
-async def test_persistence(container):
+async def test_persistence(faiss_container):
     """Test if the index is saved and loaded correctly."""
     # Add a document to the first store
-    store1 = container.get_vector_store()
+    store1 = faiss_container.get_vector_store()
     await store1.add_document("Document for persistence test.", {"source": "persistence"})
 
     # Create a new container and vector store, which should load from the same file
     reset_container()
     new_container = get_container()
     new_container.initialize()
-    new_container.get_vector_store().file_path = "test_faiss_index.pkl"
+    new_container.get_vector_store().file_path = "vector_db/faiss_db/test_faiss_index.pkl"
     store2 = new_container.get_vector_store()
+    store2._load_index()
     
     # The new store should have the document from the first store
     assert store2.index.ntotal > 0

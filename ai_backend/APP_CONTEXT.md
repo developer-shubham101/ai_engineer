@@ -528,7 +528,9 @@ ai_backend/
 │       ├── audio_*.wav     # Audio files (STT input, TTS output)
 │       ├── image_*.jpg     # Image files (OCR input)
 │       └── doc_*.pdf       # Document files
-├── chroma_data/            # ChromaDB storage
+├── vector_db/                 # Main directory for vector databases
+│   ├── chroma_db/             # ChromaDB storage
+│   └── faiss_db/              # FAISS index storage
 ├── logs/                   # Application logs
 ├── scripts/                # Utility scripts
 ├── documents/              # Documentation

@@ -3,6 +3,7 @@
 import logging
 import uuid
 from typing import Any, Dict, List, Optional, Tuple
+from app.modules.config.settings import settings
 
 try:
     # Attempt to import chromadb and its configuration settings
@@ -13,17 +14,9 @@ except Exception:
 
 from .interfaces import IVectorStore, IEmbeddingManager
 
-# NOTE: Assuming 'app.services.utility' exists based on original chroma_utils.py
-# If it doesn't, you need to provide the content of this file or define constants here.
-try:
-    from app.services.utility import (
-        DEFAULT_PERSIST_DIR,
-        DEFAULT_COLLECTION_NAME,
-    )
-except ImportError:
-    # Fallback/Mock constants if utility file is not provided
-    DEFAULT_PERSIST_DIR = "chroma_data"
-    DEFAULT_COLLECTION_NAME = "documents"
+
+DEFAULT_PERSIST_DIR = settings.DEFAULT_PERSIST_DIR
+DEFAULT_COLLECTION_NAME = settings.DEFAULT_COLLECTION_NAME
 
 
 logger = logging.getLogger(__name__)

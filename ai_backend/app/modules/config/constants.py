@@ -2,6 +2,7 @@
 
 from enum import Enum
 from typing import Dict, List, Set
+from .settings import settings
 
 
 class UserRole(Enum):
@@ -83,7 +84,7 @@ VALID_PROVIDERS: Set[str] = {provider.value for provider in LLMProvider}
 DEFAULT_TOP_K = 3
 DEFAULT_MAX_TOKENS = 256
 DEFAULT_TEMPERATURE = 0.1
-DEFAULT_EMBEDDING_MODEL = "bge-small-en-v1.5"
+DEFAULT_EMBEDDING_MODEL = settings.EMBEDDING_MODEL_KEY
 DEFAULT_DEPARTMENT = Department.GENERAL.value
 DEFAULT_SENSITIVITY = SensitivityLevel.PUBLIC_INTERNAL.value
 DEFAULT_STATUS = DocumentStatus.PUBLISHED.value

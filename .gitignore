@@ -10,3 +10,4 @@ ai_backend/app/data/support_sessions.db
 /Agni-Nexus
 /ai_backend/user_uploaded_files
 /ai_backend/scripts/embeddings_models
+/ai_backend/vector_db
