@@ -1,0 +1,58 @@
+{
+  "strict": {
+    "document_type": "memo",
+    "department": "HR",
+    "sensitivity": "highly_confidential",
+    "source": "CEO_memo_strategic_vision.md",
+    "domain": null,
+    "published_year": null,
+    "effective_date": "",
+    "allowed_roles": [
+      "Manager",
+      "SuperAdmin"
+    ],
+    "tags": [
+      "strategy",
+      "vision",
+      "CEO",
+      "memo"
+    ]
+  },
+  "soft": {
+    "summary": "Document content extracted.",
+    "keywords": [
+      "Agni Holdings",
+      "Carbon Neutrality",
+      "2030",
+      "Electric Vehicles",
+      "Data Centers",
+      "Plastic Waste",
+      "Saarthi Infotech",
+      "Praxis Global",
+      "Aisha Sharma",
+      "Group CEO"
+    ],
+    "themes": [
+      "Sustainability",
+      "Environment",
+      "Business Strategy"
+    ],
+    "entities": {
+      "people": [
+        "Aisha Sharma",
+        "Group CEO"
+      ],
+      "organizations": [
+        "Agni Holdings",
+        "Praxis Global",
+        "Saarthi Infotech"
+      ],
+      "locations": []
+    },
+    "generated_at": "2025-12-22T14:00:32.163803",
+    "llm_model": "phi2",
+    "confidence": 0.8
+  },
+  "enriched_at": "2025-12-22T14:00:32.166809",
+  "processing_time_ms": 169786.0300540924
+}

@@ -1,0 +1,51 @@
+{
+  "strict": {
+    "document_type": "report",
+    "department": "HR",
+    "sensitivity": "public_internal",
+    "source": "CSR_annual_report.md",
+    "domain": null,
+    "published_year": null,
+    "effective_date": "",
+    "allowed_roles": [
+      "Employee",
+      "Manager"
+    ],
+    "tags": [
+      "CSR",
+      "annual report",
+      "sustainability"
+    ]
+  },
+  "soft": {
+    "summary": "Document content extracted.",
+    "keywords": [
+      "document",
+      "content"
+    ],
+    "themes": [
+      "Knowledge is Fire",
+      "Education",
+      "Health",
+      "Technology for Good"
+    ],
+    "entities": {
+      "people": [],
+      "organizations": [
+        "Agni Foundation",
+        "Saarthi Infotech",
+        "Agni Pharma"
+      ],
+      "locations": [
+        "Bengaluru",
+        "Maharashtra",
+        "Gujarat"
+      ]
+    },
+    "generated_at": "2025-12-22T14:02:47.331710",
+    "llm_model": "phi2",
+    "confidence": 0.8
+  },
+  "enriched_at": "2025-12-22T14:02:47.332246",
+  "processing_time_ms": 135137.86602020264
+}

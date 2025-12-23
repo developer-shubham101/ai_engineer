@@ -1,0 +1,53 @@
+{
+  "strict": {
+    "document_type": "policy",
+    "department": "IT",
+    "sensitivity": "public_internal",
+    "source": "IT_security_policy.md",
+    "domain": null,
+    "published_year": null,
+    "effective_date": "",
+    "allowed_roles": [
+      "Employee",
+      "Manager",
+      "IT"
+    ],
+    "tags": [
+      "IT",
+      "security",
+      "policy"
+    ]
+  },
+  "soft": {
+    "summary": "Group IT Security Protocol issued by Dr. Vikram Singh on Jan 1, 2034 with updates to password policy and BYOD rules. Data classification includes levels 1-4 with specific restrictions for level 4 data. Incident reporting involves contacting the SOC in case of a breach.",
+    "keywords": [
+      "password policy",
+      "device usage",
+      "data classification",
+      "incident reporting",
+      "security protocols",
+      "data protection",
+      "incident management"
+    ],
+    "themes": [
+      "IT Security",
+      "Data Protection",
+      "Incident Management"
+    ],
+    "entities": {
+      "people": [
+        "Dr. Vikram Singh"
+      ],
+      "organizations": [
+        "Agni Holdings",
+        "SOC (Security Operations Center)"
+      ],
+      "locations": []
+    },
+    "generated_at": "2025-12-22T14:11:14.581319",
+    "llm_model": "phi2",
+    "confidence": 0.8
+  },
+  "enriched_at": "2025-12-22T14:11:14.582219",
+  "processing_time_ms": 134143.46194267273
+}

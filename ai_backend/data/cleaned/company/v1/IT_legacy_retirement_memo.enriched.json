@@ -1,0 +1,49 @@
+{
+  "strict": {
+    "document_type": "memo",
+    "department": "IT",
+    "sensitivity": "public_internal",
+    "source": "IT_legacy_retirement_memo.md",
+    "domain": null,
+    "published_year": null,
+    "effective_date": "",
+    "allowed_roles": [
+      "Employee",
+      "Manager",
+      "IT"
+    ],
+    "tags": [
+      "IT",
+      "legacy",
+      "retirement",
+      "memo"
+    ]
+  },
+  "soft": {
+    "summary": "The legacy CRM system will be decommissioned and all sales data must be migrated to Salesforce Cloud by October 30,",
+    "keywords": [
+      "SalesTrack v4",
+      "Blue Screen",
+      "Salesforce Cloud",
+      "Microsoft",
+      "VajraScope"
+    ],
+    "themes": [
+      "Security",
+      "Integration",
+      "Cost"
+    ],
+    "entities": {
+      "people": [],
+      "organizations": [
+        "Group IT Architecture Team"
+      ],
+      "locations": []
+    },
+    "generated_at": "2025-12-22T14:09:00.431759",
+    "llm_model": "phi2",
+    "confidence": 0.8
+  },
+  "enriched_at": "2025-12-22T14:09:00.433757",
+  "processing_time_ms": 185749.36771392822
+}

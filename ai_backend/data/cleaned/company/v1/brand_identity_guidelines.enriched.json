@@ -1,0 +1,40 @@
+{
+  "strict": {
+    "document_type": "guidelines",
+    "department": "Marketing",
+    "sensitivity": "public_internal",
+    "source": "brand_identity_guidelines.md",
+    "domain": null,
+    "published_year": null,
+    "effective_date": "",
+    "allowed_roles": [
+      "Employee",
+      "Manager"
+    ],
+    "tags": [
+      "brand",
+      "identity",
+      "guidelines"
+    ]
+  },
+  "soft": {
+    "summary": "Document content extracted.",
+    "keywords": [
+      "document",
+      "content"
+    ],
+    "themes": [
+      "general"
+    ],
+    "entities": {
+      "people": [],
+      "organizations": [],
+      "locations": []
+    },
+    "generated_at": "2025-12-22T14:13:44.739936",
+    "llm_model": "phi2",
+    "confidence": 0.8
+  },
+  "enriched_at": "2025-12-22T14:13:44.740938",
+  "processing_time_ms": 150132.45248794556
+}

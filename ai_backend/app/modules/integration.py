@@ -125,6 +125,19 @@ class Container:
             logger.info("Initialized agent orchestrator")
         return self._instances.get("agent_orchestrator")
     
+    def get_metadata_generator(self):
+        """Get metadata generator instance."""
+        if "metadata_generator" not in self._instances:
+            from .llm.providers.local import LocalLLMProvider
+            from .core.metadata_generator import LLMMetadataGenerator
+            
+            # Create local LLM provider for metadata generation
+            llm_provider = LocalLLMProvider()
+            self._instances["metadata_generator"] = LLMMetadataGenerator(llm_provider)
+            logger.info("Initialized metadata generator with local LLM provider")
+        return self._instances.get("metadata_generator")
+
+    
     def override_instance(self, key: str, instance: Any) -> None:
         """Override an instance (useful for testing)."""
         self._instances[key] = instance

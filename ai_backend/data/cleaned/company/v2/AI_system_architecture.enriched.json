@@ -1,0 +1,42 @@
+{
+  "strict": {
+    "document_type": "technical_specification",
+    "department": "Engineering",
+    "sensitivity": "role_confidential",
+    "source": "AI_system_architecture.md",
+    "domain": null,
+    "published_year": null,
+    "effective_date": "2025-01-15",
+    "allowed_roles": [
+      "SuperAdmin",
+      "Manager"
+    ],
+    "tags": [
+      "AI",
+      "RAG",
+      "architecture",
+      "multi-provider",
+      "system"
+    ]
+  },
+  "soft": {
+    "summary": "Document content extracted.",
+    "keywords": [
+      "document",
+      "content"
+    ],
+    "themes": [
+      "general"
+    ],
+    "entities": {
+      "people": [],
+      "organizations": [],
+      "locations": []
+    },
+    "generated_at": "2025-12-22T14:38:47.353294",
+    "llm_model": "phi2",
+    "confidence": 0.8
+  },
+  "enriched_at": "2025-12-22T14:38:47.354299",
+  "processing_time_ms": 96114.10999298096
+}

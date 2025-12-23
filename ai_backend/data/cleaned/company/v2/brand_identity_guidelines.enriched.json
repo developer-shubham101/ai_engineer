@@ -1,0 +1,43 @@
+{
+  "strict": {
+    "document_type": "guidelines",
+    "department": "Marketing",
+    "sensitivity": "public_internal",
+    "source": "brand_identity_guidelines.md",
+    "domain": null,
+    "published_year": null,
+    "effective_date": "2025-01-15",
+    "allowed_roles": [
+      "Employee",
+      "Manager",
+      "SuperAdmin"
+    ],
+    "tags": [
+      "brand",
+      "identity",
+      "guidelines",
+      "saarthi",
+      "agni"
+    ]
+  },
+  "soft": {
+    "summary": "Saarthi Infotech & Agni Holdings provide Brand Identity Guidelines for AI systems. The guidelines emphasize the company's core philosophy of guidance, transformation, intelligence, and innovation. The color palette consists of Saarthi Blue, Agni Red, Neural Grey, and Clean White. The typography includes Headings in Inter and Body Copy in Source Sans Pro. The logo usage rules ensure a clear space around the logo and avoid green as a competitor's color. The voice and tone for AI systems are Intelligent, Trustworthy, Precise, Innovative, and should not be robotic or condescending.",
+    "keywords": [
+      "document",
+      "content"
+    ],
+    "themes": [
+      "general"
+    ],
+    "entities": {
+      "people": [],
+      "organizations": [],
+      "locations": []
+    },
+    "generated_at": "2025-12-22T14:45:09.690785",
+    "llm_model": "phi2",
+    "confidence": 0.8
+  },
+  "enriched_at": "2025-12-22T14:45:09.691783",
+  "processing_time_ms": 174729.38299179077
+}

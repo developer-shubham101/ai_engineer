@@ -1,0 +1,60 @@
+{
+  "strict": {
+    "document_type": "job_description",
+    "department": "HR",
+    "sensitivity": "public_internal",
+    "source": "job_description_senior_data_scientist.md",
+    "domain": null,
+    "published_year": null,
+    "effective_date": "",
+    "allowed_roles": [
+      "Employee",
+      "Manager",
+      "HR"
+    ],
+    "tags": [
+      "job",
+      "description",
+      "senior data scientist",
+      "recruitment"
+    ]
+  },
+  "soft": {
+    "summary": "Document content extracted.",
+    "keywords": [
+      "Senior Data Scientist",
+      "NLP Focus",
+      "Large Language Models",
+      "Business Intelligence Tool",
+      "VajraScope",
+      "Llama-2",
+      "Mistral",
+      "Python",
+      "PyTorch",
+      "HuggingFace Transformers"
+    ],
+    "themes": [
+      "Machine Learning",
+      "NLP",
+      "LLMs",
+      "Business Intelligence",
+      "AWS SageMaker"
+    ],
+    "entities": {
+      "people": [],
+      "organizations": [
+        "Vajra Solutions",
+        "Saarthi Engineering"
+      ],
+      "locations": [
+        "Bengaluru",
+        "India"
+      ]
+    },
+    "generated_at": "2025-12-22T14:22:35.721961",
+    "llm_model": "phi2",
+    "confidence": 0.8
+  },
+  "enriched_at": "2025-12-22T14:22:35.722960",
+  "processing_time_ms": 105381.18886947632
+}

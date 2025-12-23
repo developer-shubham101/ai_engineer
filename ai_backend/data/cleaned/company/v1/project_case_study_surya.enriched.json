@@ -1,0 +1,58 @@
+{
+  "strict": {
+    "document_type": "case_study",
+    "department": "HR",
+    "sensitivity": "public_internal",
+    "source": "project_case_study_surya.md",
+    "domain": null,
+    "published_year": null,
+    "effective_date": "",
+    "allowed_roles": [
+      "Employee",
+      "Manager"
+    ],
+    "tags": [
+      "project",
+      "case study",
+      "Surya"
+    ]
+  },
+  "soft": {
+    "summary": "Document content extracted.",
+    "keywords": [
+      "Project Surya",
+      "CardioFix-X",
+      "MediGuard Pharmaceuticals",
+      "Agni Pharma Innovations",
+      "Vajra Solutions",
+      "Thunderbolt-AI",
+      "IoT wearables",
+      "Saarthi Infotech"
+    ],
+    "themes": [
+      "Clinical Trial",
+      "Data Analysis",
+      "Patient Screening",
+      "Cost Reduction",
+      "Regulatory Approval"
+    ],
+    "entities": {
+      "people": [
+        "Dr. Priya Joshi",
+        "Lena Schmidt"
+      ],
+      "organizations": [
+        "MediGuard Pharmaceuticals",
+        "Agni Pharma Innovations",
+        "Vajra Solutions",
+        "Saarthi Infotech"
+      ],
+      "locations": []
+    },
+    "generated_at": "2025-12-22T14:32:28.366790",
+    "llm_model": "phi2",
+    "confidence": 0.8
+  },
+  "enriched_at": "2025-12-22T14:32:28.367795",
+  "processing_time_ms": 155476.82118415833
+}

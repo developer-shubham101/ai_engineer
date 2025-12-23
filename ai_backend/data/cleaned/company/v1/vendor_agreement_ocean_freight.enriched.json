@@ -1,0 +1,63 @@
+{
+  "strict": {
+    "document_type": "agreement",
+    "department": "Finance",
+    "sensitivity": "role_confidential",
+    "source": "vendor_agreement_ocean_freight.md",
+    "domain": null,
+    "published_year": null,
+    "effective_date": "",
+    "allowed_roles": [
+      "Manager",
+      "HR"
+    ],
+    "tags": [
+      "vendor",
+      "agreement",
+      "ocean freight"
+    ]
+  },
+  "soft": {
+    "summary": "Document content extracted.",
+    "keywords": [
+      "MSA",
+      "logistics",
+      "pharmaceuticals",
+      "Mumbai",
+      "Hamburg",
+      "PRAX-LOG-2024-09",
+      "Poseidon Ocean Liners Ltd.",
+      "Agni Tower",
+      "88 Maritime Way",
+      "BAF"
+    ],
+    "themes": [
+      "Logistics services",
+      "pharmaceuticals",
+      "transportation",
+      "contracts",
+      "penalties"
+    ],
+    "entities": {
+      "people": [
+        "Ananya Desai",
+        "Capt. John Lim"
+      ],
+      "organizations": [
+        "Praxis Global Logistics Tech",
+        "Poseidon Ocean Liners Ltd.",
+        "Agni Tower",
+        "88 Maritime Way"
+      ],
+      "locations": [
+        "Mumbai",
+        "Hamburg"
+      ]
+    },
+    "generated_at": "2025-12-22T14:37:11.202618",
+    "llm_model": "phi2",
+    "confidence": 0.8
+  },
+  "enriched_at": "2025-12-22T14:37:11.203619",
+  "processing_time_ms": 115275.79593658447
+}

@@ -27,6 +27,7 @@ A **production-ready multi-provider RAG system** supporting both **offline-first
 - ✅ **Speech-to-Text & Text-to-Speech** with multiple providers
 - ✅ **OCR and Image Analysis** with CPU-friendly implementations
 - ✅ **Emotion Detection** from audio inputs
+- ✅ **LLM-assisted metadata generation** - Semantic enrichment for improved RAG
 - ✅ **Offline-first architecture** with cloud integration
 - ✅ **JWT authentication** with comprehensive audit logging
 - ✅ **Prompt optimization** with token budgeting and context truncation
@@ -78,6 +79,10 @@ User Request → FastAPI Router → Container → Modular Services → Response
 - `version_manager.py` - Document versioning system
 - `profile_analyzer.py` - User profile analysis
 - `utils.py` - Shared utilities and sentiment analysis
+- `metadata_models.py` - **NEW: Metadata data models for LLM enrichment**
+- `metadata_generator.py` - **NEW: LLM-based metadata generation**
+- `cleanup_service.py` - **NEW: Document cleanup and enrichment pipeline**
+
 
 **🎭 Multimodal Module** (`app/modules/multimodal/`) - **NEW**
 - `interfaces.py` - Multimodal processing interfaces
@@ -114,8 +119,10 @@ User Request → FastAPI Router → Container → Modular Services → Response
 - `api_routes_media.py` - **NEW: Media file serving with RBAC**
 - `api_routes_models.py` - Model management endpoints
 - `api_routes_agents.py` - **NEW: Agent workflow endpoints**
+- `api_routes_cleanup.py` - **NEW: Document cleanup and metadata enrichment**
 - `dependencies.py` - Dependency injection using container
 - `modules/integration.py` - **Dependency injection container**
+
 
 **🛠️ Utilities**
 - `utils/doc_parser.py` - Document parsing utilities
@@ -483,6 +490,9 @@ ai_backend/
 │   │   │   ├── document_manager.py # Document operations
 │   │   │   ├── version_manager.py  # Document versioning
 │   │   │   ├── profile_analyzer.py # User profile analysis
+│   │   │   ├── metadata_models.py  # Metadata data models (NEW)
+│   │   │   ├── metadata_generator.py # LLM metadata generation (NEW)
+│   │   │   ├── cleanup_service.py  # Document cleanup pipeline (NEW)
 │   │   │   └── utils.py           # Shared utilities
 │   │   ├── config/          # Configuration module
 │   │   │   ├── settings.py        # Environment settings
@@ -503,6 +513,7 @@ ai_backend/
 │   ├── api_routes_vision.py # Vision processing endpoints (NEW)
 │   ├── api_routes_media.py  # Media serving endpoints (NEW)
 │   ├── api_routes_models.py # Model management endpoints
+│   ├── api_routes_cleanup.py # Cleanup and enrichment endpoints (NEW)
 │   ├── dependencies.py      # FastAPI dependencies
 │   ├── logging_config.py    # Logging configuration
 │   └── main.py             # FastAPI application
@@ -512,14 +523,23 @@ ai_backend/
 │   ├── test_session_manager.py  # Session management tests
 │   ├── test_vector_store.py     # Vector store tests
 │   ├── test_rag_orchestrator.py # RAG orchestrator tests
+│   ├── test_metadata_generator.py # Metadata generator tests (NEW)
+│   ├── test_cleanup_service.py  # Cleanup service tests (NEW)
 │   ├── test_runner.py           # Test execution runner
 │   ├── conftest.py             # Pytest configuration
 │   └── README.md               # Test documentation
 ├── tests/                   # Legacy test files
 ├── data/                    # Document storage
-│   ├── companyData/         # Company documents
+│   ├── company/             # Company documents (source)
+│   │   ├── v1/             # Version 1 documents
+│   │   └── v2/             # Version 2 documents
+│   ├── companyData/         # Legacy company documents
 │   ├── examples/            # Example documents
 │   └── missions_output/     # Generated content
+├── cleaned/                 # Enriched documents (NEW)
+│   └── company/            # Cleaned company documents
+│       ├── v1/             # Enriched v1 documents
+│       └── v2/             # Enriched v2 documents
 ├── database/                # SQLite databases
 ├── models/                  # Local LLM models (GGUF)
 ├── embeddings_models/       # Embedding models
@@ -824,7 +844,94 @@ Response: {
 **GET /api/models/downloadable** - Models available for download
 **POST /api/models/refresh** - Refresh model cache
 
-### Model Management (`/api/models/`)
+### Document Cleanup and Metadata Enrichment (`/api/cleanupdata`) - **NEW**
+
+**POST /api/cleanupdata** - Start cleanup and enrichment pipeline
+```json
+Request: {
+  "force": false  // Force cleanup even if one is in progress
+}
+Response: {
+  "started_at": "2025-12-22T13:47:39Z",
+  "completed_at": "2025-12-22T13:48:15Z",
+  "status": "completed",
+  "total_documents": 18,
+  "processed_documents": 18,
+  "successful_documents": 18,
+  "failed_documents": 0,
+  "skipped_documents": 0,
+  "total_processing_time_ms": 36250.5,
+  "average_processing_time_ms": 2013.9,
+  "document_statuses": [
+    {
+      "source_path": "data/company/v1/CEO_memo.md",
+      "document_id": "CEO_memo",
+      "status": "success",
+      "processing_time_ms": 2150.3,
+      "enriched_path": "cleaned/company/v1/CEO_memo.md"
+    }
+  ],
+  "errors": []
+}
+```
+
+**GET /api/cleanupdata/status** - Check cleanup status
+```json
+Response: {
+  "in_progress": false,
+  "report": {
+    "status": "completed",
+    "total_documents": 18,
+    "successful_documents": 18,
+    ...
+  }
+}
+```
+
+**GET /api/cleanupdata/preview/{document_id}** - Preview metadata enrichment
+```json
+Parameters: {
+  "document_id": "CEO_memo_strategic_vision",
+  "version": "v1"  // Optional, defaults to v1
+}
+Response: {
+  "document_id": "CEO_memo_strategic_vision",
+  "version": "v1",
+  "source_path": "data/company/v1/CEO_memo_strategic_vision.md",
+  "original_metadata": {
+    "document_type": "memo",
+    "department": "HR",
+    "sensitivity": "highly_confidential",
+    "tags": ["strategy", "vision", "CEO"]
+  },
+  "enriched_metadata": {
+    "strict": {
+      "document_type": "memo",
+      "department": "HR",
+      "sensitivity": "highly_confidential",
+      "source": "CEO_memo_strategic_vision.md",
+      "tags": ["strategy", "vision", "CEO"]
+    },
+    "soft": {
+      "summary": "CEO announces Agni 2.0 vision with commitment to carbon neutrality by 2030. Key initiatives include transitioning 50% of delivery fleet to electric vehicles by 2025, migrating data centers to green energy, and reducing plastic waste by 30%.",
+      "keywords": ["carbon neutral", "sustainability", "Agni 2.0", "green energy", "electric vehicles", "plastic waste", "environmental commitment"],
+      "themes": ["sustainability", "corporate strategy", "environmental responsibility", "green initiatives"],
+      "entities": {
+        "people": ["Aisha Sharma"],
+        "organizations": ["Agni Holdings", "Praxis Global", "Saarthi Infotech", "Agni Pharma"],
+        "locations": []
+      },
+      "generated_at": "2025-12-22T13:47:42Z",
+      "llm_model": "phi2",
+      "confidence": 0.8
+    },
+    "enriched_at": "2025-12-22T13:47:42Z",
+    "processing_time_ms": 2150.3
+  },
+  "has_enriched": true
+}
+```
+
 
 **GET /api/models/list** - List available models
 **GET /api/models/best** - Get best available model
@@ -833,7 +940,31 @@ Response: {
 
 ---
 
-## 6. RBAC System
+## 6. LLM-Assisted Metadata Generation System - **NEW**
+
+A comprehensive system for enriching documents with semantic metadata using local LLM before vector database storage.
+
+**Key Components**:
+- **Metadata Models**: Strict (system) vs Soft (LLM-generated) separation
+- **Metadata Generator**: Token-optimized LLM prompts for consistent extraction
+- **Cleanup Service**: Orchestrates scanning, processing, and enrichment pipeline
+- **API Endpoints**: `/api/cleanupdata` for pipeline control and preview
+
+**Benefits**:
+- Improved retrieval quality with semantic metadata
+- Better filtering and explainability
+- CPU-efficient (LLM used only at ingestion time)
+- Preserves original documents (read-only operation)
+
+**Performance**: 2-5 seconds per document on CPU-only systems
+
+**Documentation**: See [METADATA_GENERATION.md](file:///I:/Workspace/GitHub/ai_engineer/ai_backend/documents/METADATA_GENERATION.md) for complete details.
+
+**Testing**: 17/17 tests passing (8 unit + 9 integration)
+
+---
+
+## 7. RBAC System
 
 ### Role Hierarchy
 ```
@@ -870,7 +1001,7 @@ personal (1)              - Owner + HR+ level
 
 ---
 
-## 7. Temperature Parameter System
+## 8. Temperature Parameter System
 
 ### Unified Temperature Control
 
