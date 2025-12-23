@@ -1,0 +1,54 @@
+{
+  "strict": {
+    "document_type": "spec",
+    "department": "IT",
+    "sensitivity": "public_internal",
+    "source": "product_spec_vajrascope.md",
+    "domain": null,
+    "published_year": null,
+    "effective_date": "",
+    "allowed_roles": [
+      "Employee",
+      "Manager"
+    ],
+    "tags": [
+      "product",
+      "specification",
+      "Vajrascope"
+    ]
+  },
+  "soft": {
+    "summary": "Document content extracted.",
+    "keywords": [
+      "VajraScope",
+      "predictive analytics",
+      "NLP",
+      "dashboard",
+      "C-suite executives",
+      "SAP",
+      "Salesforce",
+      "Oracle DB",
+      "anomaly detection",
+      "pricing tiers"
+    ],
+    "themes": [
+      "Enterprise Business Intelligence Tool",
+      "Natural Language Processing",
+      "Predictive Analytics",
+      "Dashboard",
+      "C-Suite Executives"
+    ],
+    "entities": {
+      "people": [],
+      "organizations": [
+        "Vajra Solutions"
+      ],
+      "locations": []
+    },
+    "generated_at": "2025-12-22T14:29:52.885940",
+    "llm_model": "phi2",
+    "confidence": 0.8
+  },
+  "enriched_at": "2025-12-22T14:29:52.887942",
+  "processing_time_ms": 156782.69219398499
+}

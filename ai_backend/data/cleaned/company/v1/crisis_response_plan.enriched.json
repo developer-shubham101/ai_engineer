@@ -1,0 +1,55 @@
+{
+  "strict": {
+    "document_type": "plan",
+    "department": "Operations",
+    "sensitivity": "public_internal",
+    "source": "crisis_response_plan.md",
+    "domain": null,
+    "published_year": null,
+    "effective_date": "",
+    "allowed_roles": [
+      "Employee",
+      "Manager",
+      "Operations",
+      "HR"
+    ],
+    "tags": [
+      "crisis",
+      "response",
+      "plan",
+      "operations"
+    ]
+  },
+  "soft": {
+    "summary": "Agni Holdings has a Crisis Management Protocol (CMP) in place for cyber ransomware attacks and chemical spills. The CMP includes steps such as isolating the affected system, reporting to the Emergency IT Hotline, using backup communication apps like Signal, designating a spokesperson, and following evacuation and containment procedures.",
+    "keywords": [
+      "Agni Holdings",
+      "Crisis Management Protocol (CMP)",
+      "Cyber Ransomware Attack",
+      "Chemical Spill",
+      "Agni Pharma Labs",
+      "St. Jude’s Hospital"
+    ],
+    "themes": [
+      "Crisis Management",
+      "Security",
+      "Communication",
+      "Medical Response"
+    ],
+    "entities": {
+      "people": [
+        "Maria Rodriguez",
+        "Aisha Sharma",
+        "Kenji Sato",
+        "Team Alpha"
+      ],
+      "organizations": [],
+      "locations": []
+    },
+    "generated_at": "2025-12-22T14:15:53.364974",
+    "llm_model": "phi2",
+    "confidence": 0.8
+  },
+  "enriched_at": "2025-12-22T14:15:53.365966",
+  "processing_time_ms": 128621.03343009949
+}

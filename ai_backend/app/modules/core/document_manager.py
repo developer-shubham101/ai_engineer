@@ -408,7 +408,7 @@ class DocumentManager:
         """
 
         # NEW DEFAULT PATH: data/companyData
-        default_path = settings.TRAINING_DATA_DIR / "company"
+        default_path = settings.TRAINING_DATA_DIR / "cleaned" / "company"
         path = Path(file_path) if file_path else default_path
         logger.info("looking for path for data %s", path)
         if not path.exists():
@@ -484,7 +484,8 @@ class DocumentManager:
                         # Skip .meta.json files (they're companions, not documents)
                         if file_path.suffix == '.json' and file_path.stem.endswith('.meta'):
                             continue
-
+                        if file_path.suffix == '.json' and file_path.stem.endswith('.enriched'):
+                            continue
                         if file_path.is_file():
                             try:
                                 # Use doc_parser to read and parse file
@@ -497,10 +498,12 @@ class DocumentManager:
                                 # Source name for display
                                 src_name = f"{category}/{version_dir.name}/{file_path.name}"
 
-                                # Load custom metadata from companion .meta.json file
+                                # Load custom metadata from companion .meta.json or .enriched.json file
                                 meta_file = file_path.with_suffix('.meta.json')
+                                enriched_file = file_path.with_suffix('.enriched.json')
+                               
                                 custom_meta = {}
-                                if meta_file.exists():
+                                if meta_file.exists() or enriched_file.exists():
                                     try:
                                         import json
                                         custom_meta = json.loads(meta_file.read_text(encoding='utf-8'))

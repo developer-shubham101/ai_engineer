@@ -1,0 +1,61 @@
+{
+  "strict": {
+    "document_type": "handbook",
+    "department": "HR",
+    "sensitivity": "public_internal",
+    "source": "HR_policies_handbook.md",
+    "domain": null,
+    "published_year": null,
+    "effective_date": "",
+    "allowed_roles": [
+      "Employee",
+      "Manager",
+      "HR"
+    ],
+    "tags": [
+      "HR",
+      "policies",
+      "handbook"
+    ]
+  },
+  "soft": {
+    "summary": "Document content extracted.",
+    "keywords": [
+      "Agni Holdings Inc.",
+      "Agni Pharma",
+      "Praxis",
+      "Saarthi Infotech",
+      "Vajra Solutions",
+      "Aisha Sharma",
+      "SecureLife World",
+      "Ethics Committee"
+    ],
+    "themes": [
+      "Attendance and Work Hours",
+      "Leave Policy",
+      "Code of Conduct",
+      "Compensation and Benefits"
+    ],
+    "entities": {
+      "people": [
+        "Aisha Sharma"
+      ],
+      "organizations": [
+        "Agni Holdings Inc.",
+        "Agni Pharma",
+        "Praxis",
+        "Saarthi Infotech",
+        "Vajra Solutions"
+      ],
+      "locations": [
+        "Mumbai",
+        "New York"
+      ]
+    },
+    "generated_at": "2025-12-22T14:05:54.651050",
+    "llm_model": "phi2",
+    "confidence": 0.8
+  },
+  "enriched_at": "2025-12-22T14:05:54.652047",
+  "processing_time_ms": 187312.80136108398
+}

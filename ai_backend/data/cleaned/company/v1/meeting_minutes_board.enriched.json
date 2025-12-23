@@ -1,0 +1,57 @@
+{
+  "strict": {
+    "document_type": "minutes",
+    "department": "HR",
+    "sensitivity": "super_confidential",
+    "source": "meeting_minutes_board.md",
+    "domain": null,
+    "published_year": null,
+    "effective_date": "",
+    "allowed_roles": [
+      "SuperAdmin"
+    ],
+    "tags": [
+      "meeting",
+      "minutes",
+      "board"
+    ]
+  },
+  "soft": {
+    "summary": "The board meeting minutes discussed expansion into South America, AI ethics debate, and the annual Agni Gala.",
+    "keywords": [
+      "Sao Paulo",
+      "Brazil",
+      "Praxis Logistics",
+      "Ethan Blackwood",
+      "Chen Wei"
+    ],
+    "themes": [
+      "Expansion into South America",
+      "AI Ethics Debate",
+      "Annual Agni Gala"
+    ],
+    "entities": {
+      "people": [
+        "Aisha Sharma",
+        "Eleanor Vance",
+        "Kenji Sato",
+        "Phoenix Capital Rep (Ethan Blackwood)",
+        "Chen Wei"
+      ],
+      "organizations": [
+        "Praxis Logistics",
+        "Vajra' Inc."
+      ],
+      "locations": [
+        "Agni Tower",
+        "Mumbai",
+        "Singapore"
+      ]
+    },
+    "generated_at": "2025-12-22T14:24:54.880207",
+    "llm_model": "phi2",
+    "confidence": 0.8
+  },
+  "enriched_at": "2025-12-22T14:24:54.881205",
+  "processing_time_ms": 139127.9592514038
+}

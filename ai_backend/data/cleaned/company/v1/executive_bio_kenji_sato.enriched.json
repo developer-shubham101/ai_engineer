@@ -1,0 +1,57 @@
+{
+  "strict": {
+    "document_type": "biography",
+    "department": "HR",
+    "sensitivity": "public_internal",
+    "source": "executive_bio_kenji_sato.md",
+    "domain": null,
+    "published_year": null,
+    "effective_date": "",
+    "allowed_roles": [
+      "Employee",
+      "Manager",
+      "HR"
+    ],
+    "tags": [
+      "executive",
+      "bio",
+      "Kenji Sato"
+    ]
+  },
+  "soft": {
+    "summary": "Document content extracted.",
+    "keywords": [
+      "COO",
+      "Agni Holdings Inc.",
+      "global operations",
+      "supply chain resilience",
+      "lean manufacturing"
+    ],
+    "themes": [
+      "leadership style",
+      "strategy execution",
+      "cost reduction",
+      "AI predictive modeling",
+      "tea ceremonies"
+    ],
+    "entities": {
+      "people": [
+        "Kenji Sato"
+      ],
+      "organizations": [
+        "Agni Holdings Inc.",
+        "Toyota Motor Corp.",
+        "Sony Electronics"
+      ],
+      "locations": [
+        "Tokyo",
+        "Mumbai"
+      ]
+    },
+    "generated_at": "2025-12-22T14:17:24.153564",
+    "llm_model": "phi2",
+    "confidence": 0.8
+  },
+  "enriched_at": "2025-12-22T14:17:24.154557",
+  "processing_time_ms": 90755.47051429749
+}

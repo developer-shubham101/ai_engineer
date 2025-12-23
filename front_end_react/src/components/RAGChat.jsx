@@ -31,6 +31,7 @@ export default function RAGChat({ onLogout }) {
   const [useDocuments, setUseDocuments] = useState(true)
   const [useConversationHistory, setUseConversationHistory] = useState(true)
   const [topK, setTopK] = useState(3)
+  const [maxTokens, setMaxTokens] = useState(512)
   const [temperature, setTemperature] = useState(() => parseFloat(localStorage.getItem('temperature')) || 0.1)
   const [composer, setComposer] = useState('')
   const [messages, setMessages] = useState([])
@@ -45,7 +46,7 @@ export default function RAGChat({ onLogout }) {
 
   // Prompt Templates
   const [promptTemplates, setPromptTemplates] = useState([])
-  const [selectedTemplate, setSelectedTemplate] = useState('')
+  const [selectedTemplate, setSelectedTemplate] = useState('no_template')
 
   const messagesRef = useRef(null)
 
@@ -395,6 +396,7 @@ export default function RAGChat({ onLogout }) {
       use_documents: !!useDocuments,
       use_conversation_history: !!useConversationHistory,
       temperature: temperature,
+      max_tokens: Number(maxTokens || 512),
       conversation_id: activeConversationId // Include conversation ID
     }
 
@@ -957,6 +959,17 @@ export default function RAGChat({ onLogout }) {
                       max={20}
                       value={topK}
                       onChange={(e) => setTopK(Number(e.target.value))}
+                    />
+                  </div>
+                  <div className="input-group input-group-sm">
+                    <span className="input-group-text">Max Tokens</span>
+                    <input
+                      type="number"
+                      className="form-control"
+                      min={1}
+                      max={4096}
+                      value={maxTokens}
+                      onChange={(e) => setMaxTokens(Number(e.target.value))}
                     />
                   </div>
                   <div className="input-group input-group-sm" title="Temperature controls randomness. Low = accurate and predictable. High = creative and unpredictable.">

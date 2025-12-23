@@ -1,0 +1,55 @@
+{
+  "strict": {
+    "document_type": "guide",
+    "department": "HR",
+    "sensitivity": "public_internal",
+    "source": "onboarding_guide_new_hire.md",
+    "domain": null,
+    "published_year": null,
+    "effective_date": "",
+    "allowed_roles": [
+      "Employee",
+      "Manager",
+      "HR"
+    ],
+    "tags": [
+      "onboarding",
+      "new hire",
+      "guide",
+      "HR"
+    ]
+  },
+  "soft": {
+    "summary": "Welcome to the Tribe: New Hire Onboarding Guide. The guide includes an ID badge collection process, IT setup instructions, HR orientation details, and information about the 'Agni Buddy' program.",
+    "keywords": [
+      "New Hire Onboarding",
+      "ID Badge",
+      "IT Setup",
+      "HR Orientation",
+      "Ignite Session",
+      "Buddy Program"
+    ],
+    "themes": [
+      "Onboarding Process",
+      "Company Culture",
+      "Teamwork"
+    ],
+    "entities": {
+      "people": [],
+      "organizations": [
+        "Tribe"
+      ],
+      "locations": [
+        "Ground Floor",
+        "Conference Room B",
+        "Teams Link",
+        "Pantry Stations"
+      ]
+    },
+    "generated_at": "2025-12-22T14:27:15.804666",
+    "llm_model": "phi2",
+    "confidence": 0.8
+  },
+  "enriched_at": "2025-12-22T14:27:15.805665",
+  "processing_time_ms": 140918.46132278442
+}

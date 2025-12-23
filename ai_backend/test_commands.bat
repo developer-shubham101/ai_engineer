@@ -1,0 +1,1 @@
+python -m pytest test_module/test_embedding_simple.py test_module/test_vector_store.py test_module/test_faiss_vector_store.py -v

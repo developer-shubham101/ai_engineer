@@ -1,0 +1,50 @@
+{
+  "strict": {
+    "document_type": "postmortem",
+    "department": "IT",
+    "sensitivity": "public_internal",
+    "source": "technical_incident_postmortem_INC-402.md",
+    "domain": null,
+    "published_year": null,
+    "effective_date": "",
+    "allowed_roles": [
+      "Employee",
+      "Manager",
+      "IT"
+    ],
+    "tags": [
+      "technical",
+      "incident",
+      "postmortem",
+      "INC-402"
+    ]
+  },
+  "soft": {
+    "summary": "The incident was caused by a misconfigured Terraform script that resulted in a 100% packet drop.",
+    "keywords": [
+      "Saarthi Cloud Outage",
+      "FinSecure Group",
+      "Junior DevOps Engineer",
+      "Rajesh Kumar",
+      "Maya Singh"
+    ],
+    "themes": [
+      "Terraform Script Error",
+      "API Gateway Failure",
+      "Transaction Request Failures"
+    ],
+    "entities": {
+      "people": [
+        "Rajesh Kumar",
+        "Maya Singh"
+      ],
+      "organizations": [],
+      "locations": []
+    },
+    "generated_at": "2025-12-22T14:35:15.894300",
+    "llm_model": "phi2",
+    "confidence": 0.8
+  },
+  "enriched_at": "2025-12-22T14:35:15.895299",
+  "processing_time_ms": 94039.43419456482
+}
