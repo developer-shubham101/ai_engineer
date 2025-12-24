@@ -48,7 +48,7 @@ class CrewOrchestrator(ICrewOrchestrator):
                 base_url=settings.COLABLLM_BASE_URL,
                 api_key=settings.COLABLLM_API_KEY,
                 temperature=0.7,
-                max_tokens=1024
+                max_tokens=512
             )
 
             logger.info(f"CrewAI LLM successfully loaded with ColabLLM: {settings.COLABLLM_BASE_URL}")
