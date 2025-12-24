@@ -71,6 +71,118 @@ curl -X POST "http://127.0.0.1:8000/api/auth/token" \
 4. `highly_confidential` - Legal/Executive only
 5. `personal` - Owner or HR/Legal/Executive
 
+## 🤖 CrewAI Multi-Agent Workflows (NEW)
+
+### Overview
+The system now supports **CrewAI multi-agent workflows** using the official CrewAI library with YAML configuration. This enables sophisticated multi-agent collaboration for debate, research, and analysis tasks.
+
+### Available Workflows
+
+| Workflow | Agents | Description |
+|----------|--------|--------------|
+| **debate** | Advocate, Critic, Moderator | Multi-agent debate with opposing viewpoints |
+| **research** | Researcher, Analyst, Synthesizer | Comprehensive research with multiple perspectives |
+
+### CrewAI Query
+- **POST** `/api/crew/query` - Execute CrewAI multi-agent workflow
+
+```bash
+curl -X POST "http://localhost:8000/api/crew/query" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{
+    "topic": "Should companies adopt remote work policies?",
+    "workflow_type": "debate",
+    "max_iterations": 3,
+    "temperature": 0.7,
+    "provider": "local"
+  }'
+```
+
+**Response:**
+```json
+{
+  "result": "# Debate Analysis: Should companies adopt remote work policies?\n\n## Advocate Position (Pro)\n[Arguments in favor...]\n\n## Critic Position (Against)\n[Counterarguments...]\n\n## Moderator Analysis\n[Balanced synthesis...]",
+  "workflow_type": "debate",
+  "agents_used": ["Advocate", "Critic", "Moderator"],
+  "iterations": 3,
+  "execution_time_ms": 5200,
+  "available_workflows": ["debate", "research"]
+}
+```
+
+### YAML Configuration
+
+**Agent Configuration** (`crew_config/agents.yaml`):
+```yaml
+debate_advocate:
+  role: "Debate Advocate"
+  goal: "Present compelling arguments in favor of the given topic"
+  backstory: "You are an experienced debater who excels at finding strong supporting evidence and presenting persuasive arguments."
+  verbose: true
+
+debate_critic:
+  role: "Debate Critic"
+  goal: "Present strong counterarguments and challenge the opposing position"
+  backstory: "You are a critical thinker who excels at identifying weaknesses in arguments and presenting alternative perspectives."
+  verbose: true
+```
+
+**Task Configuration** (`crew_config/tasks.yaml`):
+```yaml
+debate_advocate_task:
+  description: "Present 3-4 compelling arguments in favor of: {topic}. Provide factual evidence and logical reasoning to support your position."
+  expected_output: "A well-structured argument with 3-4 key points supporting the topic, each backed by reasoning or evidence."
+  agent: debate_advocate
+```
+
+### CrewAI Features
+
+- ✅ **Official CrewAI Library** - Uses `crewai` package with proper Agent, Task, and Crew classes
+- ✅ **YAML Configuration** - Externalized agent and task definitions
+- ✅ **Sequential Processing** - Tasks executed in proper order with context passing
+- ✅ **LLM Integration** - Works with local and cloud LLM providers
+- ✅ **Structured Output** - Formatted results with clear agent contributions
+- ✅ **Error Handling** - Graceful failure recovery and logging
+
+### Workflow Examples
+
+**Debate Workflow:**
+1. **Advocate** presents arguments in favor of the topic
+2. **Critic** presents counterarguments against the position
+3. **Moderator** provides balanced analysis and synthesis
+
+**Research Workflow:**
+1. **Researcher** gathers comprehensive information and facts
+2. **Analyst** provides deep analysis and identifies patterns
+3. **Synthesizer** creates comprehensive report with recommendations
+
+### Installation
+
+```bash
+# Install CrewAI dependencies
+pip install crewai PyYAML
+
+# CrewAI is now integrated into the main system
+python -m app.main
+```
+
+### Use Cases
+
+- **Decision Making**: Multi-perspective analysis of business decisions
+- **Research Projects**: Comprehensive investigation of complex topics
+- **Policy Analysis**: Balanced evaluation of organizational policies
+- **Strategic Planning**: Multi-agent collaboration on strategic initiatives
+- **Educational Content**: Structured debates and research for learning
+
+### Benefits
+
+- **Structured Collaboration**: Agents work together with defined roles
+- **Quality Output**: Multiple perspectives ensure comprehensive analysis
+- **Configurable**: Easy to modify agent behaviors via YAML
+- **Extensible**: Simple to add new workflows and agent types
+- **Production Ready**: Integrated with existing authentication and logging
+
 ## 🎭 Multimodal AI Processing (NEW)
 
 ### Overview

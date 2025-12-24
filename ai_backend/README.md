@@ -16,6 +16,7 @@ A production-ready **Retrieval-Augmented Generation (RAG) system** that works wi
 - 📚 **Document Versioning** - Non-destructive updates with full history
 - 💬 **Session Management** - Persistent conversations with context
 - 🚀 **Offline-First** - Works without internet using local LLMs
+- 🤖 **CrewAI Integration** - Multi-agent workflows with debate and research capabilities
 - ⚡ **Optimized Prompts** - Smart token budgeting and context truncation
 - 🔍 **Debug Tools** - Complete prompt/response logging
 - 🛡️ **Security** - JWT authentication with audit trails
@@ -215,6 +216,24 @@ POST /api/rag/{provider}/query
   "final_prompt": "System: You are an HR assistant..." // Debug mode
 }
 ```
+
+### CrewAI Multi-Agent Workflows
+
+```http
+POST /api/crew/query
+```
+
+```json
+{
+  "topic": "Should companies adopt remote work policies?",
+  "workflow_type": "debate",
+  "temperature": 0.7
+}
+```
+
+**Available Workflows:**
+- **debate**: Multi-agent debate with Advocate, Critic, Moderator
+- **research**: Comprehensive research with Researcher, Analyst, Synthesizer
 
 ### Authentication
 
