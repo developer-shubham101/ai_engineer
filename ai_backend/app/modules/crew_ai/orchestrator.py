@@ -8,8 +8,9 @@ from typing import Dict, Any, List, Optional
 
 from crewai import Agent, Task, Crew, Process
 
+from crewai.llm import LLM
+
 from .interfaces import ICrewOrchestrator, CrewRequest, CrewResponse
-from .custom_llm import ColabLLM
 
 logger = logging.getLogger(__name__)
 
@@ -38,25 +39,23 @@ class CrewOrchestrator(ICrewOrchestrator):
             logger.error(f"Failed to load {filename}: {e}")
             return {}
 
-    def _create_llm(self) -> Optional[ColabLLM]:
-        """Create custom LLM instance for CrewAI using ColabLLM."""
+    def _create_llm(self) -> Optional[LLM]:
+        """Create LLM instance for CrewAI using llama-server."""
         try:
-            from ..config.settings import settings
-            print(f"Creating CrewAI LLM with ColabLLM: {settings.COLABLLM_BASE_URL}")
-
-            llm = ColabLLM(
-                base_url=settings.COLABLLM_BASE_URL,
-                api_key=settings.COLABLLM_API_KEY,
-                temperature=0.7,
-                max_tokens=512
+            print("Creating CrewAI LLM with llama-server: http://localhost:8080")
+            
+            llm = LLM(
+                model="llama",
+                base_url="http://localhost:8080",
+                temperature=0.7
             )
-
-            logger.info(f"CrewAI LLM successfully loaded with ColabLLM: {settings.COLABLLM_BASE_URL}")
-            print("✅ CrewAI LLM successfully loaded with ColabLLM")
+            
+            logger.info("CrewAI LLM successfully loaded with llama-server")
+            print("✅ CrewAI LLM successfully loaded with llama-server")
             return llm
-
+            
         except Exception as e:
-            error_msg = f"Failed to create CrewAI LLM with ColabLLM: {e}"
+            error_msg = f"Failed to create CrewAI LLM with llama-server: {e}"
             logger.error(error_msg)
             print(f"❌ {error_msg}")
             return None
