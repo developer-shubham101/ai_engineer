@@ -8,6 +8,7 @@ import PromptTemplateManager from './PromptTemplateManager.jsx'
 import ConversationSidebar from './ConversationSidebar.jsx'
 import ConversationMessageDetail from './ConversationMessageDetail.jsx'
 import AudioRecorder from './AudioRecorder.jsx'
+import CrewAIChat from './CrewAIChat.jsx'
 import ToastList from './ToastList.jsx'
 import { BASE_API_URL } from '../utility/const.js'
 import { getStoredToken, getStoredUser, getSessionIdFromToken, clearAuth } from '../utility/auth.js'
@@ -20,6 +21,9 @@ export default function RAGChat({ onLogout }) {
     const storedToken = getStoredToken();
     return storedToken ? getSessionIdFromToken(storedToken) : '';
   })
+
+  // CrewAI Mode
+  const [crewMode, setCrewMode] = useState(false)
 
   // Conversation state
   const [conversations, setConversations] = useState([])
@@ -710,433 +714,447 @@ export default function RAGChat({ onLogout }) {
         onToggle={() => setSidebarOpen(!sidebarOpen)}
       />
 
+
       {/* Main Chat Area */}
-      <div className="chat-main-content">
-        <div className="row g-3 h-100">
-          <div className="col-md-9">
-            <div className="card h-100">
-              <div className="card-body d-flex flex-column">
-                <div className="d-flex justify-content-between align-items-center mb-2">
-                  <div className="d-flex align-items-center gap-2">
-                    <button
-                      className="btn btn-sm btn-outline-secondary"
-                      onClick={() => setSidebarOpen(!sidebarOpen)}
-                      title="Toggle sidebar"
-                    >
-                      <i className="bi bi-list"></i>
-                    </button>
-                    <h5 className="mb-0">{conversationTitle}</h5>
-                  </div>
-                  <small className="text-muted">Session: {sessionId || 'none'}</small>
-                </div>
-
-                <div
-                  ref={messagesRef}
-                  style={{
-                    height: "73vh",
-                    overflowY: "auto",
-                    padding: 12,
-                    borderRadius: 8,
-                  }}
-                >
-                  {messages.map((m, idx) => (
-                    <div
-                      key={idx}
-                      className={`d-flex mb-3 ${m.role === "user"
-                        ? "justify-content-end"
-                        : "justify-content-start"
-                        }`}
-                    >
-                      <div
-                        className={`p-3 rounded ${m.role === "user" ? "text-white" : ""
-                          }`}
-                        style={{
-                          background: m.role === "user" ? "#0d6efd" : "#2d702fff",
-                          maxWidth: "75%",
-                        }}
+      {crewMode ? (
+        <div className="chat-main-content">
+          <CrewAIChat onLogout={onLogout} />
+        </div>
+      ) : (
+        <div className="chat-main-content">
+          <div className="row g-3 h-100">
+            <div className="col-md-9">
+              <div className="card h-100">
+                <div className="card-body d-flex flex-column">
+                  <div className="d-flex justify-content-between align-items-center mb-2">
+                    <div className="d-flex align-items-center gap-2">
+                      <button
+                        className="btn btn-sm btn-outline-secondary"
+                        onClick={() => setSidebarOpen(!sidebarOpen)}
+                        title="Toggle sidebar"
                       >
-                        <div className="small text-muted mb-1">
-                          {m.role === "user" ? "You" : "Assistant"} • {m.ts}
-                        </div>
-                        <div style={{ whiteSpace: "pre-wrap" }}>
-                          {m.role === "user" ? m.text : m.answer || m.text}
-                        </div>
-
-                        {/* RAG Debug Info */}
-                        <ConversationMessageDetail message={m} />
-
-                        {m.role === "bot" && (
-                          <div className="d-flex align-items-center gap-2 mt-1 mb-2">
-                            <button
-                              className="btn btn-sm btn-link p-0 text-decoration-none"
-                              onClick={() => playTTS(m.answer || m.text)}
-                              title="Read Aloud"
-                            >
-                              <i className="bi bi-volume-up"></i> Play Audio
-                            </button>
-                            {m.context && (
-                              <div className="small text-muted border-start ps-2">
-                                Context: {truncate(m.context, 100)}
-                              </div>
-                            )}
-                          </div>
-                        )}
-                        {m.role === "bot" &&
-                          Array.isArray(m.retrieved) &&
-                          m.retrieved.length > 0 && (
-                            <details className="mt-2">
-                              <summary>Retrieved ({m.retrieved.length})</summary>
-                              <div className="mt-2">
-                                {m.retrieved.map((r, i) => (
-                                  <div
-                                    key={i}
-                                    className="p-2 mb-2"
-                                    style={{
-                                      borderLeft: "3px solid #e9ecef",
-                                      background: "#2d702fff",
-                                    }}
-                                  >
-                                    <div className="small text-muted">
-                                      Source:{" "}
-                                      {r.source ||
-                                        (r.metadata && r.metadata.department) ||
-                                        "unknown"}
-                                    </div>
-                                    <div style={{ whiteSpace: "pre-wrap" }}>
-                                      {truncate(r.text || r.preview || "", 600)}
-                                    </div>
-                                    <div className="small text-muted mt-1">
-                                      Metadata: {JSON.stringify(r.metadata || {})}
-                                    </div>
-                                    {r.metadata &&
-                                      (r.metadata.sensitivity === "restricted" ||
-                                        r.metadata.sensitivity ===
-                                        "confidential") && (
-                                        <button
-                                          className="btn btn-sm btn-outline-primary mt-2"
-                                          onClick={() =>
-                                            requestAccess({
-                                              document_id: r.id,
-                                              source_name: r.source,
-                                              reason: "Need access via UI",
-                                            })
-                                          }
-                                        >
-                                          Request Access
-                                        </button>
-                                      )}
-                                  </div>
-                                ))}
-                              </div>
-                            </details>
-                          )}
-                        {m.role === "bot" && m.filtered_out_count > 0 && (
-                          <div className="mt-2">
-                            <button
-                              className="btn btn-sm btn-warning"
-                              onClick={() => {
-                                if (
-                                  Array.isArray(m.public_summaries) &&
-                                  m.public_summaries.length
-                                ) {
-                                  addToast(
-                                    "Public summaries logged to console",
-                                    "info"
-                                  );
-                                  console.log(
-                                    "Public summaries:",
-                                    m.public_summaries
-                                  );
-                                } else addToast("No public summaries", "warning");
-                              }}
-                            >
-                              {m.filtered_out_count} results were filtered — show
-                              public summaries
-                            </button>
-                          </div>
-                        )}
-                      </div>
+                        <i className="bi bi-list"></i>
+                      </button>
+                      <h5 className="mb-0">{conversationTitle}</h5>
                     </div>
-                  ))}
-                </div>
+                    <small className="text-muted">Session: {sessionId || 'none'}</small>
+                  </div>
 
-                <div className="mt-3">
-                  <div className="d-flex gap-2">
-                    <div className="d-flex align-items-center gap-2 flex-grow-1">
-                      <AudioRecorder onRecordingComplete={handleAudioRecorded} />
-                      <label className="btn btn-outline-secondary btn-sm" title="Upload Image for OCR">
-                        <i className="bi bi-card-image"></i>
-                        <input
-                          type="file"
-                          accept="image/*"
-                          onChange={handleImageUpload}
-                          style={{ display: 'none' }}
-                        />
-                      </label>
-                      <textarea
-                        className="form-control"
-                        value={composer}
-                        onChange={(e) => setComposer(e.target.value)}
-                        placeholder="Type your question..."
-                        rows={2}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' && !e.shiftKey) {
-                            e.preventDefault()
-                            sendQuery()
-                          }
-                        }}
-                      />
-                    </div>
-                    <div className="d-flex flex-column align-items-end">
-                      <div className="mb-2">
-                        <button
-                          className="btn btn-primary"
-                          disabled={inFlight}
-                          onClick={sendQuery}
+                  <div
+                    ref={messagesRef}
+                    style={{
+                      height: "73vh",
+                      overflowY: "auto",
+                      padding: 12,
+                      borderRadius: 8,
+                    }}
+                  >
+                    {messages.map((m, idx) => (
+                      <div
+                        key={idx}
+                        className={`d-flex mb-3 ${m.role === "user"
+                          ? "justify-content-end"
+                          : "justify-content-start"
+                          }`}
+                      >
+                        <div
+                          className={`p-3 rounded ${m.role === "user" ? "text-white" : ""
+                            }`}
+                          style={{
+                            background: m.role === "user" ? "#0d6efd" : "#2d702fff",
+                            maxWidth: "75%",
+                          }}
                         >
-                          {inFlight ? "Sending..." : "Send"}
-                        </button>
+                          <div className="small text-muted mb-1">
+                            {m.role === "user" ? "You" : "Assistant"} • {m.ts}
+                          </div>
+                          <div style={{ whiteSpace: "pre-wrap" }}>
+                            {m.role === "user" ? m.text : m.answer || m.text}
+                          </div>
+
+                          {/* RAG Debug Info */}
+                          <ConversationMessageDetail message={m} />
+
+                          {m.role === "bot" && (
+                            <div className="d-flex align-items-center gap-2 mt-1 mb-2">
+                              <button
+                                className="btn btn-sm btn-link p-0 text-decoration-none"
+                                onClick={() => playTTS(m.answer || m.text)}
+                                title="Read Aloud"
+                              >
+                                <i className="bi bi-volume-up"></i> Play Audio
+                              </button>
+                              {m.context && (
+                                <div className="small text-muted border-start ps-2">
+                                  Context: {truncate(m.context, 100)}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                          {m.role === "bot" &&
+                            Array.isArray(m.retrieved) &&
+                            m.retrieved.length > 0 && (
+                              <details className="mt-2">
+                                <summary>Retrieved ({m.retrieved.length})</summary>
+                                <div className="mt-2">
+                                  {m.retrieved.map((r, i) => (
+                                    <div
+                                      key={i}
+                                      className="p-2 mb-2"
+                                      style={{
+                                        borderLeft: "3px solid #e9ecef",
+                                        background: "#2d702fff",
+                                      }}
+                                    >
+                                      <div className="small text-muted">
+                                        Source:{" "}
+                                        {r.source ||
+                                          (r.metadata && r.metadata.department) ||
+                                          "unknown"}
+                                      </div>
+                                      <div style={{ whiteSpace: "pre-wrap" }}>
+                                        {truncate(r.text || r.preview || "", 600)}
+                                      </div>
+                                      <div className="small text-muted mt-1">
+                                        Metadata: {JSON.stringify(r.metadata || {})}
+                                      </div>
+                                      {r.metadata &&
+                                        (r.metadata.sensitivity === "restricted" ||
+                                          r.metadata.sensitivity ===
+                                          "confidential") && (
+                                          <button
+                                            className="btn btn-sm btn-outline-primary mt-2"
+                                            onClick={() =>
+                                              requestAccess({
+                                                document_id: r.id,
+                                                source_name: r.source,
+                                                reason: "Need access via UI",
+                                              })
+                                            }
+                                          >
+                                            Request Access
+                                          </button>
+                                        )}
+                                    </div>
+                                  ))}
+                                </div>
+                              </details>
+                            )}
+                          {m.role === "bot" && m.filtered_out_count > 0 && (
+                            <div className="mt-2">
+                              <button
+                                className="btn btn-sm btn-warning"
+                                onClick={() => {
+                                  if (
+                                    Array.isArray(m.public_summaries) &&
+                                    m.public_summaries.length
+                                  ) {
+                                    addToast(
+                                      "Public summaries logged to console",
+                                      "info"
+                                    );
+                                    console.log(
+                                      "Public summaries:",
+                                      m.public_summaries
+                                    );
+                                  } else addToast("No public summaries", "warning");
+                                }}
+                              >
+                                {m.filtered_out_count} results were filtered — show
+                                public summaries
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="mt-3">
+                    <div className="d-flex gap-2">
+                      <div className="d-flex align-items-center gap-2 flex-grow-1">
+                        <AudioRecorder onRecordingComplete={handleAudioRecorded} />
+                        <label className="btn btn-outline-secondary btn-sm" title="Upload Image for OCR">
+                          <i className="bi bi-card-image"></i>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={handleImageUpload}
+                            style={{ display: 'none' }}
+                          />
+                        </label>
+                        <textarea
+                          className="form-control"
+                          value={composer}
+                          onChange={(e) => setComposer(e.target.value)}
+                          placeholder="Type your question..."
+                          rows={2}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' && !e.shiftKey) {
+                              e.preventDefault()
+                              sendQuery()
+                            }
+                          }}
+                        />
+                      </div>
+                      <div className="d-flex flex-column align-items-end">
+                        <div className="mb-2">
+                          <button
+                            className="btn btn-primary"
+                            disabled={inFlight}
+                            onClick={sendQuery}
+                          >
+                            {inFlight ? "Sending..." : "Send"}
+                          </button>
+                        </div>
                       </div>
                     </div>
                   </div>
                 </div>
               </div>
             </div>
-          </div>
 
-          {/* Controls Panel */}
-          <div className="col-md-3" style={{ height: '100vh', overflowY: 'auto' }}>
-            <div className="card mb-3">
-              <div className="card-header d-flex justify-content-between">
-                Controls
-                <button
-                  className="btn btn-sm btn-outline-secondary"
-                  onClick={() => setShowAdminPanel(!showAdminPanel)}
-                >
-                  {showAdminPanel ? 'Hide' : 'Show'} Admin
-                </button>
-              </div>
-              <div className="card-body">
-                <div className="d-flex flex-column gap-2">
-                  {user && (
-                    <div className="badge bg-primary">
-                      {user.username} ({user.role})
-                    </div>
-                  )}
-                  <div className="form-check form-switch">
-                    <input
-                      className="form-check-input"
-                      type="checkbox"
-                      checked={useLlm}
-                      onChange={(e) => setUseLlm(e.target.checked)}
-                    />
-                    <label className="form-check-label">Use LLM</label>
-                  </div>
-                  <div className="form-check form-switch">
-                    <input
-                      className="form-check-input"
-                      type="checkbox"
-                      checked={useDocuments}
-                      onChange={(e) => setUseDocuments(e.target.checked)}
-                    />
-                    <label className="form-check-label">Use Docs</label>
-                  </div>
-                  <div className="form-check form-switch">
-                    <input
-                      className="form-check-input"
-                      type="checkbox"
-                      checked={useConversationHistory}
-                      onChange={(e) => setUseConversationHistory(e.target.checked)}
-                    />
-                    <label className="form-check-label">Use History</label>
-                  </div>
-                  <div className="input-group input-group-sm">
-                    <span className="input-group-text">Top K</span>
-                    <input
-                      type="number"
-                      className="form-control"
-                      min={1}
-                      max={20}
-                      value={topK}
-                      onChange={(e) => setTopK(Number(e.target.value))}
-                    />
-                  </div>
-                  <div className="input-group input-group-sm">
-                    <span className="input-group-text">Max Tokens</span>
-                    <input
-                      type="number"
-                      className="form-control"
-                      min={1}
-                      max={4096}
-                      value={maxTokens}
-                      onChange={(e) => setMaxTokens(Number(e.target.value))}
-                    />
-                  </div>
-                  <div className="input-group input-group-sm" title="Temperature controls randomness. Low = accurate and predictable. High = creative and unpredictable.">
-                    <span className="input-group-text">Temp ({temperature.toFixed(1)})</span>
-                    <input
-                      type="range"
-                      className="form-range"
-                      min="0.0"
-                      max="1.0"
-                      step="0.1"
-                      value={temperature}
-                      onChange={(e) => setTemperature(parseFloat(e.target.value))}
-                    />
-                  </div>
-                  <select
-                    className="form-select form-select-sm"
-                    value={modelProvider}
-                    onChange={(e) => setModelProvider(e.target.value)}
-                  >
-                    <option value="local">Local</option>
-                    <option value="google">Google</option>
-                    <option value="gpt">OpenAI GPT</option>
-                    <option value="hf">Hugging Face</option>
-                    <option value="colabllm">ColabLLM</option>
-                  </select>
-
-                  <div className="mb-2">
-                    <select
-                      className="form-select form-select-sm"
-                      value={selectedTemplate}
-                      onChange={e => setSelectedTemplate(e.target.value)}
-                      placeholder="Select Template"
-                    >
-                      <option key="no_template" value={"no_template"}>No Template</option>
-                      <option key="raw_prompt" value={"raw_prompt"}>Raw Prompt</option>
-                      {promptTemplates.map(t => (
-                        <option key={t.name} value={t.name}>{t.name}</option>
-                      ))}
-                    </select>
-                  </div>
-                  {modelProvider === 'local' && (
-                    <select
-                      className="form-select form-select-sm"
-                      value={localLlmModel}
-                      onChange={(e) => setLocalLlmModel(e.target.value)}
-                    >
-                      <option value="llama32-1b">Llama 3.2 1B</option>
-                      <option value="llama32-3b">Llama 3.2 3B</option>
-                      <option value="llama31-8b">Llama 3.1 8B</option>
-                      <option value="phi3-mini">Phi-3 Mini</option>
-                      <option value="gemma2-2b">Gemma 2 2B</option>
-                      <option value="mistral-7b">Mistral 7B</option>
-                      <option value="distilgpt2-company-tuned">DistilGPT2 Company Tuned</option>
-                    </select>
-                  )}
-                  <select
-                    className="form-select form-select-sm"
-                    value={theme}
-                    onChange={(e) => setTheme(e.target.value)}
-                  >
-                    <option value="system">System</option>
-                    <option value="light">Light</option>
-                    <option value="dark">Dark</option>
-                  </select>
+            {/* Controls Panel */}
+            <div className="col-md-3" style={{ height: '100vh', overflowY: 'auto' }}>
+              <div className="card mb-3">
+                <div className="card-header d-flex justify-content-between">
+                  Controls
                   <button
-                    className="btn btn-sm btn-outline-danger"
-                    onClick={handleLogout}
+                    className="btn btn-sm btn-outline-secondary"
+                    onClick={() => setShowAdminPanel(!showAdminPanel)}
                   >
-                    Logout
+                    {showAdminPanel ? 'Hide' : 'Show'} Admin
                   </button>
                 </div>
+                <div className="card-body">
+                  <div className="d-flex flex-column gap-2">
+                    {user && (
+                      <div className="badge bg-primary">
+                        {user.username} ({user.role})
+                      </div>
+                    )}
+                    <div className="form-check form-switch">
+                      <input
+                        className="form-check-input"
+                        type="checkbox"
+                        checked={useLlm}
+                        onChange={(e) => setUseLlm(e.target.checked)}
+                      />
+                      <label className="form-check-label">Use LLM</label>
+                    </div>
+                    <div className="form-check form-switch">
+                      <input
+                        className="form-check-input"
+                        type="checkbox"
+                        checked={useDocuments}
+                        onChange={(e) => setUseDocuments(e.target.checked)}
+                      />
+                      <label className="form-check-label">Use Docs</label>
+                    </div>
+                    <div className="form-check form-switch">
+                      <input
+                        className="form-check-input"
+                        type="checkbox"
+                        checked={useConversationHistory}
+                        onChange={(e) => setUseConversationHistory(e.target.checked)}
+                      />
+                      <label className="form-check-label">Use History</label>
+                    </div>
+                    <div className="input-group input-group-sm">
+                      <span className="input-group-text">Top K</span>
+                      <input
+                        type="number"
+                        className="form-control"
+                        min={1}
+                        max={20}
+                        value={topK}
+                        onChange={(e) => setTopK(Number(e.target.value))}
+                      />
+                    </div>
+                    <div className="input-group input-group-sm">
+                      <span className="input-group-text">Max Tokens</span>
+                      <input
+                        type="number"
+                        className="form-control"
+                        min={1}
+                        max={4096}
+                        value={maxTokens}
+                        onChange={(e) => setMaxTokens(Number(e.target.value))}
+                      />
+                    </div>
+                    <div className="input-group input-group-sm" title="Temperature controls randomness. Low = accurate and predictable. High = creative and unpredictable.">
+                      <span className="input-group-text">Temp ({temperature.toFixed(1)})</span>
+                      <input
+                        type="range"
+                        className="form-range"
+                        min="0.0"
+                        max="1.0"
+                        step="0.1"
+                        value={temperature}
+                        onChange={(e) => setTemperature(parseFloat(e.target.value))}
+                      />
+                    </div>
+                    <select
+                      className="form-select form-select-sm"
+                      value={modelProvider}
+                      onChange={(e) => setModelProvider(e.target.value)}
+                    >
+                      <option value="local">Local</option>
+                      <option value="google">Google</option>
+                      <option value="gpt">OpenAI GPT</option>
+                      <option value="hf">Hugging Face</option>
+                      <option value="colabllm">ColabLLM</option>
+                    </select>
+
+                    <div className="mb-2">
+                      <select
+                        className="form-select form-select-sm"
+                        value={selectedTemplate}
+                        onChange={e => setSelectedTemplate(e.target.value)}
+                        placeholder="Select Template"
+                      >
+                        <option key="no_template" value={"no_template"}>No Template</option>
+                        <option key="raw_prompt" value={"raw_prompt"}>Raw Prompt</option>
+                        {promptTemplates.map(t => (
+                          <option key={t.name} value={t.name}>{t.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                    {modelProvider === 'local' && (
+                      <select
+                        className="form-select form-select-sm"
+                        value={localLlmModel}
+                        onChange={(e) => setLocalLlmModel(e.target.value)}
+                      >
+                        <option value="llama32-1b">Llama 3.2 1B</option>
+                        <option value="llama32-3b">Llama 3.2 3B</option>
+                        <option value="llama31-8b">Llama 3.1 8B</option>
+                        <option value="phi3-mini">Phi-3 Mini</option>
+                        <option value="gemma2-2b">Gemma 2 2B</option>
+                        <option value="mistral-7b">Mistral 7B</option>
+                        <option value="distilgpt2-company-tuned">DistilGPT2 Company Tuned</option>
+                      </select>
+                    )}
+                    <select
+                      className="form-select form-select-sm"
+                      value={theme}
+                      onChange={(e) => setTheme(e.target.value)}
+                    >
+                      <option value="system">System</option>
+                      <option value="light">Light</option>
+                      <option value="dark">Dark</option>
+                    </select>
+                    <button
+                      className={`btn btn-sm w-100 mb-2 ${crewMode ? 'btn-primary' : 'btn-outline-primary'}`}
+                      onClick={() => setCrewMode(!crewMode)}
+                    >
+                      <i className="bi bi-robot me-2"></i>
+                      {crewMode ? 'Exit CrewAI Mode' : 'Enter CrewAI Mode'}
+                    </button>
+                    <button
+                      className="btn btn-sm btn-outline-danger w-100"
+                      onClick={handleLogout}
+                    >
+                      Logout
+                    </button>
+                  </div>
+                </div>
               </div>
+
+              {showAdminPanel && (
+                <div>
+                  <div className="card mb-3">
+                    <div className="card-header">Admin Panel</div>
+                    <div className="card-body">
+                      <div className="d-grid gap-2">
+                        <button
+                          className="btn btn-outline-primary"
+                          onClick={async () => {
+                            const list = await listDocuments();
+                            console.log("Documents:", list);
+                            addToast("Documents listed (console)", "info");
+                          }}
+                        >
+                          List Documents
+                        </button>
+                        <button
+                          className="btn btn-outline-success"
+                          onClick={async () => {
+                            await seedDocuments();
+                          }}
+                        >
+                          Seed Documents
+                        </button>
+                        <button
+                          className="btn btn-outline-warning"
+                          data-bs-toggle="modal"
+                          data-bs-target="#updateMetadataModal"
+                        >
+                          Update Metadata
+                        </button>
+                        <button
+                          className="btn btn-outline-danger"
+                          onClick={testRBACAccess}
+                        >
+                          Test RBAC
+                        </button>
+                        <button
+                          className="btn btn-outline-secondary"
+                          data-bs-toggle="modal"
+                          data-bs-target="#documentVersionModal"
+                        >
+                          Version Manager
+                        </button>
+                        <button
+                          className="btn btn-outline-primary"
+                          data-bs-toggle="modal"
+                          data-bs-target="#personalizedTestModal"
+                        >
+                          Test Personalization
+                        </button>
+                        <button
+                          className="btn btn-outline-primary"
+                          data-bs-toggle="modal"
+                          data-bs-target="#promptTemplateModal"
+                        >
+                          Manage Templates
+                        </button>
+                      </div>
+                      <hr />
+                      <div className="small text-muted">
+                        Messages: {messages.length}
+                      </div>
+                      <div className="small text-muted">
+                        Conversations: {conversations.length}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="card">
+                    <div className="card-header">Add Document</div>
+                    <div className="card-body">
+                      <button
+                        className="btn btn-success w-100 mb-2"
+                        data-bs-toggle="modal"
+                        data-bs-target="#addJsonModal"
+                      >
+                        Add JSON Doc
+                      </button>
+                      <button
+                        className="btn btn-info w-100"
+                        data-bs-toggle="modal"
+                        data-bs-target="#uploadFileModal"
+                      >
+                        Upload File
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
-
-            {showAdminPanel && (
-              <div>
-                <div className="card mb-3">
-                  <div className="card-header">Admin Panel</div>
-                  <div className="card-body">
-                    <div className="d-grid gap-2">
-                      <button
-                        className="btn btn-outline-primary"
-                        onClick={async () => {
-                          const list = await listDocuments();
-                          console.log("Documents:", list);
-                          addToast("Documents listed (console)", "info");
-                        }}
-                      >
-                        List Documents
-                      </button>
-                      <button
-                        className="btn btn-outline-success"
-                        onClick={async () => {
-                          await seedDocuments();
-                        }}
-                      >
-                        Seed Documents
-                      </button>
-                      <button
-                        className="btn btn-outline-warning"
-                        data-bs-toggle="modal"
-                        data-bs-target="#updateMetadataModal"
-                      >
-                        Update Metadata
-                      </button>
-                      <button
-                        className="btn btn-outline-danger"
-                        onClick={testRBACAccess}
-                      >
-                        Test RBAC
-                      </button>
-                      <button
-                        className="btn btn-outline-secondary"
-                        data-bs-toggle="modal"
-                        data-bs-target="#documentVersionModal"
-                      >
-                        Version Manager
-                      </button>
-                      <button
-                        className="btn btn-outline-primary"
-                        data-bs-toggle="modal"
-                        data-bs-target="#personalizedTestModal"
-                      >
-                        Test Personalization
-                      </button>
-                      <button
-                        className="btn btn-outline-primary"
-                        data-bs-toggle="modal"
-                        data-bs-target="#promptTemplateModal"
-                      >
-                        Manage Templates
-                      </button>
-                    </div>
-                    <hr />
-                    <div className="small text-muted">
-                      Messages: {messages.length}
-                    </div>
-                    <div className="small text-muted">
-                      Conversations: {conversations.length}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="card">
-                  <div className="card-header">Add Document</div>
-                  <div className="card-body">
-                    <button
-                      className="btn btn-success w-100 mb-2"
-                      data-bs-toggle="modal"
-                      data-bs-target="#addJsonModal"
-                    >
-                      Add JSON Doc
-                    </button>
-                    <button
-                      className="btn btn-info w-100"
-                      data-bs-toggle="modal"
-                      data-bs-target="#uploadFileModal"
-                    >
-                      Upload File
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
           </div>
         </div>
-      </div>
+      )}
 
 
       {/* Modals */}

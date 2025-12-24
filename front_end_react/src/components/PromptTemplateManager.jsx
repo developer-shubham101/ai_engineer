@@ -91,7 +91,6 @@ export default function PromptTemplateManager({ onClose }) {
         res = await fetch(`${BASE_API_URL}/api/templates/${editingTemplate.name}`, {
           method: 'PUT',
           headers: getAuthHeaders(),
-          headers: getAuthHeaders(),
           body: JSON.stringify({
             content: formData.content,
             prompt_variables: formData.prompt_variables
