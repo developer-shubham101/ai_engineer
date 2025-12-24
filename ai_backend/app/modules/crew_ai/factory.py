@@ -9,6 +9,6 @@ class CrewOrchestratorFactory:
     """Factory for creating CrewAI orchestrators."""
     
     @staticmethod
-    def create_orchestrator(llm_provider=None) -> ICrewOrchestrator:
-        """Create CrewAI orchestrator with LLM provider."""
-        return CrewOrchestrator(llm_provider=llm_provider)
+    def create_orchestrator() -> ICrewOrchestrator:
+        """Create CrewAI orchestrator."""
+        return CrewOrchestrator()

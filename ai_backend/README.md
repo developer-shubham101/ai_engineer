@@ -48,6 +48,7 @@ graph TB
 | **OpenAI** | GPT-3.5, GPT-4 | ✅ API |
 | **Google** | Gemini-2.5-Flash, Gemini-2.5-Pro | ✅ API |
 | **Hugging Face** | Various models | ✅ API |
+| **ColabLLM** | Custom models via /ask endpoint | ✅ API |
 
 ## 🚀 Quick Start
 
@@ -102,6 +103,10 @@ This system is perfect for:
 OPENAI_API_KEY=your_openai_key
 GOOGLE_API_KEY=your_google_key
 HUGGINGFACE_API_TOKEN=your_hf_token
+
+# ColabLLM provider (optional)
+COLABLLM_BASE_URL=http://localhost:8080
+COLABLLM_API_KEY=
 
 # Server configuration
 HOST=0.0.0.0

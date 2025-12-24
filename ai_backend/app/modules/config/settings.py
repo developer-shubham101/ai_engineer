@@ -100,6 +100,10 @@ class Settings:
         self.HOST = os.getenv("HOST", "0.0.0.0")
         self.PORT = int(os.getenv("PORT", 8000))
         self.DEBUG = os.getenv("DEBUG", "false").lower() == "true"
+        
+        # ColabLLM settings
+        self.COLABLLM_BASE_URL = os.getenv("COLABLLM_BASE_URL", "https://588e8571ead7.ngrok-free.app")
+        self.COLABLLM_API_KEY = os.getenv("COLABLLM_API_KEY")
 
 
 # Global settings instance

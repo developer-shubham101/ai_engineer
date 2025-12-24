@@ -14,6 +14,7 @@ A **production-ready multi-provider RAG system** supporting both **offline-first
 ### Supported Providers
 - **Local Models**: Auto-selected from local_models.json (Mistral-7B, Phi-2, Llama-3.2, Gemma-2B via llama-cpp-python)
 - **Cloud APIs**: Google Gemini-2.5-Flash/Pro, OpenAI GPT-3.5/4, Hugging Face Inference API
+- **ColabLLM**: Custom models via /ask endpoint
 - **Shared Components**: Configurable Vector Store (ChromaDB or FAISS), BGE embeddings, SQLite sessions
 
 ### Key Features
@@ -593,7 +594,7 @@ Response: {
 ### Multi-Provider RAG (`/api/rag/`)
 
 **POST /api/rag/{provider}/query** - Unified query interface
-- **Providers**: `local`, `google`, `gpt`, `huggingface`/`hf`
+- **Providers**: `local`, `google`, `gpt`, `huggingface`, `colabllm`/`hf`
 - **Authentication**: Optional (Bearer token for personalization)
 - **RBAC**: Automatic filtering based on user role/department
 
@@ -1767,6 +1768,10 @@ OPENAI_API_KEY=your_openai_key
 GOOGLE_API_KEY=your_google_key
 HUGGINGFACE_API_TOKEN=your_hf_token
 
+# ColabLLM provider (optional)
+COLABLLM_BASE_URL=http://localhost:8080
+COLABLLM_API_KEY=
+
 # Server configuration
 HOST=0.0.0.0
 PORT=8000
@@ -1920,6 +1925,11 @@ curl -X POST "/api/rag/google/query" \
 
 # OpenAI GPT
 curl -X POST "/api/rag/gpt/query" \
+  -H "Authorization: Bearer <token>" \
+  -d '{"question": "What is our policy?", "use_llm": true}'
+
+# ColabLLM
+curl -X POST "/api/rag/colabllm/query" \
   -H "Authorization: Bearer <token>" \
   -d '{"question": "What is our policy?", "use_llm": true}'
 ```

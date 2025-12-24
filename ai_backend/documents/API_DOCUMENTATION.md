@@ -1185,7 +1185,7 @@ jq '.[] | select(.speaker == "assistant") | {processing_time_ms, llm_provider, e
 
 #### Main RAG Query Endpoint
 - **POST** `/api/rag/{model_provider}/query` - Main RAG query endpoint
-- **Path Parameter**: `model_provider` - `"local"`, `"google"`, `"gpt"`, or `"huggingface"`
+- **Path Parameter**: `model_provider` - `"local"`, `"google"`, `"gpt"`, `"huggingface"`, or `"colabllm"`
 
 **Request Body:**
 ```json

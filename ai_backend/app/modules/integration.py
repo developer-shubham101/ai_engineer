@@ -129,14 +129,7 @@ class Container:
     def get_crew_orchestrator(self):
         """Get CrewAI orchestrator instance."""
         if "crew_orchestrator" not in self._instances:
-            # Get LLM provider for CrewAI
-            from .llm.provider_factory import create_provider
-            try:
-                llm_provider = create_provider("local", {})
-            except Exception:
-                llm_provider = None
-            
-            self._instances["crew_orchestrator"] = CrewOrchestratorFactory.create_orchestrator(llm_provider)
+            self._instances["crew_orchestrator"] = CrewOrchestratorFactory.create_orchestrator()
             logger.info("Initialized CrewAI orchestrator")
         return self._instances.get("crew_orchestrator")
     
