@@ -1,0 +1,42 @@
+{
+  "strict": {
+    "document_type": "unknown",
+    "department": "General",
+    "sensitivity": "public",
+    "source": "2022 Q3 INTC.pdf",
+    "domain": null,
+    "published_year": null,
+    "effective_date": null,
+    "allowed_roles": null,
+    "tags": []
+  },
+  "soft": {
+    "summary": "Intel Corporation is a leading technology company that specializes in the design and manufacture of computer chips. The company has been experiencing significant growth in recent years, with its stock price increasing by over 50% since the beginning of the year. However, the company has also faced some challenges, including increased competition from other companies in the industry and concerns about the long-term viability of its business model.",
+    "keywords": [
+      "Intel Corporation",
+      "technology",
+      "computer chips",
+      "growth",
+      "competition",
+      "business model"
+    ],
+    "themes": [
+      "Technology",
+      "Growth",
+      "Competition",
+      "Business Model"
+    ],
+    "entities": {
+      "people": [],
+      "organizations": [
+        "Intel Corporation"
+      ],
+      "locations": []
+    },
+    "generated_at": "2025-12-23T12:11:40.870201",
+    "llm_model": "phi2",
+    "confidence": 0.8
+  },
+  "enriched_at": "2025-12-23T12:11:40.871201",
+  "processing_time_ms": 228063.4639263153
+}

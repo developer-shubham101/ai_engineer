@@ -1,0 +1,29 @@
+debate_advocate_task:
+  description: "Present 3-4 compelling arguments in favor of: {topic}. Provide factual evidence and logical reasoning to support your position."
+  expected_output: "A well-structured argument with 3-4 key points supporting the topic, each backed by reasoning or evidence."
+  agent: debate_advocate
+
+debate_critic_task:
+  description: "Present 3-4 strong counterarguments against: {topic}. Challenge the opposing position with critical analysis and alternative perspectives."
+  expected_output: "A well-structured counterargument with 3-4 key points opposing the topic, each backed by critical analysis."
+  agent: debate_critic
+
+debate_moderator_task:
+  description: "Analyze both the advocate and critic positions on: {topic}. Provide a balanced synthesis highlighting key points from both sides and suggest a nuanced conclusion."
+  expected_output: "A balanced analysis that fairly represents both positions and provides a thoughtful, nuanced conclusion."
+  agent: debate_moderator
+
+research_task:
+  description: "Conduct comprehensive research on: {topic}. Gather key facts, current trends, statistics, and expert opinions."
+  expected_output: "A comprehensive research summary with facts, trends, statistics, and expert opinions organized in clear sections."
+  agent: researcher
+
+analysis_task:
+  description: "Analyze the research findings on: {topic}. Identify patterns, connections, implications, and any gaps in the data."
+  expected_output: "A detailed analysis identifying patterns, implications, and insights from the research data."
+  agent: analyst
+
+synthesis_task:
+  description: "Create a comprehensive report on: {topic} combining research findings and analytical insights into a well-structured document."
+  expected_output: "A professional report with executive summary, key findings, analysis, and recommendations."
+  agent: synthesizer

@@ -1,0 +1,45 @@
+{
+  "strict": {
+    "document_type": "unknown",
+    "department": "General",
+    "sensitivity": "public",
+    "source": "2022 Q3 MSFT.pdf",
+    "domain": null,
+    "published_year": null,
+    "effective_date": null,
+    "allowed_roles": null,
+    "tags": []
+  },
+  "soft": {
+    "summary": "Microsoft Corporation is a technology company that develops and sells software.",
+    "keywords": [
+      "Microsoft Corporation",
+      "technology",
+      "software",
+      "development",
+      "sales"
+    ],
+    "themes": [
+      "Technology",
+      "Software",
+      "Development",
+      "Sales"
+    ],
+    "entities": {
+      "people": [],
+      "organizations": [
+        "Microsoft Corporation"
+      ],
+      "locations": [
+        "Washington",
+        "D.C.",
+        "United States"
+      ]
+    },
+    "generated_at": "2025-12-23T12:15:19.562043",
+    "llm_model": "phi2",
+    "confidence": 0.8
+  },
+  "enriched_at": "2025-12-23T12:15:19.563040",
+  "processing_time_ms": 218365.38195610046
+}

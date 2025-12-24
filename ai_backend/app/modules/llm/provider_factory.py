@@ -94,6 +94,13 @@ class ProviderRegistry:
             GoogleProviderPlugin(),
         ]
         
+        # Register ColabLLM plugin
+        try:
+            from .colabllm_plugin import ColabLLMProviderPlugin
+            plugins.append(ColabLLMProviderPlugin())
+        except ImportError:
+            logger.warning("ColabLLM plugin not available")
+        
         for plugin in plugins:
             self.register(plugin)
     

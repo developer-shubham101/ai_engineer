@@ -14,6 +14,7 @@ A **production-ready multi-provider RAG system** supporting both **offline-first
 ### Supported Providers
 - **Local Models**: Auto-selected from local_models.json (Mistral-7B, Phi-2, Llama-3.2, Gemma-2B via llama-cpp-python)
 - **Cloud APIs**: Google Gemini-2.5-Flash/Pro, OpenAI GPT-3.5/4, Hugging Face Inference API
+- **ColabLLM**: Custom models via /ask endpoint
 - **Shared Components**: Configurable Vector Store (ChromaDB or FAISS), BGE embeddings, SQLite sessions
 
 ### Key Features
@@ -24,6 +25,7 @@ A **production-ready multi-provider RAG system** supporting both **offline-first
 - ✅ **Persistent conversation history** with cross-device access
 - ✅ **Agentic mode** with step-by-step reasoning capabilities
 - ✅ **Multimodal AI capabilities** - Audio, Vision, and Media processing
+- ✅ **CrewAI Integration** - Multi-agent workflows with debate and research capabilities
 - ✅ **Speech-to-Text & Text-to-Speech** with multiple providers
 - ✅ **OCR and Image Analysis** with CPU-friendly implementations
 - ✅ **Emotion Detection** from audio inputs
@@ -84,6 +86,12 @@ User Request → FastAPI Router → Container → Modular Services → Response
 - `cleanup_service.py` - **NEW: Document cleanup and enrichment pipeline**
 
 
+**🤖 CrewAI Module** (`app/modules/crew_ai/`) - **NEW**
+- `interfaces.py` - CrewAI interfaces for multi-agent workflows
+- `orchestrator.py` - CrewAI orchestrator using official library
+- `factory.py` - Factory for creating CrewAI orchestrators
+- YAML configuration files in `crew_config/` directory
+
 **🎭 Multimodal Module** (`app/modules/multimodal/`) - **NEW**
 - `interfaces.py` - Multimodal processing interfaces
 - `file_manager.py` - User file management with RBAC
@@ -119,6 +127,7 @@ User Request → FastAPI Router → Container → Modular Services → Response
 - `api_routes_media.py` - **NEW: Media file serving with RBAC**
 - `api_routes_models.py` - Model management endpoints
 - `api_routes_agents.py` - **NEW: Agent workflow endpoints**
+- `api_routes_crew.py` - **NEW: CrewAI multi-agent workflow endpoints**
 - `api_routes_cleanup.py` - **NEW: Document cleanup and metadata enrichment**
 - `dependencies.py` - Dependency injection using container
 - `modules/integration.py` - **Dependency injection container**
@@ -585,7 +594,7 @@ Response: {
 ### Multi-Provider RAG (`/api/rag/`)
 
 **POST /api/rag/{provider}/query** - Unified query interface
-- **Providers**: `local`, `google`, `gpt`, `huggingface`/`hf`
+- **Providers**: `local`, `google`, `gpt`, `huggingface`, `colabllm`/`hf`
 - **Authentication**: Optional (Bearer token for personalization)
 - **RBAC**: Automatic filtering based on user role/department
 
@@ -649,6 +658,42 @@ Response: {
 **GET /api/agents/status** - Get agent system status
 **GET /api/agents/tools** - List available tools
 **POST /api/agents/tools/{name}/test** - Test individual tools
+
+### CrewAI Multi-Agent Workflows (`/api/crew/`) - **NEW**
+
+**POST /api/crew/query** - Execute CrewAI multi-agent workflows
+```json
+Request: {
+  "topic": "Should companies adopt remote work policies?",
+  "workflow_type": "debate",  // debate, research
+  "max_iterations": 3,
+  "temperature": 0.7,
+  "provider": "local",
+  "conversation_id": "conv_123"
+}
+Response: {
+  "result": "# Debate Analysis: Topic\n\n## Advocate Position...\n\n## Critic Position...\n\n## Moderator Analysis...",
+  "workflow_type": "debate",
+  "agents_used": ["Advocate", "Critic", "Moderator"],
+  "iterations": 3,
+  "execution_time_ms": 5200,
+  "available_workflows": ["debate", "research"]
+}
+```
+
+**GET /api/crew/status** - Get CrewAI system status
+**GET /api/crew/workflows** - List available workflows
+
+**Available Workflows:**
+- **debate**: Multi-agent debate with Advocate, Critic, and Moderator
+- **research**: Comprehensive research with Researcher, Analyst, and Synthesizer
+
+**Key Features:**
+- **Official CrewAI Library**: Uses `crewai.Agent`, `crewai.Task`, `crewai.Crew`
+- **YAML Configuration**: Agent and task definitions in `crew_config/`
+- **Sequential Processing**: Tasks executed in proper order with context
+- **LLM Integration**: Works with local and cloud providers
+- **Structured Output**: Formatted results with clear agent contributions
 
 ### Audio Processing (`/api/audio/`) - **NEW**
 
@@ -1723,6 +1768,10 @@ OPENAI_API_KEY=your_openai_key
 GOOGLE_API_KEY=your_google_key
 HUGGINGFACE_API_TOKEN=your_hf_token
 
+# ColabLLM provider (optional)
+COLABLLM_BASE_URL=http://localhost:8080
+COLABLLM_API_KEY=
+
 # Server configuration
 HOST=0.0.0.0
 PORT=8000
@@ -1876,6 +1925,11 @@ curl -X POST "/api/rag/google/query" \
 
 # OpenAI GPT
 curl -X POST "/api/rag/gpt/query" \
+  -H "Authorization: Bearer <token>" \
+  -d '{"question": "What is our policy?", "use_llm": true}'
+
+# ColabLLM
+curl -X POST "/api/rag/colabllm/query" \
   -H "Authorization: Bearer <token>" \
   -d '{"question": "What is our policy?", "use_llm": true}'
 ```

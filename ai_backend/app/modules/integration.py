@@ -16,6 +16,7 @@ from .core.document_manager import DocumentManager
 from .core.version_manager import VersionManager
 from .llm.template_manager import TemplateManager
 from .agents.factories import AgentOrchestratorFactory
+from .crew_ai.factory import CrewOrchestratorFactory
 
 logger = logging.getLogger(__name__)
 
@@ -124,6 +125,13 @@ class Container:
             self._instances["agent_orchestrator"] = AgentOrchestratorFactory.create_orchestrator(vector_store)
             logger.info("Initialized agent orchestrator")
         return self._instances.get("agent_orchestrator")
+    
+    def get_crew_orchestrator(self):
+        """Get CrewAI orchestrator instance."""
+        if "crew_orchestrator" not in self._instances:
+            self._instances["crew_orchestrator"] = CrewOrchestratorFactory.create_orchestrator()
+            logger.info("Initialized CrewAI orchestrator")
+        return self._instances.get("crew_orchestrator")
     
     def get_metadata_generator(self):
         """Get metadata generator instance."""

@@ -993,6 +993,7 @@ export default function RAGChat({ onLogout }) {
                     <option value="google">Google</option>
                     <option value="gpt">OpenAI GPT</option>
                     <option value="hf">Hugging Face</option>
+                    <option value="colabllm">ColabLLM</option>
                   </select>
 
                   <div className="mb-2">
