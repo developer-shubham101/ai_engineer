@@ -2,7 +2,7 @@
 
 from typing import List, Optional
 from .interfaces import ITool, IAgentOrchestrator
-from .orchestrator import AgentOrchestrator
+from .orchestrators import CustomOrchestrator, AutoGenOrchestrator, AUTOGEN_AVAILABLE
 from .tools import (
     SearchDocumentsTool, GetUserTicketsTool, GetTicketCommentsTool,
     AnalyzeDataTool, SummarizeStatusTool, ResearchDataTool
@@ -65,16 +65,35 @@ class AgentOrchestratorFactory:
     
     @staticmethod
     def create_orchestrator(
+        orchestrator_type: str = "autogen",
         vector_store: Optional[IVectorStore] = None,
         tools: Optional[List[ITool]] = None
     ) -> IAgentOrchestrator:
-        """Create agent orchestrator with tools."""
-        if tools is None:
-            tools = ToolFactory.create_default_tools(vector_store)
+        """Create agent orchestrator based on type."""
+        if orchestrator_type.lower() == "autogen":
+            if not AUTOGEN_AVAILABLE:
+                print("AutoGen not available, using custom orchestrator")
+                orchestrator_type = "custom"
+            else:
+                return AutoGenOrchestrator()
         
-        orchestrator = AgentOrchestrator()
+        if orchestrator_type.lower() == "custom":
+            if tools is None:
+                tools = ToolFactory.create_default_tools(vector_store)
+            
+            orchestrator = CustomOrchestrator()
+            
+            for tool in tools:
+                orchestrator.register_tool(tool)
+            
+            return orchestrator
         
-        for tool in tools:
-            orchestrator.register_tool(tool)
-        
-        return orchestrator
+        raise ValueError(f"Unknown orchestrator type: {orchestrator_type}")
+    
+    @staticmethod
+    def get_available_types() -> dict:
+        """Get available orchestrator types."""
+        return {
+            "custom": True,
+            "autogen": AUTOGEN_AVAILABLE
+        }

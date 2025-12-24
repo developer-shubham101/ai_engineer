@@ -4,13 +4,13 @@ import logging
 import time
 from typing import Dict, Any, List, Optional
 
-from .interfaces import IAgentOrchestrator, ITool, AgentRequest, AgentResponse
-from .utils import StepFormatter
+from ...interfaces import IAgentOrchestrator, ITool, AgentRequest, AgentResponse
+from ...utils import StepFormatter
 
 logger = logging.getLogger(__name__)
 
 
-class AgentOrchestrator(IAgentOrchestrator):
+class CustomOrchestrator(IAgentOrchestrator):
     """Agent orchestrator with safety constraints."""
     
     def __init__(self, max_steps: int = 5):

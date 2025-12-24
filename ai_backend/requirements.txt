@@ -51,6 +51,10 @@ passlib[bcrypt]
 crewai
 PyYAML
 
+# --- AutoGen ---
+autogen-core
+autogen-agentchat
+autogen-ext[openai]
 
 
 

@@ -3,7 +3,7 @@ import { BASE_API_URL } from '../utility/const.js'
 import { getStoredToken, getSessionIdFromToken } from '../utility/auth.js'
 import ReactMarkdown from 'react-markdown'
 
-export default function CrewAIChat({ onLogout }) {
+export default function CrewAIChat({ onLogout, onExit }) {
   const [topic, setTopic] = useState('')
   const [workflowType, setWorkflowType] = useState('debate')
   const [maxIterations, setMaxIterations] = useState(3)
@@ -103,10 +103,15 @@ export default function CrewAIChat({ onLogout }) {
     <div className="h-100 d-flex flex-column">
       {/* Header */}
       <div className="p-3 border-bottom d-flex justify-content-between align-items-center bg-light-subtle">
-        <h5 className="mb-0">
-          <i className="bi bi-robot me-2"></i>
-          CrewAI Agents
-        </h5>
+        <div className="d-flex align-items-center gap-2">
+          <button className="btn btn-sm btn-outline-secondary" onClick={onExit} title="Exit CrewAI Mode">
+            <i className="bi bi-arrow-left"></i>
+          </button>
+          <h5 className="mb-0">
+            <i className="bi bi-robot me-2"></i>
+            CrewAI Agents
+          </h5>
+        </div>
         <div>
           {loading && <span className="badge bg-warning text-dark me-2">Agents Working...</span>}
           <span className="badge bg-secondary">{workflowType.toUpperCase()}</span>
