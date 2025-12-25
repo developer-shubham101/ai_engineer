@@ -4,6 +4,7 @@ from typing import Dict, Any, Optional, Union
 import logging
 import os
 
+from .agents.interfaces import IAgentOrchestrator
 from .auth.jwt_auth import JWTAuthenticator
 from .auth.user_manager import SQLiteUserManager
 from .auth.session_manager import SQLiteSessionManager
@@ -118,11 +119,12 @@ class Container:
             logger.info("Initialized template manager")
         return self._instances.get("template_manager")
     
-    def get_agent_orchestrator(self):
+    def get_agent_orchestrator(self) -> IAgentOrchestrator:
         """Get agent orchestrator instance."""
         if "agent_orchestrator" not in self._instances:
             vector_store = self.get_vector_store()
-            self._instances["agent_orchestrator"] = AgentOrchestratorFactory.create_orchestrator(vector_store)
+            self._instances["agent_orchestrator"] = AgentOrchestratorFactory.create_orchestrator(
+                vector_store=vector_store)
             logger.info("Initialized agent orchestrator")
         return self._instances.get("agent_orchestrator")
     

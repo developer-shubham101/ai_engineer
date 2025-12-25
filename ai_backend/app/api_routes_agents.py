@@ -7,8 +7,7 @@ from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 
 from app.dependencies import get_current_user_optional
-from app.modules.agents.interfaces import AgentRequest, AgentResponse
-from app.modules.agents.orchestrator import AgentOrchestrator
+from app.modules.agents.interfaces import AgentRequest
 from app.modules.integration import get_container
 
 logger = logging.getLogger(__name__)
@@ -23,6 +22,7 @@ class AgentQueryRequest(BaseModel):
     max_steps: int = 5
     temperature: float = 0.1
     provider: str = "local"
+    orchestrator_type: str = "custom"
     conversation_id: Optional[str] = None
     debug: bool = False
 
@@ -61,7 +61,7 @@ async def get_agent_status():
     """Get agent system status and available tools."""
     try:
         orchestrator = get_agent_orchestrator()
-        
+
         # Get tool information
         tool_info = []
         for tool_name in orchestrator.get_available_tools():
@@ -71,7 +71,7 @@ async def get_agent_status():
                     name=tool.name,
                     description=tool.description
                 ))
-        
+
         return AgentStatusResponse(
             available_tools=tool_info,
             max_steps=orchestrator.max_steps,
@@ -84,8 +84,8 @@ async def get_agent_status():
 
 @router.post("/query", response_model=AgentQueryResponse)
 async def query_agent(
-    request: AgentQueryRequest,
-    user: Optional[Dict[str, Any]] = Depends(get_current_user_optional)
+        request: AgentQueryRequest,
+        user: Optional[Dict[str, Any]] = Depends(get_current_user_optional)
 ):
     """Execute agent workflow with tools.
     
@@ -112,8 +112,15 @@ async def query_agent(
     - "Generate performance research data"
     """
     try:
-        orchestrator = get_agent_orchestrator()
-        
+        # Get orchestrator based on request type
+        # We bypass the default container.get_agent_orchestrator() to support dynamic selection
+        from app.modules.agents.factories import AgentOrchestratorFactory
+        container = get_container()
+        orchestrator = AgentOrchestratorFactory.create_orchestrator(
+            orchestrator_type=request.orchestrator_type,
+            vector_store=container.get_vector_store()
+        )
+
         # Create agent request
         agent_request = AgentRequest(
             question=request.question,
@@ -124,10 +131,10 @@ async def query_agent(
             conversation_id=request.conversation_id,
             debug=request.debug
         )
-        
+
         # Process request
         response = await orchestrator.process_request(agent_request, user)
-        
+
         return AgentQueryResponse(
             answer=response.answer,
             steps=response.steps,
@@ -135,7 +142,7 @@ async def query_agent(
             available_tools=orchestrator.get_available_tools(),
             debug_info=response.debug_info
         )
-        
+
     except Exception as e:
         logger.error(f"Agent query failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -146,7 +153,7 @@ async def list_tools():
     """List all available agent tools."""
     try:
         orchestrator = get_agent_orchestrator()
-        
+
         tools = []
         for tool_name in orchestrator.get_available_tools():
             tool = orchestrator.tools.get(tool_name)
@@ -155,7 +162,7 @@ async def list_tools():
                     name=tool.name,
                     description=tool.description
                 ))
-        
+
         return tools
     except Exception as e:
         logger.error(f"Failed to list tools: {e}")
@@ -164,9 +171,9 @@ async def list_tools():
 
 @router.post("/tools/{tool_name}/test")
 async def test_tool(
-    tool_name: str,
-    input_data: str,
-    user: Optional[Dict[str, Any]] = Depends(get_current_user_optional)
+        tool_name: str,
+        input_data: str,
+        user: Optional[Dict[str, Any]] = Depends(get_current_user_optional)
 ):
     """Test a specific tool directly.
     
@@ -176,21 +183,21 @@ async def test_tool(
     """
     try:
         orchestrator = get_agent_orchestrator()
-        
+
         tool = orchestrator.tools.get(tool_name)
         if not tool:
             raise HTTPException(status_code=404, detail=f"Tool '{tool_name}' not found")
-        
+
         context = {"user": user or {}}
         result = await tool.execute(input_data, context)
-        
+
         return {
             "tool": tool_name,
             "input": input_data,
             "result": result,
             "status": "success"
         }
-        
+
     except HTTPException:
         raise
     except Exception as e:

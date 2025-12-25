@@ -9,6 +9,7 @@ import ConversationSidebar from './ConversationSidebar.jsx'
 import ConversationMessageDetail from './ConversationMessageDetail.jsx'
 import AudioRecorder from './AudioRecorder.jsx'
 import CrewAIChat from './CrewAIChat.jsx'
+import AgentChat from './AgentChat.jsx'
 import ToastList from './ToastList.jsx'
 import { BASE_API_URL } from '../utility/const.js'
 import { getStoredToken, getStoredUser, getSessionIdFromToken, clearAuth } from '../utility/auth.js'
@@ -24,6 +25,9 @@ export default function RAGChat({ onLogout }) {
 
   // CrewAI Mode
   const [crewMode, setCrewMode] = useState(false)
+  const [agentMode, setAgentMode] = useState(false)
+
+  // Conversation state
 
   // Conversation state
   const [conversations, setConversations] = useState([])
@@ -718,7 +722,11 @@ export default function RAGChat({ onLogout }) {
       {/* Main Chat Area */}
       {crewMode ? (
         <div className="chat-main-content">
-          <CrewAIChat onLogout={onLogout} />
+          <CrewAIChat onLogout={onLogout} onExit={() => setCrewMode(false)} />
+        </div>
+      ) : agentMode ? (
+        <div className="chat-main-content">
+          <AgentChat onLogout={onLogout} onExit={() => setAgentMode(false)} />
         </div>
       ) : (
         <div className="chat-main-content">
@@ -1045,8 +1053,21 @@ export default function RAGChat({ onLogout }) {
                       <option value="dark">Dark</option>
                     </select>
                     <button
+                      className={`btn btn-sm w-100 mb-2 ${agentMode ? 'btn-success' : 'btn-outline-success'}`}
+                      onClick={() => {
+                        setAgentMode(!agentMode)
+                        if (crewMode) setCrewMode(false)
+                      }}
+                    >
+                      <i className="bi bi-cpu me-2"></i>
+                      {agentMode ? 'Exit Agent Mode' : 'Enter Agent Mode'}
+                    </button>
+                    <button
                       className={`btn btn-sm w-100 mb-2 ${crewMode ? 'btn-primary' : 'btn-outline-primary'}`}
-                      onClick={() => setCrewMode(!crewMode)}
+                      onClick={() => {
+                        setCrewMode(!crewMode)
+                        if (agentMode) setAgentMode(false)
+                      }}
                     >
                       <i className="bi bi-robot me-2"></i>
                       {crewMode ? 'Exit CrewAI Mode' : 'Enter CrewAI Mode'}

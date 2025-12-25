@@ -8,11 +8,17 @@ The Agents module provides a **sandbox environment** for LangChain agent experim
 
 ```
 /api/agents/
-├── query          # Execute agent workflows
+├── query          # Execute agent workflows (supports 'custom' or 'autogen')
 ├── status         # Get system status
 ├── tools          # List available tools
 └── tools/{name}/test  # Test individual tools
 ```
+
+## Architecture
+
+The agents module now supports multiple orchestrator backends via a factory pattern:
+- **Custom Orchestrator**: Default single-agent implementation.
+- **AutoGen Orchestrator**: Multi-agent system using Microsoft AutoGen (requires `orchestrator_type="autogen"`).
 
 ## Safety Features
 
@@ -76,6 +82,16 @@ Execute agent workflow with tools.
   "tools": ["get_user_tickets", "get_ticket_comments"],
   "max_steps": 5,
   "temperature": 0.1,
+  "orchestrator_type": "custom",
+  "debug": true
+}
+```
+
+### AutoGen Example
+```json
+{
+  "question": "Research the future of AI agents",
+  "orchestrator_type": "autogen",
   "debug": true
 }
 ```

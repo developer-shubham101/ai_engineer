@@ -25,6 +25,7 @@ A **production-ready multi-provider RAG system** supporting both **offline-first
 - ✅ **Persistent conversation history** with cross-device access
 - ✅ **Agentic mode** with step-by-step reasoning capabilities
 - ✅ **Multimodal AI capabilities** - Audio, Vision, and Media processing
+- ✅ **Agent Framework** - Modular architecture with AutoGen and custom orchestrators
 - ✅ **CrewAI Integration** - Multi-agent workflows with debate and research capabilities
 - ✅ **Speech-to-Text & Text-to-Speech** with multiple providers
 - ✅ **OCR and Image Analysis** with CPU-friendly implementations
@@ -102,7 +103,9 @@ User Request → FastAPI Router → Container → Modular Services → Response
 
 **🤖 Agents Module** (`app/modules/agents/`) - **NEW**
 - `interfaces.py` - Agent and tool interfaces following SOLID principles
-- `orchestrator.py` - Agent orchestrator with dependency injection
+- `orchestrators/` - Agent orchestrator implementations
+  - `custom/` - Custom single-agent orchestrator
+  - `autogen/` - AutoGen multi-agent orchestrator
 - `tools.py` - Tool implementations following SRP
 - `factories.py` - Factory pattern for tools and orchestrators
 - `utils.py` - Utility classes for mock data and formatting
@@ -632,6 +635,7 @@ Request: {
   "tools": ["get_user_tickets", "get_ticket_comments"],
   "max_steps": 5,
   "temperature": 0.1,
+  "orchestrator_type": "custom",  // "custom" or "autogen"
   "debug": true
 }
 Response: {

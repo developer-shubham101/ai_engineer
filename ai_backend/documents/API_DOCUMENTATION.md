@@ -20,6 +20,7 @@ This document provides comprehensive API documentation and testing examples for 
 6. [RAG Query APIs](#-rag-query-apis)
 7. [Document Management](#-document-management)
 8. [Model Management](#-model-management)
+9. [Agents API](#-agents-api-new)
 
 ## 📋 General Endpoints
 
@@ -1033,6 +1034,18 @@ curl -X GET "http://localhost:8000/api/models/best" \
 curl -X POST "http://localhost:8000/api/models/refresh" \
 -H "Authorization: Bearer $TOKEN"
 ```
+
+## 🤖 Agents API (NEW)
+
+The Agents module provides a sandbox for agent experimentation, supporting both custom single-agent and AutoGen multi-agent workflows.
+
+For full detailed documentation, please refer to **[AGENTS_DOCUMENTATION.md](../AGENTS_DOCUMENTATION.md)**.
+
+### Quick Information
+- **Endpoint**: `POST /api/agents/query`
+- **New Parameter**: `orchestrator_type` ("custom" or "autogen")
+  - `custom`: Standard single-agent capability.
+  - `autogen`: Multi-agent collaboration using AutoGen.
 
 ## 🔧 System Status
 

@@ -16,6 +16,7 @@ A production-ready **Retrieval-Augmented Generation (RAG) system** that works wi
 - 📚 **Document Versioning** - Non-destructive updates with full history
 - 💬 **Session Management** - Persistent conversations with context
 - 🚀 **Offline-First** - Works without internet using local LLMs
+- 🤖 **Agent Framework** - Modular architecture with AutoGen and custom orchestrators
 - 🤖 **CrewAI Integration** - Multi-agent workflows with debate and research capabilities
 - ⚡ **Optimized Prompts** - Smart token budgeting and context truncation
 - 🔍 **Debug Tools** - Complete prompt/response logging

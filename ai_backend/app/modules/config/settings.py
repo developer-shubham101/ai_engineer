@@ -3,11 +3,12 @@
 import os
 from pathlib import Path
 from typing import Dict, Any
+from dotenv import load_dotenv
 
 # ============================================================================
 # BASE PATHS
 # ============================================================================
-
+load_dotenv()
 PROJECT_ROOT = Path(os.getcwd()).resolve()
 BASE_DIR = PROJECT_ROOT / "app/"
 CHROMA_STORAGE_DIR = PROJECT_ROOT / "chroma_storage"
@@ -102,7 +103,7 @@ class Settings:
         self.DEBUG = os.getenv("DEBUG", "false").lower() == "true"
         
         # ColabLLM settings
-        self.COLABLLM_BASE_URL = os.getenv("COLABLLM_BASE_URL", "https://588e8571ead7.ngrok-free.app")
+        self.COLABLLM_BASE_URL = os.getenv("COLABLLM_BASE_URL", "https://6f4ee4e9e156.ngrok-free.app/")
         self.COLABLLM_API_KEY = os.getenv("COLABLLM_API_KEY")
 
 
