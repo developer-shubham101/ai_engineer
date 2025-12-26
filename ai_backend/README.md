@@ -7,7 +7,11 @@
 
 > **Enterprise-grade RAG system with multi-provider LLM support, advanced RBAC, and offline-first architecture**
 
-A production-ready **Retrieval-Augmented Generation (RAG) system** that works with multiple LLM providers through a unified API. Supports both **offline operation** with local models and **cloud integration** with major AI providers.
+> **Enterprise-grade RAG system with multi-provider LLM support, advanced RBAC, and offline-first architecture**
+>
+> 🎓 **Educational Reference Implementation**: This backend serves as a comprehensive study guide for building scalable AI systems.
+
+A production-ready **Retrieval-Augmented Generation (RAG) system** that works with multiple LLM providers through a unified API. Supports both **offline operation** with local models and **cloud integration** with major AI providers. It is designed to help you **learn and master** the intricacies of RAG architectures.
 
 ## ✨ Key Features
 

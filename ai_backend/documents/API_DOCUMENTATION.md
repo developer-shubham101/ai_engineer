@@ -1734,3 +1734,116 @@ echo "\nTemperature testing complete!"
 ```
 
 This API documentation provides comprehensive coverage of all available endpoints, authentication methods, temperature control, and testing scenarios for the Multi-Provider Enterprise RAG System.
+
+## 9. Agents API (NEW)
+
+### Overview
+The Agents API allows execution of single-agent workflows with tool access. It supports sandboxed execution of tools like document search, data analysis, and ticket retrieval.
+
+### Get Agent Status
+- **GET** `/api/agents/status` - Get agent system status and available tools
+
+```bash
+curl -X GET "http://localhost:8000/api/agents/status"
+```
+
+**Response:**
+```json
+{
+  "available_tools": [
+    {
+      "name": "search_documents",
+      "description": "Search company knowledge base"
+    }
+  ],
+  "max_steps": 5,
+  "status": "active"
+}
+```
+
+### Query Agent
+- **POST** `/api/agents/query` - Execute agent workflow
+
+```bash
+curl -X POST "http://localhost:8000/api/agents/query" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{
+    "question": "What is the status of my tickets?",
+    "tools": ["get_user_tickets", "summarize_status"],
+    "max_steps": 5,
+    "debug": true
+  }'
+```
+
+**Response:**
+```json
+{
+  "answer": "You have 2 open tickets...",
+  "steps": [
+    {
+      "step": 1,
+      "tool": "get_user_tickets",
+      "result": "..."
+    }
+  ],
+  "tools_used": ["get_user_tickets"],
+  "debug_info": {...}
+}
+```
+
+### List Tools
+- **GET** `/api/agents/tools` - List all available tools
+
+### Test Tool
+- **POST** `/api/agents/tools/{tool_name}/test` - Test a specific tool directly
+
+```bash
+curl -X POST "http://localhost:8000/api/agents/tools/search_documents/test?input_data=vacation%20policy" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+## 10. Cleanup API (NEW)
+
+### Overview
+The Cleanup API manages the document sanitization and enrichment pipeline. It processes documents using LLMs to generate metadata and clean content.
+
+### Start Cleanup
+- **POST** `/api/cleanupdata` - Start the cleanup pipeline
+
+```bash
+curl -X POST "http://localhost:8000/api/cleanupdata?force=false" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+**Response:**
+```json
+{
+  "total_documents": 10,
+  "successful_documents": 10,
+  "failed_documents": 0,
+  "start_time": "...",
+  "end_time": "..."
+}
+```
+
+### Get Cleanup Status
+- **GET** `/api/cleanupdata/status` - Get current status of cleanup
+
+### Preview Metadata
+- **GET** `/api/cleanupdata/preview/{document_id}` - Preview original vs enriched metadata
+
+```bash
+curl -X GET "http://localhost:8000/api/cleanupdata/preview/policy_v1?version=v1" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+**Response:**
+```json
+{
+  "document_id": "policy_v1",
+  "original_metadata": {...},
+  "enriched_metadata": {...},
+  "has_enriched": true
+}
+```

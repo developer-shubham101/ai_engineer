@@ -146,6 +146,8 @@ Take your AI system from local development → production-ready deployment.
 **Goal:**
 Build a fully functional, production-ready **AI Copilot** that serves as a knowledge + task automation assistant for your org.
 
+> **Note:** This repository (`ai_engineer`) is the **reference implementation** for this Capstone Project. You can use it to study how the concepts from Phases 1-5 come together in a real-world application.
+
 ### 💡 Features
 
 * Private LLM knowledge base (docs, policies, employee data)
