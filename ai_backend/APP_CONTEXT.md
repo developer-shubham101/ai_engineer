@@ -11,6 +11,13 @@
 ### Purpose
 A **production-ready multi-provider RAG system** supporting both **offline-first** (local models) and **cloud-based** (API) LLM providers through a unified architecture. Designed for enterprise environments with comprehensive RBAC, document versioning, and session management.
 
+### Context & Motivation
+This system is built as a **learning playground and reference implementation** for Advanced RAG patterns. It allows developers to:
+-   **Experiment** with different LLM providers (Local vs. Cloud) and observe trade-offs.
+-   **Understand** complex system design patterns like Dependency Injection in Python/FastAPI.
+-   **Study** the implementation of enterprise features like RBAC and precise token management.
+-   **Debug** and trace the full RAG pipeline to demystify how retrieval and generation utilize context.
+
 ### Supported Providers
 - **Local Models**: Auto-selected from local_models.json (Mistral-7B, Phi-2, Llama-3.2, Gemma-2B via llama-cpp-python)
 - **Cloud APIs**: Google Gemini-2.5-Flash/Pro, OpenAI GPT-3.5/4, Hugging Face Inference API
@@ -662,6 +669,15 @@ Response: {
 **GET /api/agents/status** - Get agent system status
 **GET /api/agents/tools** - List available tools
 **POST /api/agents/tools/{name}/test** - Test individual tools
+```json
+Request: POST /api/agents/tools/search_documents/test?input_data=vacation%20policy
+Response: {
+  "tool": "search_documents",
+  "input": "vacation policy",
+  "result": "...",
+  "status": "success"
+}
+```
 
 ### CrewAI Multi-Agent Workflows (`/api/crew/`) - **NEW**
 

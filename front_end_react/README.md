@@ -1,6 +1,11 @@
-# RAG Chat React (Vite)
+# Educational RAG Chat React (Vite)
 
-This is a small React app (Vite) that implements the RAG Chat UI split into components.
+This is a lightweight React app designed to demonstrate **how to build effective User Interfaces for RAG systems**. It serves as a reference implementation for the following RAG UI patterns:
+-   **Chat & History**: Managing persistent conversation state.
+-   **Document Management**: Uploading, chunking, and versioning documents.
+-   **Transparency**: Visualizing the RAG pipeline (retrieved contexts, tokens used, latency).
+
+It implements the RAG Chat UI split into reusable components.
 
 ## Quick start
 

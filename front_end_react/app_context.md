@@ -1,12 +1,16 @@
 # COPILOT_CONTEXT.md
 
 ## 1. Project Summary
-- A lightweight React frontend for testing and interacting with a role-based enterprise RAG (Retrieval-Augmented Generation) backend.
-- Provides a chat interface with **persistent conversation history**, file upload and JSON document ingestion UIs, admin panels for access-requests and metadata updates.
-- Uses JWT token-based authentication with username/password login. All requests include `Authorization: Bearer <token>` header.
-- User roles are determined by the backend based on credentials and embedded in the JWT token (Employee, Manager, HR, Legal, Executive, SuperAdmin).
-- **ChatGPT-like conversation management**: Users can create, switch between, rename, and delete conversations. All messages are persisted to the backend with full RAG pipeline logging.
-- Designed primarily as a developer tool to exercise backend endpoints and demonstrate RAG behavior (retrieved docs, filtered results, public summaries).
+-   **Educational Purpose**: A lightweight React frontend designed as a **developer tool** to test, visualize, and understand the behavior of the enterprise RAG backend.
+-   **Key Learning Concepts**:
+    -   Implementing **persistent conversation history** in a chat interface.
+    -   Building UIs for **document management** (upload, versioning, RBAC).
+    -   Visualizing **RAG internals** (retrieved chunks, metadata, tokens) to debug system performance.
+-   **Features**:
+    -   Chat interface with ChatGPT-like session management.
+    -   Admin panels for access-requests and metadata updates.
+    -   JWT token-based authentication handling.
+-   **Primary Goal**: To "exercise" the backend endpoints and demonstrate how RAG systems actually work (retrieval, filtering, context injection).
 
 ## 2. High-Level Architecture
 - `index.html` + Vite bootstrapped React app (development server: `vite`).

@@ -1,8 +1,16 @@
 # 🚀 Multi-Provider Enterprise RAG System
 
+## Project Motivation: Learning RAG Systems & Tools
+
+This repository is designed as a **comprehensive reference implementation** for AI Engineers looking to master Retrieval-Augmented Generation (RAG) systems. It serves as a practical, hands-on playground to understand the complexities of building production-grade AI applications, moving beyond simple demos to handle real-world challenges like:
+
+*   **Multi-Provider Orchestration**: How to switch seamlessly between OpenAI, Google, Hugging Face, and Local LLMs.
+*   **Enterprise Constraints**: Implementing RBAC (Role-Based Access Control), document versioning, and audit logging.
+*   **System Architecture**: connecting a FastAPI backend with a modern React frontend.
+
 ## Project Overview
 
-This repository hosts a robust, production-ready Multi-Provider Enterprise RAG (Retrieval-Augmented Generation) system. It supports both offline-first (local models) and cloud-based (API) LLM providers through a unified, modular architecture. Designed for enterprise environments, it features comprehensive Role-Based Access Control (RBAC), document versioning, and intelligent session management. A lightweight React frontend is included for testing and interacting with the backend, demonstrating its capabilities through a chat interface, file uploads, and admin panels.
+While built with the robustness of a production system, the primary goal of this codebase is **education**. It demonstrates a robust, modular architecture for a Multi-Provider Enterprise RAG system. It supports both offline-first (local models) and cloud-based (API) LLM providers through a unified interface. Designed for enterprise environments, it features comprehensive Role-Based Access Control (RBAC), document versioning, and intelligent session management. A lightweight React frontend is included to demonstrate how to build user interfaces that interact effectively with complex RAG backends.
 
 ---
 
