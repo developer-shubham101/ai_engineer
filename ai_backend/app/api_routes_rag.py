@@ -16,7 +16,7 @@ from app.modules.config.constants import (
     VALID_SENSITIVITY_LEVELS, VALID_DEPARTMENTS, ROLE_LEVELS, SENSITIVITY_LEVELS,
     DEFAULT_DEPARTMENT, DEFAULT_SENSITIVITY, DEFAULT_TOP_K, DEFAULT_MAX_TOKENS, DEFAULT_TEMPERATURE,
     MAX_FILE_SIZE_BYTES, HTTP_MESSAGES, HR_LEVEL_THRESHOLD, EMPLOYEE_PLUS_ROLES, SUPER_ADMIN_ROLES,
-    HR_PLUS_ROLES, MARKDOWN_EXTENSIONS, HTML_EXTENSIONS, JSON_EXTENSIONS
+    HR_PLUS_ROLES, MARKDOWN_EXTENSIONS, HTML_EXTENSIONS, JSON_EXTENSIONS, VALID_PROVIDERS
 )
 from app.modules.core.document_manager import DocumentManager
 from app.modules.integration import get_container
@@ -170,6 +170,13 @@ async def query_rag(
         requester: Optional[Dict[str, Any]] = Depends(get_current_user_optional)
 ):
     """RAG query endpoint - refactored to use modular RAG Orchestrator."""
+    
+    # Validate model provider
+    if model_provider not in VALID_PROVIDERS:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Invalid model provider '{model_provider}'. Valid providers: {list(VALID_PROVIDERS)}"
+        )
 
     container = get_container()
     container.initialize()

@@ -1,6 +1,0 @@
-
-C:\Users\vampire\Downloads\llama-b7445-bin-win-cpu-x64>
-
-.\llama-server.exe -m "I:\Workspace\GitHub\ai_engineer\ai_backend\models\mistral-7b-instruct-v0.2.Q3_K_M.gguf"  -c 4096  -t 8  --host 127.0.0.1  --port 8080
-
-.\llama-server.exe -m "I:\Workspace\GitHub\ai_engineer\ai_backend\models\llama-3.2"  -c 4096  -t 8  --host 127.0.0.1  --port 8080

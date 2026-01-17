@@ -11,7 +11,7 @@ import AudioRecorder from './AudioRecorder.jsx'
 import CrewAIChat from './CrewAIChat.jsx'
 import AgentChat from './AgentChat.jsx'
 import ToastList from './ToastList.jsx'
-import { BASE_API_URL } from '../utility/const.js'
+import { BASE_API_URL, CONFIG_TOOLTIPS } from '../utility/const.js'
 import { getStoredToken, getStoredUser, getSessionIdFromToken, clearAuth } from '../utility/auth.js'
 
 
@@ -47,7 +47,9 @@ export default function RAGChat({ onLogout }) {
   const [selectedFile, setSelectedFile] = useState(null)
   const [fileMeta, setFileMeta] = useState({ department: '', sensitivity: 'public_internal', tags: '' })
   const [toasts, setToasts] = useState([])
-  const [modelProvider, setModelProvider] = useState(localStorage.getItem('model_provider') || 'local')
+  const [modelProvider, setModelProvider] = useState(
+    localStorage.getItem("model_provider") || "llamaserver",
+  );
   const [localLlmModel, setLocalLlmModel] = useState(localStorage.getItem('local_llm_model') || 'llama32-1b')
   const [theme, setTheme] = useState(localStorage.getItem('theme') || 'system')
   const [showAdminPanel, setShowAdminPanel] = useState(false)
@@ -948,7 +950,10 @@ export default function RAGChat({ onLogout }) {
                         checked={useLlm}
                         onChange={(e) => setUseLlm(e.target.checked)}
                       />
-                      <label className="form-check-label">Use LLM</label>
+                      <label className="form-check-label d-flex align-items-center gap-1">
+                        Use LLM
+                        <i className="bi bi-info-circle text-muted" title={CONFIG_TOOLTIPS.USE_LLM} style={{fontSize: '0.8em'}}></i>
+                      </label>
                     </div>
                     <div className="form-check form-switch">
                       <input
@@ -957,7 +962,10 @@ export default function RAGChat({ onLogout }) {
                         checked={useDocuments}
                         onChange={(e) => setUseDocuments(e.target.checked)}
                       />
-                      <label className="form-check-label">Use Docs</label>
+                      <label className="form-check-label d-flex align-items-center gap-1">
+                        Use Docs
+                        <i className="bi bi-info-circle text-muted" title={CONFIG_TOOLTIPS.USE_DOCS} style={{fontSize: '0.8em'}}></i>
+                      </label>
                     </div>
                     <div className="form-check form-switch">
                       <input
@@ -966,10 +974,16 @@ export default function RAGChat({ onLogout }) {
                         checked={useConversationHistory}
                         onChange={(e) => setUseConversationHistory(e.target.checked)}
                       />
-                      <label className="form-check-label">Use History</label>
+                      <label className="form-check-label d-flex align-items-center gap-1">
+                        Use History
+                        <i className="bi bi-info-circle text-muted" title={CONFIG_TOOLTIPS.USE_HISTORY} style={{fontSize: '0.8em'}}></i>
+                      </label>
                     </div>
                     <div className="input-group input-group-sm">
-                      <span className="input-group-text">Top K</span>
+                      <span className="input-group-text d-flex align-items-center gap-1">
+                        Top K
+                        <i className="bi bi-info-circle text-muted" title={CONFIG_TOOLTIPS.TOP_K} style={{fontSize: '0.8em'}}></i>
+                      </span>
                       <input
                         type="number"
                         className="form-control"
@@ -980,7 +994,10 @@ export default function RAGChat({ onLogout }) {
                       />
                     </div>
                     <div className="input-group input-group-sm">
-                      <span className="input-group-text">Max Tokens</span>
+                      <span className="input-group-text d-flex align-items-center gap-1">
+                        Max Tokens
+                        <i className="bi bi-info-circle text-muted" title={CONFIG_TOOLTIPS.MAX_TOKENS} style={{fontSize: '0.8em'}}></i>
+                      </span>
                       <input
                         type="number"
                         className="form-control"
@@ -990,8 +1007,11 @@ export default function RAGChat({ onLogout }) {
                         onChange={(e) => setMaxTokens(Number(e.target.value))}
                       />
                     </div>
-                    <div className="input-group input-group-sm" title="Temperature controls randomness. Low = accurate and predictable. High = creative and unpredictable.">
-                      <span className="input-group-text">Temp ({temperature.toFixed(1)})</span>
+                    <div className="input-group input-group-sm">
+                      <span className="input-group-text d-flex align-items-center gap-1">
+                        Temp ({temperature.toFixed(1)})
+                        <i className="bi bi-info-circle text-muted" title={CONFIG_TOOLTIPS.TEMPERATURE} style={{fontSize: '0.8em'}}></i>
+                      </span>
                       <input
                         type="range"
                         className="form-range"
@@ -1002,20 +1022,29 @@ export default function RAGChat({ onLogout }) {
                         onChange={(e) => setTemperature(parseFloat(e.target.value))}
                       />
                     </div>
-                    <select
-                      className="form-select form-select-sm"
-                      value={modelProvider}
-                      onChange={(e) => setModelProvider(e.target.value)}
-                    >
-                      <option value="local">Local</option>
-                      <option value="google">Google</option>
-                      <option value="gpt">OpenAI GPT</option>
-                      <option value="hf">Hugging Face</option>
-                      <option value="llamaserver">Llama Server</option>
-
-                    </select>
+                    <div className="mb-2">
+                      <label className="form-label small d-flex align-items-center gap-1 mb-1">
+                        Model Provider
+                        <i className="bi bi-info-circle text-muted" title={CONFIG_TOOLTIPS.MODEL_PROVIDER} style={{fontSize: '0.8em'}}></i>
+                      </label>
+                      <select
+                        className="form-select form-select-sm"
+                        value={modelProvider}
+                        onChange={(e) => setModelProvider(e.target.value)}
+                      >
+                        <option value="llamaserver">Llama Server</option>
+                        <option value="local">Local</option>
+                        <option value="google">Google</option>
+                        <option value="gpt">OpenAI GPT</option>
+                        <option value="hf">Hugging Face</option>
+                      </select>
+                    </div>
 
                     <div className="mb-2">
+                      <label className="form-label small d-flex align-items-center gap-1 mb-1">
+                        Template
+                        <i className="bi bi-info-circle text-muted" title={CONFIG_TOOLTIPS.TEMPLATE} style={{fontSize: '0.8em'}}></i>
+                      </label>
                       <select
                         className="form-select form-select-sm"
                         value={selectedTemplate}
@@ -1030,29 +1059,41 @@ export default function RAGChat({ onLogout }) {
                       </select>
                     </div>
                     {modelProvider === 'local' && (
+                      <div className="mb-2">
+                        <label className="form-label small d-flex align-items-center gap-1 mb-1">
+                          Local Model
+                          <i className="bi bi-info-circle text-muted" title={CONFIG_TOOLTIPS.LOCAL_MODEL} style={{fontSize: '0.8em'}}></i>
+                        </label>
+                        <select
+                          className="form-select form-select-sm"
+                          value={localLlmModel}
+                          onChange={(e) => setLocalLlmModel(e.target.value)}
+                        >
+                          <option value="llama32-1b">Llama 3.2 1B</option>
+                          <option value="llama32-3b">Llama 3.2 3B</option>
+                          <option value="llama31-8b">Llama 3.1 8B</option>
+                          <option value="phi3-mini">Phi-3 Mini</option>
+                          <option value="gemma2-2b">Gemma 2 2B</option>
+                          <option value="mistral-7b">Mistral 7B</option>
+                          <option value="distilgpt2-company-tuned">DistilGPT2 Company Tuned</option>
+                        </select>
+                      </div>
+                    )}
+                    <div className="mb-2">
+                      <label className="form-label small d-flex align-items-center gap-1 mb-1">
+                        Theme
+                        <i className="bi bi-info-circle text-muted" title={CONFIG_TOOLTIPS.THEME} style={{fontSize: '0.8em'}}></i>
+                      </label>
                       <select
                         className="form-select form-select-sm"
-                        value={localLlmModel}
-                        onChange={(e) => setLocalLlmModel(e.target.value)}
+                        value={theme}
+                        onChange={(e) => setTheme(e.target.value)}
                       >
-                        <option value="llama32-1b">Llama 3.2 1B</option>
-                        <option value="llama32-3b">Llama 3.2 3B</option>
-                        <option value="llama31-8b">Llama 3.1 8B</option>
-                        <option value="phi3-mini">Phi-3 Mini</option>
-                        <option value="gemma2-2b">Gemma 2 2B</option>
-                        <option value="mistral-7b">Mistral 7B</option>
-                        <option value="distilgpt2-company-tuned">DistilGPT2 Company Tuned</option>
+                        <option value="system">System</option>
+                        <option value="light">Light</option>
+                        <option value="dark">Dark</option>
                       </select>
-                    )}
-                    <select
-                      className="form-select form-select-sm"
-                      value={theme}
-                      onChange={(e) => setTheme(e.target.value)}
-                    >
-                      <option value="system">System</option>
-                      <option value="light">Light</option>
-                      <option value="dark">Dark</option>
-                    </select>
+                    </div>
                     <button
                       className={`btn btn-sm w-100 mb-2 ${agentMode ? 'btn-success' : 'btn-outline-success'}`}
                       onClick={() => {

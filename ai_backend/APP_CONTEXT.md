@@ -21,7 +21,7 @@ This system is built as a **learning playground and reference implementation** f
 ### Supported Providers
 - **Local Models**: Auto-selected from local_models.json (Mistral-7B, Phi-2, Llama-3.2, Gemma-2B via llama-cpp-python)
 - **Cloud APIs**: Google Gemini-2.5-Flash/Pro, OpenAI GPT-3.5/4, Hugging Face Inference API
-- **ColabLLM**: Custom models via /ask endpoint
+- **CustomLLM**: Custom/third-party models via /ask endpoint (replaces ColabLLM)
 - **LlamaServer**: llama-server.exe with OpenAI-compatible API (NEW)
 - **Shared Components**: Configurable Vector Store (ChromaDB or FAISS), BGE embeddings, SQLite sessions
 
@@ -606,7 +606,7 @@ Response: {
 ### Multi-Provider RAG (`/api/rag/`)
 
 **POST /api/rag/{provider}/query** - Unified query interface
-- **Providers**: `local`, `google`, `gpt`, `huggingface`, `colabllm`, `llamaserver`
+- **Providers**: `local`, `google`, `gpt`, `huggingface`, `customllm`, `llamaserver`
 - **Authentication**: Optional (Bearer token for personalization)
 - **RBAC**: Automatic filtering based on user role/department
 
@@ -1958,6 +1958,11 @@ curl -X POST "/api/rag/gpt/query" \
 
 # ColabLLM
 curl -X POST "/api/rag/colabllm/query" \
+  -H "Authorization: Bearer <token>" \
+  -d '{"question": "What is our policy?", "use_llm": true}'
+
+# CustomLLM (preferred)
+curl -X POST "/api/rag/customllm/query" \
   -H "Authorization: Bearer <token>" \
   -d '{"question": "What is our policy?", "use_llm": true}'
 

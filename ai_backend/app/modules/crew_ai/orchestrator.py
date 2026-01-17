@@ -11,6 +11,7 @@ from crewai import Agent, Task, Crew, Process
 from crewai.llm import LLM
 
 from .interfaces import ICrewOrchestrator, CrewRequest, CrewResponse
+from ..config.settings import settings
 
 logger = logging.getLogger(__name__)
 
@@ -40,13 +41,30 @@ class CrewOrchestrator(ICrewOrchestrator):
             return {}
 
     def _create_llm(self) -> Optional[LLM]:
-        """Create LLM instance for CrewAI using llama-server."""
+        """Create LLM instance for CrewAI using llama-server.
+        
+        Uses llama.cpp server as LLM API provider. Alternative providers like OpenAI or Gemini
+        can be configured by changing the base_url and model parameters.
+        
+        Configuration:
+            - Base URL: settings.CREW_BASE_URL (default: http://localhost:8080)
+            - Model: "llama" (compatible with llama.cpp server)
+            - Temperature: 0.7 (balanced creativity/consistency)
+        
+        Setup Instructions:
+            1. Install llama.cpp server: documents/llm_cpp/setup_llm_cpp.md
+            2. Run local server: documents/llm_cpp/run_local_cpp.md
+            3. Verify server at: http://localhost:8080/health
+        
+        Returns:
+            Optional[LLM]: Configured LLM instance or None if initialization fails
+        """
         try:
-            print("Creating CrewAI LLM with llama-server: http://localhost:8080")
+            print(f"Creating CrewAI LLM with llama-server: {settings.CREW_BASE_URL}")
             
             llm = LLM(
                 model="llama",
-                base_url="http://localhost:8080",
+                base_url=settings.CREW_BASE_URL,
                 temperature=0.7
             )
             
