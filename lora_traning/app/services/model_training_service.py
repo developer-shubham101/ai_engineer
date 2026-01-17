@@ -96,10 +96,46 @@ def read_training_data_from_files(data_dir: Path = Path("data"), max_samples: in
     return training_pairs
 
 
-def prepare_training_data(max_samples: int = 1000) -> List[Dict[str, str]]:
-    """Load training data from agniholdings_train.jsonl file."""
+def prepare_training_data(max_samples: int = 1000, dataset_name: str = None) -> List[Dict[str, str]]:
+    """
+    Load training data.
+    If dataset_name is provided, loads from Hugging Face (e.g., 'yahma/alpaca-cleaned').
+    Otherwise, loads from local 'agniholdings_train.jsonl'.
+    """
     if not TRAINING_AVAILABLE:
         raise RuntimeError("Training dependencies not installed")
+
+    if dataset_name:
+        logger.info(f"Loading remote dataset: {dataset_name}")
+        try:
+            from datasets import load_dataset
+            dataset = load_dataset(dataset_name, split="train")
+            
+            # Map Alpaca format to our format
+            training_pairs = []
+            for item in dataset:
+                instruction = item.get("instruction", "")
+                input_text = item.get("input", "")
+                output = item.get("output", "")
+                
+                # Combine instruction and input if input exists
+                full_instruction = f"{instruction}\n{input_text}" if input_text else instruction
+                
+                training_pairs.append({
+                    "instruction": full_instruction,
+                    "response": output,
+                    "source": dataset_name
+                })
+                
+                if max_samples and len(training_pairs) >= max_samples:
+                    break
+            
+            logger.info(f"Loaded {len(training_pairs)} samples from {dataset_name}")
+            return training_pairs
+            
+        except Exception as e:
+            logger.exception(f"Failed to load HF dataset {dataset_name}: {e}")
+            raise
 
     logger.info("Loading training data from agniholdings_train.jsonl")
 
@@ -153,7 +189,8 @@ class ModelTrainingService:
         output_name: str = None,
         max_samples: int = None,
         epochs: int = None,
-        learning_rate: float = None
+        learning_rate: float = None,
+        dataset_name: str = None
     ) -> Dict[str, Any]:
         """Train model on company data."""
         if not TRAINING_AVAILABLE:
@@ -172,16 +209,29 @@ class ModelTrainingService:
         
         try:
             # Prepare data
-            samples = prepare_training_data(max_samples)
+            samples = prepare_training_data(max_samples, dataset_name=dataset_name)
             dataset = format_training_data(samples)
             
             # Load model and tokenizer
-            logger.info("Loading model and tokenizer")
-            tokenizer = AutoTokenizer.from_pretrained(self.model_name)
+            # Load model and tokenizer
+            sanitized_name = self.model_name.replace("/", "-")
+            local_model_path = self.models_dir / sanitized_name
+            
+            if not local_model_path.exists():
+                error_msg = (
+                    f"Model not found at {local_model_path}. "
+                    "Please run 'python scripts/download_model.py' first to download the base model."
+                )
+                logger.error(error_msg)
+                raise FileNotFoundError(error_msg)
+                
+            logger.info(f"Loading model and tokenizer from local path: {local_model_path}")
+            
+            tokenizer = AutoTokenizer.from_pretrained(str(local_model_path))
             tokenizer.pad_token = tokenizer.eos_token
             
             model = AutoModelForCausalLM.from_pretrained(
-                self.model_name,
+                str(local_model_path),
                 torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
                 device_map="auto" if torch.cuda.is_available() else None
             )
@@ -248,6 +298,7 @@ class ModelTrainingService:
             training_info = {
                 "model_name": output_name,
                 "base_model": self.model_name,
+                "dataset_source": dataset_name or "local_jsonl",
                 "training_samples": len(samples),
                 "epochs": epochs,
                 "learning_rate": learning_rate,
@@ -345,14 +396,16 @@ async def train_company_model(
     output_name: str = None,
     max_samples: int = None,
     epochs: int = None,
-    learning_rate: float = None
+    learning_rate: float = None,
+    dataset_name: str = None
 ) -> Dict[str, Any]:
     """Train a model on company data."""
     return _training_service.train_model(
         output_name=output_name,
         max_samples=max_samples,
         epochs=epochs,
-        learning_rate=learning_rate
+        learning_rate=learning_rate,
+        dataset_name=dataset_name
     )
 
 

@@ -13,7 +13,7 @@ A **minimal LoRA fine-tuning and testing system** for training custom models on 
 
 ### Supported Models
 - **Local Models**: GGUF format models loaded via llama-cpp-python
-- **Training**: LoRA fine-tuning on Llama 3.2 1B base model
+- **Training**: LoRA fine-tuning on `meta-llama/Llama-3.2-1B-Instruct` base model
 - **Output**: Trained models saved in HuggingFace format + GGUF conversion
 
 ### Key Features
@@ -72,9 +72,9 @@ lora_traning/
 │   ├── api_routes_training.py # Training endpoints
 │   └── logging_config.py    # Logging setup
 ├── models/                  # Local LLM files (GGUF + trained models)
-│   ├── gpt2-company-tuned/           # HuggingFace format
-│   ├── gpt2-company-tuned.gguf       # GGUF format
-│   └── gpt2-company-tuned.json       # Training metadata
+│   ├── llama-3.2-1b-instruct-company-tuned/           # HuggingFace format
+│   ├── llama-3.2-1b-instruct-company-tuned.gguf       # GGUF format
+│   └── llama-3.2-1b-instruct-company-tuned.json       # Training metadata
 ├── data/                   # Training data (JSONL format)
 │   └── agniholdings_train.jsonl      # Company Q&A pairs
 ├── scripts/                # Training and conversion scripts
@@ -133,20 +133,25 @@ Response: {
 ## 5. Training System
 
 ### Model Configuration
-- **Base Model**: Configurable via `app/config/model_config.py` (default: DistilGPT2)
-- **Training Format**: "Question: X\nAnswer: Y"
+- **Base Model**: Configurable via `app/config/model_config.py` (default: `meta-llama/Llama-3.2-1B-Instruct`)
+- **Training Format**: Alpaca-style Instruction Format (System/User/Assistant)
 - **Context Length**: 512 tokens
 - **Training Epochs**: 2-3 (adjustable)
 
 ### Training Process
-1. **Load JSONL Data**: Read training pairs from `agniholdings_train.jsonl`
-2. **Format Conversion**: Convert to instruction-tuning format
-3. **Model Training**: Fine-tune GPT-2 on company data
+### Training Process
+1. **Download Base Model**: Run `scripts/download_model.py` to cache model locally
+2. **Load Data**: 
+    - **Local**: Read training pairs from `agniholdings_train.jsonl`
+    - **Remote**: Load from Hugging Face (e.g., `yahma/alpaca-cleaned`)
+3. **Format Conversion**: Convert to Llama 3.2 instruction-tuning format
+3. **Model Training**: Fine-tune Llama 3.2 1B Instruct on data
 4. **Export**: Save in HuggingFace format
 5. **GGUF Conversion**: Convert for llama.cpp inference
 
 ### Data Format
-- ✅ **JSONL Format** - Pre-formatted Q&A pairs in ChatML format
+- ✅ **JSONL Format** - Compatible with `yahma/alpaca-cleaned` dataset structure
+- ✅ **HF Datasets** - Direct loading supported via `dataset_name` parameter
 - ✅ **12 Training Samples** - Real Agni Holdings company data
 - ✅ **High Quality** - Manually crafted questions and answers
 
@@ -228,7 +233,7 @@ Response: {
 - **Comprehensive Coverage**: Document-level and section-level training pairs
 
 ### Model Training System
-- **DistilGPT2 Fine-tuning**: Lightweight model for fast training
+- **Llama 3.2 1B Instruct Fine-tuning**: Efficient fine-tuning for instruction following
 - **Automated Pipeline**: Complete workflow from documents to GGUF
 - **Quality Assurance**: Automated testing with performance scoring
 - **Format Conversion**: HuggingFace to GGUF conversion for efficient inference
@@ -260,7 +265,7 @@ curl -X POST "http://localhost:8000/api/query" \
   -d '{
     "question": "What is the company policy on leave?",
     "use_llm": true,
-    "local_llm_model": "distilgpt2-company-tuned"
+    "local_llm_model": "llama-3.2-1b-instruct-company-tuned"
   }'
 ```
 
@@ -394,7 +399,9 @@ def refresh_models() -> List[ModelInfo]:
   "base_model": str,
   "max_samples": int,
   "epochs": int,
-  "learning_rate": float
+  "epochs": int,
+  "learning_rate": float,
+  "dataset_name": Optional[str] // e.g. "yahma/alpaca-cleaned"
 }
 ```
 
@@ -430,21 +437,31 @@ def refresh_models() -> List[ModelInfo]:
 scripts\retrain_improved.bat
 ```
 
+### Complete Training Pipeline
+```bash
+# One command for complete workflow
+scripts\retrain_improved.bat
+```
+
 **Workflow Steps:**
-1. **Document Conversion** - Convert .md/.html to text
-2. **Data Preparation** - Create Q&A pairs
-3. **Dependency Installation** - Install required packages
-4. **Model Training** - Train on company data
-5. **GGUF Conversion** - Convert for inference
-6. **Summary Report** - Show available files
+1. **Model Download** - Ensure base model is downloaded locally (`scripts/download_model.py`)
+2. **Document Conversion** - Convert .md/.html to text
+3. **Data Preparation** - Create Q&A pairs (or use HF dataset)
+4. **Dependency Installation** - Install required packages
+5. **Model Training** - Train on company data
+6. **GGUF Conversion** - Convert for inference
+7. **Summary Report** - Show available files
 
 ### Manual Steps
 ```bash
+### Manual Steps
+```bash
 # Step-by-step execution
+python scripts\download_model.py  # Run once
 python scripts\doc_parser.py
 python scripts\prepare_training_data_improved.py
-python scripts\train_model.py
-python scripts\convert_to_gguf_improved.py models\distilgpt2-company-tuned
+python scripts\test_trained_model.py
+python scripts\convert_to_gguf_improved.py models\llama-3.2-1b-instruct-company-tuned
 ```
 
 ### Testing
@@ -470,9 +487,9 @@ lora_traning/
 ├── raw_data/              # Original source documents
 │   └── company/           # Source documents (.md format)
 ├── models/                # Trained models and GGUF files
-│   ├── distilgpt2-company-tuned/     # HuggingFace format
-│   ├── distilgpt2-company-tuned.gguf # GGUF format
-│   └── distilgpt2-company-tuned.json # Training metadata
+│   ├── llama-3.2-1b-instruct-company-tuned/     # HuggingFace format
+│   ├── llama-3.2-1b-instruct-company-tuned.gguf # GGUF format
+│   └── llama-3.2-1b-instruct-company-tuned.json # Training metadata
 ├── scripts/               # Training and utility scripts
 │   ├── doc_parser.py              # Document conversion
 │   ├── train_model.py             # Model training
@@ -528,7 +545,7 @@ DATA_DIR = Path("data")          # Training data (text files)
 
 ### Training Settings
 ```python
-DEFAULT_BASE_MODEL = "meta-llama/Llama-3.2-1B"
+DEFAULT_BASE_MODEL = "meta-llama/Llama-3.2-1B-Instruct"
 DEFAULT_EPOCHS = 3
 DEFAULT_LEARNING_RATE = 2e-5
 DEFAULT_BATCH_SIZE = 1
@@ -538,6 +555,7 @@ MAX_TRAINING_SAMPLES = 1000
 ### Alternative Models
 ```python
 # Open-source alternatives (no authentication required)
+"meta-llama/Llama-3.2-1B-Instruct" # Current default
 "distilgpt2"              # Lightweight, fast
 "gpt2"                    # Standard GPT-2
 "microsoft/DialoGPT-small" # Dialog-focused
@@ -572,7 +590,9 @@ curl -X POST "/api/training/start" \
     "output_name": "my-custom-model",
     "base_model": "meta-llama/Llama-3.2-1B",
     "max_samples": 500,
-    "epochs": 3
+    "max_samples": 500,
+    "epochs": 3,
+    "dataset_name": "yahma/alpaca-cleaned" // Optional: Load from HF
   }'
 ```
 

@@ -16,20 +16,9 @@ logger = logging.getLogger(__name__)
 class AutoGenOrchestrator(IAgentOrchestrator):
     """AutoGen-based multi-agent orchestrator using v0.4 API."""
 
-    def __init__(self):
-        # Initialize the model client pointing to local llama-server
-        self.model_client = OpenAIChatCompletionClient(
-            model="mistral-7b-instruct",  # informative name
-            base_url="http://127.0.0.1:8080/v1",
-            api_key="placeholder",
-            model_info={
-                "vision": False,
-                "function_calling": False,
-                "json_output": False,
-                "structured_output": False,
-                "family": "unknown",
-            },
-        )
+    def __init__(self, model_client):
+        # Use injected model client or create default
+        self.model_client = model_client
 
     async def process_request(self, request: AgentRequest, user: Optional[Dict[str, Any]] = None) -> AgentResponse:
         """Process agent request using AutoGen."""

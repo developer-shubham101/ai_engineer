@@ -33,7 +33,8 @@ async def main():
             output_name=config["output_name"],
             max_samples=config["max_samples"],
             epochs=config["epochs"],
-            learning_rate=config["learning_rate"]
+            learning_rate=config["learning_rate"],
+            dataset_name=config.get("dataset_name") # Pass HF dataset name
         )
 
         logger.info("Training completed successfully!")

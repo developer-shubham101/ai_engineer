@@ -22,6 +22,7 @@ This system is built as a **learning playground and reference implementation** f
 - **Local Models**: Auto-selected from local_models.json (Mistral-7B, Phi-2, Llama-3.2, Gemma-2B via llama-cpp-python)
 - **Cloud APIs**: Google Gemini-2.5-Flash/Pro, OpenAI GPT-3.5/4, Hugging Face Inference API
 - **ColabLLM**: Custom models via /ask endpoint
+- **LlamaServer**: llama-server.exe with OpenAI-compatible API (NEW)
 - **Shared Components**: Configurable Vector Store (ChromaDB or FAISS), BGE embeddings, SQLite sessions
 
 ### Key Features
@@ -34,6 +35,7 @@ This system is built as a **learning playground and reference implementation** f
 - ✅ **Multimodal AI capabilities** - Audio, Vision, and Media processing
 - ✅ **Agent Framework** - Modular architecture with AutoGen and custom orchestrators
 - ✅ **CrewAI Integration** - Multi-agent workflows with debate and research capabilities
+- ✅ **LlamaServer Integration** - Direct llama-server.exe support with OpenAI-compatible API (NEW)
 - ✅ **Speech-to-Text & Text-to-Speech** with multiple providers
 - ✅ **OCR and Image Analysis** with CPU-friendly implementations
 - ✅ **Emotion Detection** from audio inputs
@@ -604,7 +606,7 @@ Response: {
 ### Multi-Provider RAG (`/api/rag/`)
 
 **POST /api/rag/{provider}/query** - Unified query interface
-- **Providers**: `local`, `google`, `gpt`, `huggingface`, `colabllm`/`hf`
+- **Providers**: `local`, `google`, `gpt`, `huggingface`, `colabllm`, `llamaserver`
 - **Authentication**: Optional (Bearer token for personalization)
 - **RBAC**: Automatic filtering based on user role/department
 
@@ -1601,7 +1603,9 @@ The prompt chain integrates seamlessly with existing RAG services:
 from app.modules.llm.prompt_chain import PromptChain
 
 class BaseRAGService:
-    def __init__(self):
+    def __init__(self, model_client=None):
+        # Use injected model client or create default
+        self.model_client = model_client
         self.prompt_chain = PromptChain(session_manager=self.session_manager)
     
     async def build_final_prompt(self, query_text, context, user, session_id):
@@ -1781,7 +1785,7 @@ session_manager = container.get_session_manager()
 
 ## 16. Configuration
 
-### Environment Variables
+### Configuration
 ```bash
 # Optional cloud API keys (for cloud providers)
 OPENAI_API_KEY=your_openai_key
@@ -1791,6 +1795,10 @@ HUGGINGFACE_API_TOKEN=your_hf_token
 # ColabLLM provider (optional)
 COLABLLM_BASE_URL=http://localhost:8080
 COLABLLM_API_KEY=
+
+# LlamaServer provider (NEW)
+LLAMASERVER_BASE_URL=http://127.0.0.1:8080/v1
+LLAMASERVER_MODEL_NAME=mistral-7b-instruct-v0.2
 
 # Server configuration
 HOST=0.0.0.0
@@ -1950,6 +1958,11 @@ curl -X POST "/api/rag/gpt/query" \
 
 # ColabLLM
 curl -X POST "/api/rag/colabllm/query" \
+  -H "Authorization: Bearer <token>" \
+  -d '{"question": "What is our policy?", "use_llm": true}'
+
+# LlamaServer (NEW)
+curl -X POST "/api/rag/llamaserver/query" \
   -H "Authorization: Bearer <token>" \
   -d '{"question": "What is our policy?", "use_llm": true}'
 ```

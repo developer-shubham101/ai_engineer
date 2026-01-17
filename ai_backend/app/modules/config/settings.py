@@ -103,8 +103,12 @@ class Settings:
         self.DEBUG = os.getenv("DEBUG", "false").lower() == "true"
         
         # ColabLLM settings
-        self.COLABLLM_BASE_URL = os.getenv("COLABLLM_BASE_URL", "https://6f4ee4e9e156.ngrok-free.app/")
+        self.COLABLLM_BASE_URL = os.getenv("COLABLLM_BASE_URL")
         self.COLABLLM_API_KEY = os.getenv("COLABLLM_API_KEY")
+        
+        # LlamaServer settings
+        self.LLAMASERVER_BASE_URL = os.getenv("LLAMASERVER_BASE_URL", "http://127.0.0.1:8080/v1")
+        self.LLAMASERVER_MODEL_NAME = os.getenv("LLAMASERVER_MODEL_NAME", "mistral-7b-instruct-v0.2")
 
 
 # Global settings instance

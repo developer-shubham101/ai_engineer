@@ -17,6 +17,12 @@ This will:
 
 ### 2. Manual Step-by-Step Process
 
+#### Step 0: Download Base Model
+```bash
+python scripts\download_model.py
+```
+- Downloads model to `models/` directory for local usage.
+
 #### Step 1: Prepare Training Data
 ```bash
 python scripts\prepare_training_data_improved.py
@@ -29,15 +35,15 @@ python scripts\prepare_training_data_improved.py
 ```bash
 python scripts\train_model.py
 ```
-- Trains DistilGPT2 on company data
-- Saves model to `models/distilgpt2-company-tuned/`
+- Trains Llama 3.2 1B Instruct on company data
+- Saves model to `models/llama-3.2-1b-instruct-company-tuned/`
 
 #### Step 3: Convert to GGUF
 ```bash
-python scripts\convert_to_gguf_improved.py models\distilgpt2-company-tuned
+python scripts\convert_to_gguf_improved.py models\llama-3.2-1b-instruct-company-tuned
 ```
 - Downloads llama.cpp automatically
-- Converts to `models/distilgpt2-company-tuned.gguf`
+- Converts to `models/llama-3.2-1b-instruct-company-tuned.gguf`
 
 ### 3. Test Your Trained Model
 
@@ -58,7 +64,7 @@ curl -X POST "http://localhost:8000/api/query" \
   -d '{
     "question": "What is the company policy on leave?",
     "use_llm": true,
-    "local_llm_model": "distilgpt2-company-tuned"
+    "local_llm_model": "llama-3.2-1b-instruct-company-tuned"
   }'
 ```
 
@@ -122,7 +128,7 @@ curl -X POST "http://localhost:8000/api/query" \
 2. **Manual conversion:**
    ```bash
    git clone https://github.com/ggerganov/llama.cpp.git
-   python llama.cpp/convert_hf_to_gguf.py models/distilgpt2-company-tuned --outfile models/distilgpt2-company-tuned.gguf
+   python llama.cpp/convert_hf_to_gguf.py models/llama-3.2-1b-instruct-company-tuned --outfile models/llama-3.2-1b-instruct-company-tuned.gguf
    ```
 
 ### Server Connection Issues
@@ -132,7 +138,7 @@ curl -X POST "http://localhost:8000/api/query" \
    ```
 
 2. **Check model availability:**
-   - Ensure `models/distilgpt2-company-tuned.gguf` exists
+   - Ensure `models/llama-3.2-1b-instruct-company-tuned.gguf` exists
    - Or use HuggingFace format model
 
 ## File Structure After Training
@@ -141,9 +147,9 @@ curl -X POST "http://localhost:8000/api/query" \
 lora_traning/
 ├── data/                          # Your company documents
 ├── models/
-│   ├── distilgpt2-company-tuned/  # HuggingFace format model
-│   ├── distilgpt2-company-tuned.gguf  # GGUF format (optimized)
-│   └── distilgpt2-company-tuned.json  # Training metadata
+│   ├── llama-3.2-1b-instruct-company-tuned/  # HuggingFace format model
+│   ├── llama-3.2-1b-instruct-company-tuned.gguf  # GGUF format (optimized)
+│   └── llama-3.2-1b-instruct-company-tuned.json  # Training metadata
 ├── training_data.jsonl            # Prepared training data
 └── scripts/
     ├── retrain_improved.bat       # Complete workflow

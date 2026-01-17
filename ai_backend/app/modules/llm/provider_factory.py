@@ -101,6 +101,13 @@ class ProviderRegistry:
         except ImportError:
             logger.warning("ColabLLM plugin not available")
         
+        # Register LlamaServer plugin
+        try:
+            from .llamaserver_plugin import LlamaServerProviderPlugin
+            plugins.append(LlamaServerProviderPlugin())
+        except ImportError:
+            logger.warning("LlamaServer plugin not available")
+        
         for plugin in plugins:
             self.register(plugin)
     
