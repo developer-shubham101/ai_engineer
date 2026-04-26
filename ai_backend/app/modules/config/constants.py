@@ -45,6 +45,7 @@ class LLMProvider(Enum):
     - GOOGLE: Google Gemini API models
     - GPT/OPENAI: OpenAI GPT models via API
     - HUGGINGFACE/HF: Hugging Face Inference API models
+    - COLABLLM: Custom API endpoints (legacy name for backward compatibility)
     - CUSTOMLLM: Custom/third-party API endpoints (preferred)
     - LLAMASERVER: llama-server.exe with OpenAI-compatible API (see documents/llm_cpp/)
     """
@@ -54,6 +55,7 @@ class LLMProvider(Enum):
     OPENAI = "openai"
     HUGGINGFACE = "huggingface"
     HF = "hf"   
+    COLABLLM = "colabllm"  # Legacy name for backward compatibility
     CUSTOMLLM = "customllm"  # Custom/third-party LLM APIs
     LLAMASERVER = "llamaserver"
 

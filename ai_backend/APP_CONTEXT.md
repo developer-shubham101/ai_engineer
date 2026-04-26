@@ -21,9 +21,22 @@ This system is built as a **learning playground and reference implementation** f
 ### Supported Providers
 - **Local Models**: Auto-selected from local_models.json (Mistral-7B, Phi-2, Llama-3.2, Gemma-2B via llama-cpp-python)
 - **Cloud APIs**: Google Gemini-2.5-Flash/Pro, OpenAI GPT-3.5/4, Hugging Face Inference API
-- **CustomLLM**: Custom/third-party models via /ask endpoint (replaces ColabLLM)
-- **LlamaServer**: llama-server.exe with OpenAI-compatible API (NEW)
+- **CustomLLM**: Custom/third-party models via /ask endpoint (preferred for third-party APIs)
+- **ColabLLM**: Legacy name for custom APIs (backward compatibility)
+- **LlamaServer**: llama-server.exe with OpenAI-compatible API
 - **Shared Components**: Configurable Vector Store (ChromaDB or FAISS), BGE embeddings, SQLite sessions
+
+### Provider Endpoints
+
+| Provider | Endpoint | Description | Status |
+|----------|----------|-------------|--------|
+| Local Models | `local` | GGUF models via llama-cpp-python | ✅ Active |
+| OpenAI GPT | `gpt`, `openai` | GPT-3.5, GPT-4 via OpenAI API | ✅ Active |
+| Google Gemini | `google` | Gemini-2.5-Flash/Pro via Google AI | ✅ Active |
+| Hugging Face | `huggingface`, `hf` | Various models via HF Inference API | ✅ Active |
+| CustomLLM | `customllm` | Third-party APIs via /ask endpoint | ✅ Active (Preferred) |
+| ColabLLM | `colabllm` | Third-party APIs via /ask endpoint | ✅ Active (Legacy) |
+| LlamaServer | `llamaserver` | Local server with OpenAI-compatible API | ✅ Active |
 
 ### Key Features
 - ✅ **Multi-provider LLM support** with unified API
@@ -606,7 +619,7 @@ Response: {
 ### Multi-Provider RAG (`/api/rag/`)
 
 **POST /api/rag/{provider}/query** - Unified query interface
-- **Providers**: `local`, `google`, `gpt`, `huggingface`, `customllm`, `llamaserver`
+- **Providers**: `local`, `google`, `gpt`, `openai`, `huggingface`, `hf`, `colabllm`, `customllm`, `llamaserver`
 - **Authentication**: Optional (Bearer token for personalization)
 - **RBAC**: Automatic filtering based on user role/department
 
@@ -1792,13 +1805,19 @@ OPENAI_API_KEY=your_openai_key
 GOOGLE_API_KEY=your_google_key
 HUGGINGFACE_API_TOKEN=your_hf_token
 
-# ColabLLM provider (optional)
-COLABLLM_BASE_URL=http://localhost:8080
-COLABLLM_API_KEY=
+# Custom/Third-party LLM provider (optional)
+CUSTOMLLM_BASE_URL=http://localhost:8080
+CUSTOMLLM_API_KEY=your_custom_api_key
+# Legacy support (backward compatibility)
+COLABLLM_BASE_URL=http://localhost:8080  # Falls back to CUSTOMLLM_BASE_URL
+COLABLLM_API_KEY=your_api_key            # Falls back to CUSTOMLLM_API_KEY
 
 # LlamaServer provider (NEW)
 LLAMASERVER_BASE_URL=http://127.0.0.1:8080/v1
 LLAMASERVER_MODEL_NAME=mistral-7b-instruct-v0.2
+
+# CrewAI settings
+CREW_BASE_URL=http://localhost:8080
 
 # Server configuration
 HOST=0.0.0.0
@@ -1956,13 +1975,28 @@ curl -X POST "/api/rag/gpt/query" \
   -H "Authorization: Bearer <token>" \
   -d '{"question": "What is our policy?", "use_llm": true}'
 
-# ColabLLM
-curl -X POST "/api/rag/colabllm/query" \
+# Alternative OpenAI endpoint
+curl -X POST "/api/rag/openai/query" \
   -H "Authorization: Bearer <token>" \
   -d '{"question": "What is our policy?", "use_llm": true}'
 
-# CustomLLM (preferred)
+# Hugging Face
+curl -X POST "/api/rag/huggingface/query" \
+  -H "Authorization: Bearer <token>" \
+  -d '{"question": "What is our policy?", "use_llm": true}'
+
+# Alternative Hugging Face endpoint
+curl -X POST "/api/rag/hf/query" \
+  -H "Authorization: Bearer <token>" \
+  -d '{"question": "What is our policy?", "use_llm": true}'
+
+# CustomLLM (preferred for third-party APIs)
 curl -X POST "/api/rag/customllm/query" \
+  -H "Authorization: Bearer <token>" \
+  -d '{"question": "What is our policy?", "use_llm": true}'
+
+# ColabLLM (legacy - backward compatibility)
+curl -X POST "/api/rag/colabllm/query" \
   -H "Authorization: Bearer <token>" \
   -d '{"question": "What is our policy?", "use_llm": true}'
 
