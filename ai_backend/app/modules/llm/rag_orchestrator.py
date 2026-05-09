@@ -43,6 +43,35 @@ class RAGOrchestrator(IRAGOrchestrator):
         if request.metadata and "_cached_response" in request.metadata:
             return await self.middleware_stack.process_response(request, request.metadata["_cached_response"])
 
+        # # Handle tool-based agent mode
+        if request.use_tools:
+            from app.modules.agents.agent_runner import run_agent
+
+            try:
+                # Get LLM provider for agent
+                provider_config = request.provider_specific or {}
+                llm_provider = await create_provider(request.provider, provider_config)
+
+                # Run agent with tools
+                agent_response = await run_agent(request.question, llm_provider)
+
+                return RAGResponse(
+                    answer=agent_response,
+                    retrieved_documents=[],
+                    context="Agent mode with tools",
+                    final_prompt=None,
+                    metadata={"provider": request.provider, "mode": "agent_tools"}
+                )
+            except Exception as e:
+                logger.exception("Agent tool execution failed: %s", e)
+                error_response = RAGResponse(
+                    answer=f"Agent error: {str(e)}",
+                    retrieved_documents=[],
+                    context="",
+                    metadata={"error": str(e), "mode": "agent_tools"}
+                )
+                return await self.middleware_stack.process_response(request, error_response)
+
         try:
             user_id = request.user.get("user_id") if request.user else None
             user_role = request.user.get("role") if request.user else None
@@ -167,17 +196,17 @@ class RAGOrchestrator(IRAGOrchestrator):
                         "history": history_str  # Include history in prompt_data
                     }
 
-                    logger.info("Prompt data: %s", prompt_data) 
+                    logger.info("Prompt data: %s", prompt_data)
                     logger.info("Prompt template: %s", request.prompt_template)
                     logger.info("History string %s", history_str)
 
                     if request.prompt_template == "raw_prompt":
-                        final_prompt = f"Question: {request.question}\nSources: {source_docs}" 
+                        final_prompt = f"Question: {request.question}\nSources: {source_docs}"
                     elif request.prompt_template == "no_template":
-                        final_prompt = request.question 
+                        final_prompt = request.question
                     else:
                         final_prompt = self.langchain_selector.format_prompt(prompt_data, request.prompt_template)
-                          
+
                     # Create dynamic prompt
                     # final_prompt = self.langchain_selector.format_prompt(prompt_data, request.prompt_template)
 
@@ -191,14 +220,15 @@ class RAGOrchestrator(IRAGOrchestrator):
                     #     )
                 logger.info("Generated final prompt: ====START==== \n%s\n====END===", final_prompt)
 
-
                 # Use agentic mode if enabled
                 if request.enable_agentic_mode:
                     # Agentic mode: Add reasoning and action planning to the prompt
                     agentic_prompt = f"{final_prompt}\n\nThink step by step and provide a detailed response with reasoning."
-                    response = await self.generate_response(agentic_prompt, provider, request.max_tokens, request.temperature)
+                    response = await self.generate_response(agentic_prompt, provider, request.max_tokens,
+                                                            request.temperature)
                 else:
-                    response = await self.generate_response(final_prompt, provider, request.max_tokens, request.temperature)
+                    response = await self.generate_response(final_prompt, provider, request.max_tokens,
+                                                            request.temperature)
 
                 # Validate JSON response
                 if response and response.text:

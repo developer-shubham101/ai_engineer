@@ -1311,100 +1311,83 @@ vision_provider = create_vision_provider("paddleocr")  # Switch to PaddleOCR
 - **Whisper.cpp**: Faster CPU inference
 - **Custom Emotion Models**: ML-based emotion detection
 
-## 9. Agents System (NEW)
+### Agent Tools System (NEW)
 
-### Overview
+**Function-Based Tools** (`app/modules/agents/function_tools/`):
+- **`tool_stock.py`** - Real-time stock price lookup using yfinance
+- **`tool_weather.py`** - Weather information with demo fallback
+- **`tool_file.py`** - Text file saving with security measures
 
-The system now supports a **dedicated Agents module** with LangChain-style tool orchestration, following SOLID principles and factory patterns. This provides a sandbox environment for agent experimentation with safety constraints.
+**Agent Runner** (`app/modules/agents/agent_runner.py`):
+- **Static imports** for reliability (no dynamic loading)
+- **UML flow implementation** following the exact pattern:
+  1. Build system prompt with available tools
+  2. LLM decides which tool to use (JSON response)
+  3. Execute tool and feed result back to LLM
+  4. Continue until final answer or max iterations
+- **Smart JSON extraction** with regex patterns for mixed responses
+- **Tool result tracking** and intelligent summarization
+- **Error handling** for malformed responses
 
-### Architecture Principles
+**Integration with RAG System**:
+- **`use_tools` parameter** in QueryRequest and RAGRequest
+- **RAG Orchestrator integration** - Tool mode handled in `process_query()`
+- **Provider factory support** for LLM selection
+- **Unified API** - Same `/api/rag/{provider}/query` endpoint
 
-**🏗️ SOLID Compliance:**
-- **Single Responsibility**: Each tool has one clear purpose
-- **Open/Closed**: Easy to extend with new tools without modifying existing code
-- **Liskov Substitution**: All tools implement ITool interface
-- **Interface Segregation**: Separate interfaces for tools, orchestrators, and utilities
-- **Dependency Inversion**: Orchestrator depends on abstractions, not concrete tools
+**Tool Registry**:
+```python
+REGISTRY = {
+    "get_stock_price": {
+        "fn": get_stock_price,
+        "args": ["symbol"],
+        "description": "Get current stock price for a symbol"
+    },
+    "get_weather": {
+        "fn": get_weather,
+        "args": ["city"],
+        "description": "Get current weather for a city"
+    },
+    "save_text_file": {
+        "fn": save_text_file,
+        "args": ["filename", "content"],
+        "description": "Save text content to a file"
+    }
+}
+```
 
-**🏭 Factory Pattern:**
-- `ToolFactory` - Creates individual tools with proper dependencies
-- `AgentOrchestratorFactory` - Creates orchestrators with tool sets
-- Easy switching between different tool implementations
+**Stock Tool Implementation**:
+- **yfinance library** for real stock data from Yahoo Finance
+- **No API key required** - Free access to market data
+- **Real-time prices** with proper error handling
+- **Simple response format**: `{"symbol": "AAPL", "price": 150.25, "status": "success"}`
 
-**💉 Dependency Injection:**
-- Integrated into main container (`integration.py`)
-- Tools receive dependencies through constructor injection
-- No hard-coded dependencies or singletons
-
-### Available Tools
-
-| Tool | Purpose | Dependencies |
-|------|---------|-------------|
-| `SearchDocumentsTool` | Search knowledge base | IVectorStore |
-| `GetUserTicketsTool` | Get support tickets | MockDataProvider |
-| `GetTicketCommentsTool` | Get ticket history | MockDataProvider |
-| `AnalyzeDataTool` | Analyze patterns | AnalysisProvider |
-| `ResearchDataTool` | Generate metrics | MockDataProvider |
-| `SummarizeStatusTool` | Compile information | None |
-
-### Safety Features
-
-**Following MOTIVATION.md Guidelines:**
-- ✅ **Hard Step Limit**: Maximum 5 steps (configurable)
-- ✅ **Tool Whitelisting**: Only registered tools allowed
-- ✅ **No Direct DB Access**: Tools use wrapped services
-- ✅ **Sandboxed Execution**: Isolated from production systems
-- ✅ **Error Handling**: Graceful failure recovery
-
-### Utility Classes
-
-**Separation of Concerns:**
-- `MockDataProvider` - Provides research data (tickets, comments, metrics)
-- `AnalysisProvider` - Handles data analysis logic
-- `DocumentFormatter` - Formats search results
-- `StepFormatter` - Formats execution steps and final answers
-
-### API Integration
-
-**Endpoints:**
-- `POST /api/agents/query` - Execute agent workflows
-- `GET /api/agents/status` - System status and available tools
-- `GET /api/agents/tools` - List all tools with descriptions
-- `POST /api/agents/tools/{name}/test` - Test individual tools
-
-**Usage Example:**
+**Usage Example**:
 ```bash
-curl -X POST "/api/agents/query" \
+curl -X POST "/api/rag/local/query" \
   -H "Content-Type: application/json" \
   -d '{
-    "question": "What is the status of my tickets?",
-    "tools": ["get_user_tickets", "get_ticket_comments"],
-    "max_steps": 3,
-    "debug": true
+    "question": "Get the stock price for AAPL and save it to a file",
+    "use_llm": true,
+    "use_tools": true,
+    "conversation_id": "test123"
   }'
 ```
 
-### Research Applications
+**Expected Flow**:
+1. **Tool Call 1**: `{"tool": "get_stock_price", "args": {"symbol": "AAPL"}}`
+2. **Tool Result**: `{"symbol": "AAPL", "price": 150.25, "status": "success"}`
+3. **Tool Call 2**: `{"tool": "save_text_file", "args": {"filename": "AAPL_stock.txt", "content": "AAPL: $150.25"}}`
+4. **Final Response**: `"Stock price for AAPL: $150.25\nSaved file: AAPL_stock.txt (15 characters)"`
 
-**Learning Scenarios:**
-- Multi-step reasoning patterns
-- Tool orchestration strategies
-- Error handling and recovery
-- Agent decision making
-
-**Extensibility:**
-- Easy to add new tools via factory
-- Configurable step limits and timeouts
-- Pluggable data providers
-- Custom workflow patterns
-
-### Benefits
-
-- **Clean Architecture**: SOLID principles ensure maintainability
-- **Easy Testing**: Each component can be tested independently
-- **Research Friendly**: Safe sandbox for experimentation
-- **Production Ready**: Proper error handling and logging
-- **Extensible**: Factory pattern makes adding tools trivial
+**Key Features**:
+- ✅ **Static imports** for better reliability and IDE support
+- ✅ **Regex JSON extraction** handles mixed LLM responses
+- ✅ **Tool result summarization** provides meaningful final answers
+- ✅ **Error recovery** for malformed or incomplete responses
+- ✅ **Real stock data** via yfinance (no demo/fallback data)
+- ✅ **Secure file operations** with path sanitization
+- ✅ **Integrated with RAG** - Same API, enhanced capabilities
 
 ## 10. Agentic Mode Feature (RAG Enhancement)
 

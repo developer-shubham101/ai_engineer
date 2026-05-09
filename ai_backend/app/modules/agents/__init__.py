@@ -1,1 +1,1 @@
-# Agents module for LangChain agent workflows
+"""Agent module for tool-based interactions."""

@@ -26,6 +26,7 @@ class RAGRequest:
     use_documents: bool = True  # Flag to control document retrieval
     use_conversation_history: bool = True
     enable_agentic_mode: bool = False  # Flag to enable agentic mode
+    use_tools: bool = False  # Flag to enable tool-based agent mode
     max_tokens: int = 256
     temperature: float = 0.1  # Temperature controls randomness. Low = accurate and predictable. High = creative and unpredictable.
     category: Optional[str] = None

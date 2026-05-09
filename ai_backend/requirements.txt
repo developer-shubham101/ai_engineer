@@ -68,3 +68,6 @@ ultralytics  # YOLO object detection
 
 # --- Dev / Testing ---
 pytest
+
+
+yfinance
