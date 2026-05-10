@@ -10,5 +10,6 @@ export const CONFIG_TOOLTIPS = {
   MODEL_PROVIDER: 'Select the AI model provider for processing queries. Different providers offer various capabilities and performance characteristics',
   LOCAL_MODEL: 'Choose specific local model when using local provider. Each model has different strengths in reasoning, speed, and resource usage',
   THEME: 'Select application color theme preference. Choose between light, dark, or system-based theme that follows your device settings',
-  TEMPLATE: 'Select prompt template to structure the AI response format. Configure in admin settings to manage templates. Based on template, LLM will give different response styles like simple, technical, descriptive, or structured responses'
+  TEMPLATE: 'Select prompt template to structure the AI response format. Configure in admin settings to manage templates. Based on template, LLM will give different response styles like simple, technical, descriptive, or structured responses',
+  USE_TOOLS: 'Enable agentic tools so the AI can perform actions like file saving, web search, or calculations alongside answering questions'
 }

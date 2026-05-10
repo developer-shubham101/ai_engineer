@@ -2,13 +2,21 @@
 
 ## Overview
 
-The new template system uses JSON message arrays instead of string parsing, making it much more reliable and easier to use. Templates are stored as message arrays in the database.
+The new template system uses JSON message arrays instead of string parsing, providing strict LLM behavior control. Templates are stored as message arrays in the database and follow a specific structure for optimal message ordering.
 
 ## Template Structure
 
-Each template consists of:
-- **messages**: Array of message objects with `role` and `content`
-- **prompt_variables**: Pipe-separated list of variables used in the template
+Each template **must** contain exactly 2 messages:
+1. **System message** (index 0) - Defines AI behavior and context
+2. **User message** (index 1) - Contains the user's question with variables
+
+### Message Flow
+When a template is used, messages are assembled in this order:
+1. **System message** (from template[0]) - with variable substitution
+2. **Conversation history** (optional) - previous user/assistant exchanges
+3. **User message** (from template[1]) - with variable substitution
+
+This ensures all system instructions come first, followed by context (history), and finally the current user query.
 
 ## Example Templates
 
@@ -55,11 +63,11 @@ Each template consists of:
   "messages": [
     {
       "role": "system", 
-      "content": "You are a professional enterprise assistant. Use the provided context to answer questions accurately. User role: {user_role}, Department: {department}"
+      "content": "You are a professional enterprise assistant. Use the provided context to answer questions accurately. User role: {user_role}, Department: {department}\n\nRelevant documents:\n{source_docs}"
     },
     {
       "role": "user", 
-      "content": "Context: {source_docs}\n\nQuestion: {user_question}"
+      "content": "{user_question}"
     }
   ],
   "prompt_variables": "user_role|department|source_docs|user_question"
@@ -125,22 +133,66 @@ curl -X POST "http://localhost:8000/api/rag/local/query" \
 ## Available Variables
 
 The system supports these variables in templates:
-- `{user_question}` - The user's question
+- `{user_question}` - The user's question (required)
 - `{source_docs}` - Retrieved document context
-- `{history}` - Conversation history
 - `{user_role}` - User's role (Employee, Manager, etc.)
 - `{department}` - User's department
 - `{user_profile_summary}` - User profile information
 - `{max_tokens}` - Token limit
 
+**Note**: History is automatically inserted between system and user messages, so you don't need a `{history}` variable.
+
+## Message Assembly Example
+
+Given this template:
+```json
+{
+  "messages": [
+    {"role": "system", "content": "You are a helpful assistant."},
+    {"role": "user", "content": "{user_question}"}
+  ]
+}
+```
+
+With conversation history, the final message array becomes:
+```json
+[
+  {"role": "system", "content": "You are a helpful assistant."},
+  {"role": "user", "content": "Previous question"},
+  {"role": "assistant", "content": "Previous answer"},
+  {"role": "user", "content": "Current question"}
+]
+```
+
 ## Benefits of New System
 
 1. **No String Parsing**: Direct JSON message arrays
-2. **Strict Role Enforcement**: System messages are properly separated
-3. **Easy Testing**: Built-in template testing endpoint
-4. **Variable Substitution**: Clean variable replacement
-5. **Database Storage**: Templates stored in SQLite with versioning
-6. **API Management**: Full CRUD operations via REST API
+2. **Strict Role Enforcement**: System messages properly separated from user messages
+3. **Proper Message Ordering**: System → History → User
+4. **Easy Testing**: Built-in template testing endpoint
+5. **Variable Substitution**: Clean variable replacement in both messages
+6. **Database Storage**: Templates stored in SQLite with versioning
+7. **API Management**: Full CRUD operations via REST API
+8. **Multi-Provider Support**: Works with all LLM providers (local, OpenAI, Google, etc.)
+
+## Provider Compatibility
+
+All providers now accept message arrays:
+- **LocalLLMProvider**: Converts messages to prompt string
+- **OpenAILLMProvider**: Uses messages directly (native support)
+- **GoogleLLMProvider**: Converts messages to prompt string
+- **HuggingFaceLLMProvider**: Converts messages to prompt string
+- **CustomLLMProvider**: Converts messages to prompt string
+- **LlamaServerProvider**: Converts to AutoGen core messages
+
+## Template Best Practices
+
+1. **Always Use 2 Messages**: System (index 0) and User (index 1)
+2. **Clear System Messages**: Define the AI's role and behavior clearly
+3. **Variable Placement**: Put context variables in system message, question in user message
+4. **Role Consistency**: Keep system messages focused on behavior and context
+5. **Testing**: Always test templates before production use
+6. **Documentation**: Document template purpose and required variables
 
 ## Migration from Old System
 
@@ -149,11 +201,4 @@ Old templates using string parsing are automatically converted. The new system:
 - Provides backward compatibility
 - Offers better error handling
 - Enables easier template management
-
-## Template Best Practices
-
-1. **Clear System Messages**: Define the AI's role and behavior clearly
-2. **Variable Naming**: Use descriptive variable names
-3. **Role Consistency**: Keep system messages focused on behavior
-4. **Testing**: Always test templates before production use
-5. **Documentation**: Document template purpose and variables
+- Ensures proper message ordering for all LLM providers

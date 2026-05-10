@@ -37,6 +37,7 @@ export default function RAGChat({ onLogout }) {
   // Existing state
   const [useLlm, setUseLlm] = useState(false)
   const [useDocuments, setUseDocuments] = useState(true)
+  const [useTools, setUseTools] = useState(false)
   const [useConversationHistory, setUseConversationHistory] = useState(true)
   const [topK, setTopK] = useState(3)
   const [maxTokens, setMaxTokens] = useState(512)
@@ -404,6 +405,7 @@ export default function RAGChat({ onLogout }) {
       top_k: Number(topK || 3),
       use_llm: !!useLlm,
       use_documents: !!useDocuments,
+      use_tools: !!useTools,
       use_conversation_history: !!useConversationHistory,
       temperature: temperature,
       max_tokens: Number(maxTokens || 512),
@@ -965,6 +967,18 @@ export default function RAGChat({ onLogout }) {
                       <label className="form-check-label d-flex align-items-center gap-1">
                         Use Docs
                         <i className="bi bi-info-circle text-muted" title={CONFIG_TOOLTIPS.USE_DOCS} style={{fontSize: '0.8em'}}></i>
+                      </label>
+                    </div>
+                    <div className="form-check form-switch">
+                      <input
+                        className="form-check-input"
+                        type="checkbox"
+                        checked={useTools}
+                        onChange={(e) => setUseTools(e.target.checked)}
+                      />
+                      <label className="form-check-label d-flex align-items-center gap-1">
+                        Use Tools
+                        <i className="bi bi-info-circle text-muted" title={CONFIG_TOOLTIPS.USE_TOOLS} style={{fontSize: '0.8em'}}></i>
                       </label>
                     </div>
                     <div className="form-check form-switch">

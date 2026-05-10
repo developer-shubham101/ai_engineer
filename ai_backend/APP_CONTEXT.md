@@ -1044,7 +1044,132 @@ A comprehensive system for enriching documents with semantic metadata using loca
 
 ---
 
-## 7. RBAC System
+## 7. Template System - Message-Based Architecture
+
+### Overview
+
+The template system uses **JSON message arrays** instead of string parsing for strict LLM behavior control. Templates are stored in the database and follow a specific structure for optimal message ordering.
+
+### Template Structure
+
+Each template **must** contain exactly 2 messages:
+1. **System message** (index 0) - Defines AI behavior and context
+2. **User message** (index 1) - Contains the user's question with variables
+
+### Message Assembly Flow
+
+When a template is used, messages are assembled in this order:
+1. **System message** (from template[0]) - with variable substitution
+2. **Conversation history** (optional) - previous user/assistant exchanges
+3. **User message** (from template[1]) - with variable substitution
+
+This ensures all system instructions come first, followed by context (history), and finally the current user query.
+
+### Example Template
+
+```json
+{
+  "name": "pirate_template",
+  "messages": [
+    {
+      "role": "system", 
+      "content": "You are a pirate. Always respond like a pirate with 'Ahoy!' and pirate language. Use words like 'matey', 'arrr', 'ye', 'me hearty' in every response. Never break character - you are always a pirate."
+    },
+    {
+      "role": "user", 
+      "content": "{user_question}"
+    }
+  ],
+  "prompt_variables": "user_question"
+}
+```
+
+### Available Variables
+
+- `{user_question}` - The user's question (required)
+- `{source_docs}` - Retrieved document context
+- `{user_role}` - User's role (Employee, Manager, etc.)
+- `{department}` - User's department
+- `{user_profile_summary}` - User profile information
+- `{max_tokens}` - Token limit
+
+**Note**: History is automatically inserted between system and user messages, so you don't need a `{history}` variable.
+
+### Message Builder Implementation
+
+The `_build_messages` method in `rag_orchestrator.py` follows this simple flow:
+
+```python
+async def _build_messages(template_name, user_question, documents, history, ...):
+    # 1. Get template from database
+    template_obj = template_manager.get_template(template_name)
+    
+    # 2. Build system message (template[0]) with variable substitution
+    system_msg = template_obj['messages'][0]
+    # Replace {user_question}, {source_docs}, etc.
+    
+    # 3. Add conversation history (optional)
+    for msg in history:
+        messages.append({"role": msg.speaker, "content": msg.content})
+    
+    # 4. Build user message (template[1]) with variable substitution
+    user_msg = template_obj['messages'][1]
+    # Replace {user_question}, {source_docs}, etc.
+    
+    return messages  # ['system', 'user', 'assistant', 'user', ...]
+```
+
+### Provider Compatibility
+
+All providers accept message arrays:
+- **LocalLLMProvider**: Converts messages to prompt string
+- **OpenAILLMProvider**: Uses messages directly (native support)
+- **GoogleLLMProvider**: Converts messages to prompt string
+- **HuggingFaceLLMProvider**: Converts messages to prompt string
+- **CustomLLMProvider**: Converts messages to prompt string
+- **LlamaServerProvider**: Converts to AutoGen core messages
+
+### API Usage
+
+```bash
+# Use template in RAG query
+curl -X POST "http://localhost:8000/api/rag/local/query" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "question": "What is the capital of France?",
+    "conversation_id": "test123",
+    "prompt_template": "pirate_template",
+    "use_llm": true
+  }'
+```
+
+**Expected Response**: *"Ahoy matey! The capital of France be Paris, arrr! That be a fine city for any seafarin' soul to visit, me hearty!"*
+
+### Benefits
+
+1. **No String Parsing**: Direct JSON message arrays
+2. **Strict Role Enforcement**: System messages properly separated from user messages
+3. **Proper Message Ordering**: System → History → User
+4. **Variable Substitution**: Clean variable replacement in both messages
+5. **Multi-Provider Support**: Works with all LLM providers
+6. **Easy Testing**: Built-in template testing endpoint
+
+### Template Management API
+
+**Base Path**: `/api/templates`
+
+- `POST /api/templates` - Create template
+- `GET /api/templates` - List all templates
+- `GET /api/templates/{name}` - Get specific template
+- `PUT /api/templates/{name}` - Update template
+- `DELETE /api/templates/{name}` - Delete template
+- `POST /api/templates/test/{name}` - Test template
+
+**Documentation**: See [TEMPLATE_SYSTEM_USAGE.md](file:///I:/Workspace/GitHub/ai_engineer/ai_backend/TEMPLATE_SYSTEM_USAGE.md) for complete details.
+
+---
+
+## 8. RBAC System
 
 ### Role Hierarchy
 ```
