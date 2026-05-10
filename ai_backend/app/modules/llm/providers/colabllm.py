@@ -1,7 +1,7 @@
 """Custom third-party LLM provider implementation."""
 
 import logging
-from typing import Dict, Any
+from typing import Dict, Any, Union, List
 
 import requests
 
@@ -22,15 +22,24 @@ class CustomLLMProvider(ILLMProvider):
 
     async def generate(
             self,
-            prompt: str,
+            prompt: Union[str, List[Dict[str, str]]],
             max_tokens: int = 128,
             temperature: float = 0.6,
             **kwargs
     ) -> LLMResponse:
-        """Generate response using custom third-party /ask endpoint."""
+        """Generate response using custom third-party /ask endpoint.
+        Accepts either a string prompt or a list of message dicts with 'role' and 'content'.
+        """
         try:
+            # Convert messages to prompt if needed
+            if isinstance(prompt, list):
+                logger.debug("Converting messages to prompt for CustomLLM")
+                prompt_str = self._messages_to_prompt(prompt)
+            else:
+                prompt_str = prompt
+            
             payload = {
-                "prompt": prompt,
+                "prompt": prompt_str,
                 "max_tokens": max_tokens,
                 "temperature": temperature,
                 "top_p": kwargs.get("top_p", 0.9),
@@ -96,6 +105,15 @@ class CustomLLMProvider(ILLMProvider):
             "supports_streaming": False,
             "max_context": 2048
         }
+    
+    def _messages_to_prompt(self, messages: List[Dict[str, str]]) -> str:
+        """Convert messages array to single prompt string."""
+        prompt_parts = []
+        for msg in messages:
+            role = msg.get("role", "user").upper()
+            content = msg.get("content", "")
+            prompt_parts.append(f"{role}: {content}")
+        return "\n\n".join(prompt_parts)
 
 
 # Backward compatibility alias

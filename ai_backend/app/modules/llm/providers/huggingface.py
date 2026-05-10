@@ -4,7 +4,7 @@ Hugging Face LLM provider implementation using HF Inference API.
 """
 
 import logging
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, Union, List
 import os
 import time
 
@@ -37,9 +37,10 @@ class HuggingFaceLLMProvider(ILLMProvider):
         else:
             self.client = None
     
-    async def generate(self, prompt: str, max_tokens: int = 256, temperature: float = 0.1, **kwargs) -> LLMResponse:
+    async def generate(self, prompt: Union[str, List[Dict[str, str]]], max_tokens: int = 256, temperature: float = 0.1, **kwargs) -> LLMResponse:
         """
         Generate a response using Hugging Face Inference API.
+        Accepts either a string prompt or a list of message dicts with 'role' and 'content'.
         """
         if not HF_AVAILABLE:
             raise ConnectionError("Hugging Face Hub not installed. Install with: pip install huggingface_hub")
@@ -51,7 +52,15 @@ class HuggingFaceLLMProvider(ILLMProvider):
             from app.logging_config import log_llm_interaction, log_sensitive_debug, log_performance_metric
             
             hf_start_time = time.time()
-            prompt_tokens = estimate_tokens_from_text(prompt)
+            
+            # Convert messages to prompt if needed
+            if isinstance(prompt, list):
+                logger.debug("Converting messages to prompt for Hugging Face LLM")
+                prompt_str = self._messages_to_prompt(prompt)
+            else:
+                prompt_str = prompt
+            
+            prompt_tokens = estimate_tokens_from_text(prompt_str)
             
             log_llm_interaction(
                 logger, "HUGGINGFACE", prompt_tokens, 0,
@@ -60,14 +69,14 @@ class HuggingFaceLLMProvider(ILLMProvider):
             
             log_sensitive_debug(
                 logger, "Hugging Face LLM request",
-                prompt=prompt, model=self.model_name
+                prompt=prompt_str, model=self.model_name
             )
 
             # The text_generation method is not async, so we'd need to run it in a threadpool
             from fastapi.concurrency import run_in_threadpool
             response = await run_in_threadpool(
                 self.client.text_generation,
-                prompt=prompt,
+                prompt=prompt_str,
                 max_new_tokens=max_tokens,
                 temperature=temperature if temperature > 0 else None, # Some models fail with temp=0
                 return_full_text=False
@@ -121,3 +130,12 @@ class HuggingFaceLLMProvider(ILLMProvider):
     def get_max_context_length(self) -> int:
         # This is highly model-dependent. A default, but should be looked up.
         return 2048
+    
+    def _messages_to_prompt(self, messages: List[Dict[str, str]]) -> str:
+        """Convert messages array to single prompt string."""
+        prompt_parts = []
+        for msg in messages:
+            role = msg.get("role", "user").upper()
+            content = msg.get("content", "")
+            prompt_parts.append(f"{role}: {content}")
+        return "\n\n".join(prompt_parts)

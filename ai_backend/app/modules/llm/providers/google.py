@@ -1,7 +1,7 @@
 import os
 import logging
 import time
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, Union, List
 
 from dotenv import load_dotenv
 from langchain_google_genai import ChatGoogleGenerativeAI
@@ -45,9 +45,10 @@ class GoogleLLMProvider(ILLMProvider):
             logger.error(f"Failed to initialize Google LLM: {e}")
             return None
 
-    async def generate(self, prompt: str, max_tokens: int = 256, temperature: float = 0.1, **kwargs) -> LLMResponse:
+    async def generate(self, prompt: Union[str, List[Dict[str, str]]], max_tokens: int = 256, temperature: float = 0.1, **kwargs) -> LLMResponse:
         """
         Generate a response using Google Gemini LLM.
+        Accepts either a string prompt or a list of message dicts with 'role' and 'content'.
         """
         if not self.llm:
             raise ConnectionError("Google LLM is not initialized. Check your API key.")
@@ -56,17 +57,25 @@ class GoogleLLMProvider(ILLMProvider):
             from app.logging_config import log_llm_interaction, log_sensitive_debug, log_performance_metric
             
             google_start_time = time.time()
-            prompt_tokens = estimate_tokens_from_text(prompt)
+            
+            # Convert messages to prompt if needed
+            if isinstance(prompt, list):
+                logger.debug("Converting messages to prompt for Google LLM")
+                prompt_str = self._messages_to_prompt(prompt)
+            else:
+                prompt_str = prompt
+            
+            prompt_tokens = estimate_tokens_from_text(prompt_str)
             
             log_llm_interaction(
                 logger, "GOOGLE_GEMINI", prompt_tokens, 0,  # response tokens unknown yet
-                prompt_len=len(prompt), session_id=kwargs.get("session_id", "none"),
+                prompt_len=len(prompt_str), session_id=kwargs.get("session_id", "none"),
                 model=self.model_name
             )
             
             log_sensitive_debug(
                 logger, "Google LLM request",
-                full_prompt=prompt, prompt_len=len(prompt)
+                full_prompt=prompt_str, prompt_len=len(prompt_str)
             )
             
             temp_llm = ChatGoogleGenerativeAI(
@@ -75,7 +84,7 @@ class GoogleLLMProvider(ILLMProvider):
                 convert_system_message_to_human=True,
                 temperature=temperature
             )
-            answer = await run_in_threadpool(temp_llm.invoke, prompt)
+            answer = await run_in_threadpool(temp_llm.invoke, prompt_str)
             answer_content = answer.content if answer and hasattr(answer, 'content') else str(answer)
             
             google_duration = (time.time() - google_start_time) * 1000
@@ -123,3 +132,12 @@ class GoogleLLMProvider(ILLMProvider):
     
     def get_max_context_length(self) -> int:
         return 32768
+    
+    def _messages_to_prompt(self, messages: List[Dict[str, str]]) -> str:
+        """Convert messages array to single prompt string."""
+        prompt_parts = []
+        for msg in messages:
+            role = msg.get("role", "user").upper()
+            content = msg.get("content", "")
+            prompt_parts.append(f"{role}: {content}")
+        return "\n\n".join(prompt_parts)

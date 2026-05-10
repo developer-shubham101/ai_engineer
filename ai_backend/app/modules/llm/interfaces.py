@@ -1,7 +1,7 @@
 """LLM provider interfaces."""
 
 from abc import ABC, abstractmethod
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, Union
 from dataclasses import dataclass
 
 
@@ -70,8 +70,8 @@ class ILLMProvider(ABC):
     """Interface for LLM providers."""
     
     @abstractmethod
-    async def generate(self, prompt: str, max_tokens: int = 256, temperature: float = 0.1, **kwargs) -> LLMResponse:
-        """Generate response from prompt."""
+    async def generate(self, prompt: Union[str, List[Dict[str, str]]], max_tokens: int = 256, temperature: float = 0.1, **kwargs) -> LLMResponse:
+        """Generate response from prompt (string) or messages (list of dicts with 'role' and 'content')."""
         pass
     
     @abstractmethod

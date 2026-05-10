@@ -5,7 +5,7 @@ Local LLM provider implementation.
 from __future__ import annotations
 
 import logging
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, Union, List
 import time
 
 from app.modules.llm.interfaces import ILLMProvider, LLMResponse
@@ -34,14 +34,20 @@ class LocalLLMProvider(ILLMProvider):
             self._llm_instance = get_llm_instance(self.model_name)
         return self._llm_instance
     
-    async def generate(self, prompt: str, max_tokens: int = 256, temperature: float = 0.1, **kwargs) -> LLMResponse:
+    async def generate(self, prompt: Union[str, List[Dict[str, str]]], max_tokens: int = 256, temperature: float = 0.1, **kwargs) -> LLMResponse:
         """
         Generate a response using local LLM.
+        Accepts either a string prompt or a list of message dicts with 'role' and 'content'.
         """
         model_key = kwargs.get("model_key")
         if model_key:
             self.model_name = model_key
             self._llm_instance = None # Reset instance to load new model
+        
+        # Convert messages to prompt if needed
+        if isinstance(prompt, list):
+            logger.debug("Converting messages to prompt for local LLM")
+            prompt = self._messages_to_prompt(prompt)
         
         logger.debug("Generating response with local LLM, model_key=%s", self.model_name)
         
@@ -148,3 +154,12 @@ class LocalLLMProvider(ILLMProvider):
     def get_max_context_length(self) -> int:
         # A common default for local models
         return 2048
+    
+    def _messages_to_prompt(self, messages: List[Dict[str, str]]) -> str:
+        """Convert messages array to single prompt string."""
+        prompt_parts = []
+        for msg in messages:
+            role = msg.get("role", "user").upper()
+            content = msg.get("content", "")
+            prompt_parts.append(f"{role}: {content}")
+        return "\n\n".join(prompt_parts)

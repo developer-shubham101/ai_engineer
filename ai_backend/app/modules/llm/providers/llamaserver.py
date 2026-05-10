@@ -1,7 +1,7 @@
 """LlamaServer provider implementation using OpenAI-compatible API."""
 
 import logging
-from typing import Dict, Any
+from typing import Dict, Any, Union, List
 
 from autogen_ext.models.openai import OpenAIChatCompletionClient
 
@@ -28,26 +28,53 @@ class LlamaServerProvider(ILLMProvider):
                 "json_output": False,
                 "structured_output": False,
                 "family": "unknown",
+                "multiple_system_messages": True,  # Allow multiple system messages
             },
         )
 
     async def generate(
             self,
-            prompt: str,
+            prompt: Union[str, List[Dict[str, str]]],
             max_tokens: int = 256,
             temperature: float = 0.7,
             **kwargs
     ) -> LLMResponse:
-        """Generate response using llama-server."""
+        """Generate response using llama-server.
+        Accepts either a string prompt or a list of message dicts with 'role' and 'content'.
+        """
         try:
-            from autogen_agentchat.messages import UserMessage
-            messages = [UserMessage(content=prompt, source="user")]
+            from autogen_core.models import UserMessage as CoreUserMessage, SystemMessage as CoreSystemMessage, AssistantMessage as CoreAssistantMessage
             
+            # Convert to AutoGen core message format (for model client)
+            if isinstance(prompt, str):
+                # String prompt - convert to single user message
+                logger.debug("[LLAMASERVER] Converting string prompt to CoreUserMessage")
+                messages = [CoreUserMessage(content=prompt, source="user")]
+            else:
+                # Message array - convert each message to appropriate core message type
+                logger.debug(f"[LLAMASERVER] Converting {len(prompt)} messages to AutoGen core format")
+                messages = []
+                for msg in prompt:
+                    role = msg.get("role", "user")
+                    content = msg.get("content", "")
+                    
+                    if role == "system":
+                        messages.append(CoreSystemMessage(content=content))
+                    elif role == "assistant":
+                        messages.append(CoreAssistantMessage(content=content, source="assistant"))
+                    else:  # user or any other role
+                        messages.append(CoreUserMessage(content=content, source="user"))
+                
+                logger.debug(f"[LLAMASERVER] Converted to {len(messages)} core messages")
+                logger.debug(f"[LLAMASERVER] Message types: {[type(m).__name__ for m in messages]}")
+            
+            logger.debug(f"[LLAMASERVER] Calling llama-server with {len(messages)} messages")
             response = await self.client.create(
                 messages=messages
             )
             
             text = response.content if hasattr(response, 'content') else str(response)
+            logger.debug(f"[LLAMASERVER] Response length: {len(text)} characters")
             
             return LLMResponse(
                 text=text,
@@ -55,7 +82,7 @@ class LlamaServerProvider(ILLMProvider):
             )
 
         except Exception as e:
-            logger.error(f"LlamaServer generation failed: {e}")
+            logger.error(f"[LLAMASERVER] Generation failed: {e}", exc_info=True)
             return LLMResponse(
                 text=f"Generation failed: {str(e)}",
                 metadata={"provider": "llamaserver", "error": str(e)}

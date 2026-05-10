@@ -6,6 +6,7 @@ OpenAI LLM provider implementation.
 import logging
 import os
 import time
+from typing import Union, List, Dict, Any
 
 from app.modules.llm.interfaces import ILLMProvider, LLMResponse
 from app.modules.llm.prompt_builder import estimate_tokens_from_text
@@ -35,9 +36,10 @@ class OpenAILLMProvider(ILLMProvider):
         self.model_name = model_name
         self.provider_name = "openai"
     
-    async def generate(self, prompt: str, max_tokens: int = 256, temperature: float = 0.1, **kwargs) -> LLMResponse:
+    async def generate(self, prompt: Union[str, List[Dict[str, str]]], max_tokens: int = 256, temperature: float = 0.1, **kwargs) -> LLMResponse:
         """
         Generate a response using OpenAI GPT models.
+        Accepts either a string prompt or a list of message dicts with 'role' and 'content'.
         """
         if not OPENAI_AVAILABLE:
             raise ConnectionError("OpenAI package not installed. Install with: pip install openai")
@@ -50,12 +52,14 @@ class OpenAILLMProvider(ILLMProvider):
             
             gpt_start_time = time.time()
             
-            # This prompt is not structured with roles. The full prompt is passed as a single string.
-            # For OpenAI, it's better to structure it with roles.
-            # Assuming the prompt is a user message.
-            messages = [{"role": "user", "content": prompt}]
-            
-            total_prompt_tokens = estimate_tokens_from_text(prompt)
+            # Convert to messages format if string prompt
+            if isinstance(prompt, str):
+                messages = [{"role": "user", "content": prompt}]
+                total_prompt_tokens = estimate_tokens_from_text(prompt)
+            else:
+                messages = prompt
+                # Estimate tokens from all messages
+                total_prompt_tokens = sum(estimate_tokens_from_text(msg.get("content", "")) for msg in messages)
             
             log_llm_interaction(
                 logger, "OPENAI_GPT", total_prompt_tokens, 0,  # response tokens unknown yet

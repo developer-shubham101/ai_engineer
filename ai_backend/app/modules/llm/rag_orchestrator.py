@@ -152,105 +152,39 @@ class RAGOrchestrator(IRAGOrchestrator):
                 provider_config = request.provider_specific or {}
                 provider = await create_provider(request.provider, provider_config)
 
-                # Format history
-                history_str = ""
-                if request.use_conversation_history:
-                    if session_history:
-                        history_str = self.session_manager.render_history(session_history)
+                # Get user context
+                user_role = request.user.get("role", "Guest") if request.user else "Guest"
+                department = request.user.get("department", "General") if request.user else "General"
 
-                USE_CUSTOM_PROMPT_BUILDER = False
-                if USE_CUSTOM_PROMPT_BUILDER:
-                    final_prompt = await self.prompt_chain.build_prompt(
-                        question=request.question,
-                        context=context,
-                        user=request.user,
-                        session_id=session_id,
-                        history=history_str,
-                        category=request.category
-                    )
-                else:
-                    # Use LangChain dynamic prompt selector
-                    user_role = request.user.get("role", "Guest") if request.user else "Guest"
-                    department = request.user.get("department", "General") if request.user else "General"
-
-                    # Get context size from provider
-                    context_size = getattr(provider, 'context_size', 2048) if provider else 2048
-
-                    # Format source docs
-                    source_docs = "\n".join(
-                        [doc.get("text", "") for doc in documents[:5]]
-                    )
-
-                    logger.info("Source docs: \n%s\n=======\n", source_docs)
-                    logger.info("History: \n%s\n=======\n", history_str)
-
-                    # Prepare prompt data
-                    prompt_data = {
-                        "context_size": context_size,
-                        "user_role": user_role,
-                        "department": department,
-                        "user_question": request.question,
-                        "max_tokens": request.max_tokens,
-                        "user_profile_summary": str(profile) if profile else "No profile",
-                        "source_docs": source_docs,
-                        "history": history_str  # Include history in prompt_data
-                    }
-
-                    logger.info("Prompt data: %s", prompt_data)
-                    logger.info("Prompt template: %s", request.prompt_template)
-                    logger.info("History string %s", history_str)
-
-                    if request.prompt_template == "raw_prompt":
-                        final_prompt = f"Question: {request.question}\nSources: {source_docs}"
-                    elif request.prompt_template == "no_template":
-                        final_prompt = request.question
-                    else:
-                        final_prompt = self.langchain_selector.format_prompt(prompt_data, request.prompt_template)
-
-                    # Create dynamic prompt
-                    # final_prompt = self.langchain_selector.format_prompt(prompt_data, request.prompt_template)
-
-                    # if not template:
-                    #     logger.error("Failed to get prompt template.")
-                    #     final_prompt = f"Question: {request.question}\nSources: {source_docs}"
-                    # else:
-                    #     final_prompt = self.langchain_selector.format_prompt(
-                    #         template=template,
-                    #         prompt_data=prompt_data
-                    #     )
-                logger.info("Generated final prompt: ====START==== \n%s\n====END===", final_prompt)
-
-                # Use agentic mode if enabled
-                if request.enable_agentic_mode:
-                    # Agentic mode: Add reasoning and action planning to the prompt
-                    agentic_prompt = f"{final_prompt}\n\nThink step by step and provide a detailed response with reasoning."
-                    response = await self.generate_response(agentic_prompt, provider, request.max_tokens,
-                                                            request.temperature)
-                else:
-                    response = await self.generate_response(final_prompt, provider, request.max_tokens,
-                                                            request.temperature)
-
-                # Validate JSON response
+                # Build messages array directly
+                messages = await self._build_messages(
+                    template_name=request.prompt_template,
+                    user_question=request.question,
+                    documents=documents if request.use_documents else [],
+                    history=session_history if request.use_conversation_history else [],
+                    user_role=user_role,
+                    department=department,
+                    user_profile=profile,
+                    max_tokens=request.max_tokens
+                )
+                
+                logger.debug(f"[RAG DEBUG] Generated {messages} messages for LLM")
+                
+                # Generate response using messages directly
+                response = await provider.generate(
+                    prompt=messages,
+                    max_tokens=request.max_tokens,
+                    temperature=request.temperature
+                )
+                
                 if response and response.text:
-                    logger.info("Generated response: ====START==== \n%s\n====END===", response.text)
                     answer = response.text
-                    # validated = self.langchain_selector.validate_response(response.text)
-                    # if validated:
-                    #     logger.info("Validated response: ====START==== \n%s\n====END===", validated.model_dump_json())
-                    #     answer = validated.model_dump_json()
-                    # else:
-                    #     logger.info("Failed to validate response: ====START==== \n%s\n====END===", response.text)
-                    #     # Retry with fallback template
-                    #     fallback_template = self.langchain_selector.get_fallback_template()
-                    #     fallback_prompt = fallback_template.format(
-                    #         user_question=prompt_data.get("user_question", ""),
-                    #         source_docs=prompt_data.get("source_docs", "")
-                    #     )
-                    #     retry_response = await self.generate_response(fallback_prompt, provider, request.max_tokens,
-                    #                                                   request.temperature)
-                    #     answer = retry_response.text if retry_response else '{"answer": "I could not process your request", "sources": [], "confidence": "low"}'
+                    final_prompt = self._format_messages_for_debug(messages)
+                    logger.debug(f"[RAG DEBUG] LLM response length: {len(answer)} characters")
                 else:
-                    answer = '{"answer": "I found relevant documents but couldn\'t generate a response", "sources": [], "confidence": "low"}'
+                    answer = "I found relevant documents but couldn't generate a response"
+                    final_prompt = self._format_messages_for_debug(messages)
+                    logger.warning("[RAG DEBUG] LLM returned empty response")
 
                 log_timestamp = datetime.now().isoformat()
                 logger.info(f"""
@@ -574,6 +508,91 @@ class RAGOrchestrator(IRAGOrchestrator):
                 )
             logger.debug(f"Stored conversation with RAG logging in conversation {conversation_id}")
 
+    async def _build_messages(self, template_name: str, user_question: str, 
+                             documents: List[Dict[str, Any]], history: List[Dict[str, Any]],
+                             user_role: str, department: str, user_profile: Dict[str, Any],
+                             max_tokens: int) -> List[Dict[str, str]]:
+        """Build messages: system (template 1st), history (optional), user (template 2nd)."""
+        logger.info(f"[MESSAGE BUILD] ========== Starting Message Build ==========")
+        logger.info(f"[MESSAGE BUILD] Template: '{template_name}'")
+        logger.info(f"[MESSAGE BUILD] User Question: '{user_question[:100]}...'")
+        logger.info(f"[MESSAGE BUILD] Documents count: {len(documents)}")
+        logger.info(f"[MESSAGE BUILD] History count: {len(history)}")
+        
+        messages = []
+        
+        # Prepare variables
+        source_docs = "\n\n".join([
+            f"Document {i+1}: {doc.get('text', '')[:500]}..."
+            for i, doc in enumerate(documents[:5])
+        ]) if documents else ""
+        
+        variables = {
+            'user_question': user_question,
+            'source_docs': source_docs,
+            'user_role': user_role,
+            'department': department,
+            'user_profile_summary': str(user_profile) if user_profile else "No profile",
+            'max_tokens': str(max_tokens)
+        }
+        logger.info(f"[MESSAGE BUILD] Variables: {list(variables.keys())}")
+        
+        # Get template
+        template_obj = None
+        if template_name and not template_name.startswith("SYSTEM:"):
+            from ..integration import get_container
+            container = get_container()
+            template_manager = container.get_template_manager()
+            template_obj = template_manager.get_template(template_name)
+            logger.info(f"[MESSAGE BUILD] Template found: {template_obj is not None}")
+        
+        # 1. System message (first element from template)
+        if template_obj and template_obj.get('messages') and len(template_obj['messages']) > 0:
+            system_msg = template_obj['messages'][0].copy()
+            content = system_msg['content']
+            for var_name, var_value in variables.items():
+                content = content.replace(f'{{{var_name}}}', var_value)
+            system_msg['content'] = content
+            messages.append(system_msg)
+            logger.info(f"[MESSAGE BUILD] Added system message from template")
+        else:
+            messages.append({
+                "role": "system",
+                "content": f"You are a helpful enterprise assistant. User role: {user_role}, Department: {department}"
+            })
+            logger.info(f"[MESSAGE BUILD] Added default system message")
+        
+        # 2. History (optional)
+        if history:
+            for msg in history:
+                role = "user" if msg.get("speaker") == "user" else "assistant"
+                messages.append({"role": role, "content": msg.get("content", "")})
+            logger.info(f"[MESSAGE BUILD] Added {len(history)} history messages")
+        
+        # 3. User message (second element from template)
+        if template_obj and template_obj.get('messages') and len(template_obj['messages']) > 1:
+            user_msg = template_obj['messages'][1].copy()
+            content = user_msg['content']
+            for var_name, var_value in variables.items():
+                content = content.replace(f'{{{var_name}}}', var_value)
+            user_msg['content'] = content
+            messages.append(user_msg)
+            logger.info(f"[MESSAGE BUILD] Added user message from template")
+        else:
+            messages.append({"role": "user", "content": user_question})
+            logger.info(f"[MESSAGE BUILD] Added default user message")
+        
+        logger.info(f"[MESSAGE BUILD] ========== Complete ==========")
+        logger.info(f"[MESSAGE BUILD] Final: {messages}")
+        logger.info(f"[MESSAGE BUILD] Roles: {[msg.get('role') for msg in messages]}")
+        
+        return messages
+
+    
+    def _format_messages_for_debug(self, messages: List[Dict[str, str]]) -> str:
+        """Format messages for debug logging."""
+        return "\n\n".join([f"{msg['role'].upper()}: {msg['content']}" for msg in messages])
+    
     async def build_context(self, documents: List[Dict[str, Any]]) -> str:
         """Build context from retrieved documents."""
         if not documents:
