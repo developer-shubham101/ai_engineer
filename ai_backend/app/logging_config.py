@@ -1,7 +1,9 @@
 import logging
+import sys
 from datetime import datetime
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
+from typing import Optional
 
 LOG_DIR = Path("logs")
 LOG_DIR.mkdir(exist_ok=True)
@@ -9,6 +11,24 @@ LOG_DIR.mkdir(exist_ok=True)
 LOG_FILE = LOG_DIR / "rag_app.log"
 DEBUG_LOG_FILE = LOG_DIR / "debug.log"
 SECURITY_LOG_FILE = LOG_DIR / "security.log"
+
+
+def _configure_stdio_encoding() -> None:
+    """Prefer UTF-8 streams, but never fail startup if the host console is limited."""
+    for stream_name in ("stdout", "stderr"):
+        stream = getattr(sys, stream_name, None)
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure:
+            try:
+                reconfigure(encoding="utf-8", errors="replace")
+            except Exception:
+                pass
+
+
+def _safe_console_text(message: str, encoding: Optional[str]) -> str:
+    """Return text that can be written to the active console without UnicodeEncodeError."""
+    target_encoding = encoding or "utf-8"
+    return message.encode(target_encoding, errors="replace").decode(target_encoding, errors="replace")
 
 
 class StructuredFormatter(logging.Formatter):
@@ -62,8 +82,19 @@ class SecurityFormatter(logging.Formatter):
         return f"[{timestamp}] SECURITY | {record.getMessage()}"
 
 
+class SafeConsoleFormatter(logging.Formatter):
+    """Formatter that degrades unsupported console characters instead of crashing logging."""
+
+    def format(self, record) -> str:
+        message = super().format(record)
+        stream_encoding = getattr(sys.stderr, "encoding", None)
+        return _safe_console_text(message, stream_encoding)
+
+
 def setup_logging() -> logging.Logger:
     """Setup enhanced logging with multiple handlers and formatters"""
+    _configure_stdio_encoding()
+
     logger = logging.getLogger()
     logger.setLevel(logging.DEBUG)  # Capture all levels
 
@@ -71,7 +102,7 @@ def setup_logging() -> logging.Logger:
     structured_formatter = StructuredFormatter()
 
     # Simple formatter for console (less verbose)
-    console_formatter = logging.Formatter(
+    console_formatter = SafeConsoleFormatter(
         "%(asctime)s | %(levelname)-8s | %(name)-20s | %(message)s",
         datefmt="%H:%M:%S"
     )
@@ -81,21 +112,21 @@ def setup_logging() -> logging.Logger:
 
     # Main application log (INFO and above)
     file_handler = RotatingFileHandler(
-        LOG_FILE, maxBytes=10_000_000, backupCount=10
+        LOG_FILE, maxBytes=10_000_000, backupCount=10, encoding="utf-8"
     )
     file_handler.setLevel(logging.INFO)
     file_handler.setFormatter(structured_formatter)
 
     # Debug log (ALL levels) - for detailed debugging
     debug_handler = RotatingFileHandler(
-        DEBUG_LOG_FILE, maxBytes=20_00_000, backupCount=5
+        DEBUG_LOG_FILE, maxBytes=20_00_000, backupCount=5, encoding="utf-8"
     )
     debug_handler.setLevel(logging.DEBUG)
     debug_handler.setFormatter(structured_formatter)
 
     # Security log (WARNING and above) - for security events
     security_handler = RotatingFileHandler(
-        SECURITY_LOG_FILE, maxBytes=5_000_000, backupCount=10
+        SECURITY_LOG_FILE, maxBytes=5_000_000, backupCount=10, encoding="utf-8"
     )
     security_handler.setLevel(logging.WARNING)
     security_handler.setFormatter(security_formatter)
@@ -105,16 +136,29 @@ def setup_logging() -> logging.Logger:
     console_handler.setLevel(logging.INFO)
     console_handler.setFormatter(console_formatter)
 
-    # Avoid duplicate handlers
-    if not logger.handlers:
-        logger.addHandler(file_handler)
-        logger.addHandler(debug_handler)
-        logger.addHandler(security_handler)
-        logger.addHandler(console_handler)
+    # If uvicorn or a test runner already attached console handlers, make those
+    # handlers Unicode-safe too so the same record cannot crash a legacy console.
+    for existing_handler in logger.handlers:
+        is_console_handler = (
+            isinstance(existing_handler, logging.StreamHandler)
+            and not isinstance(existing_handler, logging.FileHandler)
+        )
+        if is_console_handler:
+            existing_handler.setFormatter(console_formatter)
 
-        # Log startup message
-        logger.info("RAG Application logging initialized - Main: %s, Debug: %s, Security: %s",
-                    LOG_FILE, DEBUG_LOG_FILE, SECURITY_LOG_FILE)
+    handlers = [file_handler, debug_handler, security_handler, console_handler]
+    for handler in handlers:
+        handler._rag_app_handler = True
+
+    # Avoid duplicate app handlers while still allowing uvicorn/test handlers to exist.
+    if not any(getattr(handler, "_rag_app_handler", False) for handler in logger.handlers):
+        for handler in handlers:
+            logger.addHandler(handler)
+
+    logging.captureWarnings(True)
+
+    logger.info("RAG Application logging initialized - Main: %s, Debug: %s, Security: %s",
+                LOG_FILE, DEBUG_LOG_FILE, SECURITY_LOG_FILE)
 
     return logger
 

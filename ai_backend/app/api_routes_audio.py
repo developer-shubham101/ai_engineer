@@ -61,7 +61,7 @@ async def speech_to_text(
         stt_provider = create_stt_provider(provider)
         result = await stt_provider.transcribe(file_path)
 
-        print(f"result {result}")
+        logger.info("STT completed: success=%s provider=%s file_path=%s", result.success, provider, file_path)
         
         return AudioResponse(
             success=result.success,
@@ -98,7 +98,12 @@ async def text_to_speech(
         tts_provider = create_tts_provider(request.provider)
         result = await tts_provider.synthesize(request.text, output_path)
 
-        print(f"result: {result}")
+        logger.info(
+            "TTS completed: success=%s provider=%s output_path=%s",
+            result.success,
+            request.provider,
+            result.file_path or output_path,
+        )
         return AudioResponse(
             success=result.success,
             data=result.data,

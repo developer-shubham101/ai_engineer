@@ -44,7 +44,7 @@ async def extract_text_from_image(
         vision_provider = create_vision_provider(provider)
         result = await vision_provider.extract_text(file_path)
 
-        print(f"result : {result}")
+        logger.info("OCR completed: success=%s provider=%s file_path=%s", result.success, provider, file_path)
         
         return VisionResponse(
             success=result.success,

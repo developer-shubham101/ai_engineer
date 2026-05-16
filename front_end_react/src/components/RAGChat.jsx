@@ -35,10 +35,10 @@ export default function RAGChat({ onLogout }) {
   const [sidebarOpen, setSidebarOpen] = useState(true)
 
   // Existing state
-  const [useLlm, setUseLlm] = useState(false)
-  const [useDocuments, setUseDocuments] = useState(true)
-  const [useTools, setUseTools] = useState(false)
-  const [useConversationHistory, setUseConversationHistory] = useState(true)
+  const [useLlm, setUseLlm] = useState(() => localStorage.getItem('use_llm') === 'true')
+  const [useDocuments, setUseDocuments] = useState(() => localStorage.getItem('use_documents') !== 'false')
+  const [useTools, setUseTools] = useState(() => localStorage.getItem('use_tools') === 'true')
+  const [useConversationHistory, setUseConversationHistory] = useState(() => localStorage.getItem('use_conversation_history') !== 'false')
   const [topK, setTopK] = useState(3)
   const [maxTokens, setMaxTokens] = useState(512)
   const [temperature, setTemperature] = useState(() => parseFloat(localStorage.getItem('temperature')) || 0.1)
@@ -57,7 +57,7 @@ export default function RAGChat({ onLogout }) {
 
   // Prompt Templates
   const [promptTemplates, setPromptTemplates] = useState([])
-  const [selectedTemplate, setSelectedTemplate] = useState('no_template')
+  const [selectedTemplate, setSelectedTemplate] = useState(localStorage.getItem('selected_template') || 'no_template')
 
   const messagesRef = useRef(null)
 
@@ -78,6 +78,11 @@ export default function RAGChat({ onLogout }) {
   useEffect(() => { localStorage.setItem('model_provider', modelProvider) }, [modelProvider])
   useEffect(() => { localStorage.setItem('local_llm_model', localLlmModel) }, [localLlmModel])
   useEffect(() => { localStorage.setItem('temperature', temperature.toString()) }, [temperature])
+  useEffect(() => { localStorage.setItem('use_llm', useLlm) }, [useLlm])
+  useEffect(() => { localStorage.setItem('use_documents', useDocuments) }, [useDocuments])
+  useEffect(() => { localStorage.setItem('use_tools', useTools) }, [useTools])
+  useEffect(() => { localStorage.setItem('use_conversation_history', useConversationHistory) }, [useConversationHistory])
+  useEffect(() => { localStorage.setItem('selected_template', selectedTemplate) }, [selectedTemplate])
   useEffect(() => {
     localStorage.setItem('theme', theme)
     if (theme === 'system') {

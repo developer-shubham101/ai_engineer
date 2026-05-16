@@ -63,7 +63,7 @@ def get_cleanup_service() -> CleanupService:
     return CleanupService(
         metadata_generator=metadata_generator,
         source_base_dir="data/company",
-        output_base_dir="cleaned/company"
+        output_base_dir="data/cleaned/company"
     )
 
 

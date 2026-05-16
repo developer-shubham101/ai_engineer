@@ -1,0 +1,68 @@
+{
+  "strict": {
+    "document_type": "unknown",
+    "department": "General",
+    "sensitivity": "public",
+    "source": "Trishul Dynamics.md",
+    "domain": null,
+    "published_year": null,
+    "effective_date": null,
+    "allowed_roles": null,
+    "tags": []
+  },
+  "soft": {
+    "summary": "Trishul Dynamics Ltd. is a leading Indian technology company that specializes in defence, biotechnology, clean energy, and space systems. It has a strong commitment to scientific rigour, national responsibility, sustainable innovation, and people-centricity. The company operates through four wholly-owned subsidiaries and has a diverse workforce of over 31,500 employees.",
+    "keywords": [
+      "Trishul Dynamics Ltd.",
+      "defence",
+      "biotechnology",
+      "clean energy",
+      "space systems",
+      "India",
+      "Aryan Capital Consortium",
+      "NSE",
+      "BSE",
+      "TRISHULDYN"
+    ],
+    "themes": [
+      "corporate identity",
+      "mission",
+      "vision",
+      "core values",
+      "business segments"
+    ],
+    "entities": {
+      "people": [
+        "Trishul Dynamics Ltd.",
+        "Aryan Capital Consortium",
+        "NSE",
+        "BSE",
+        "TRISHULDYN",
+        "CHRO",
+        "employees",
+        "Board of Directors",
+        "P&L accountability",
+        "operational charter."
+      ],
+      "organizations": [
+        "Trishul Dynamics Ltd.",
+        "Aryan Capital Consortium",
+        "N"
+      ],
+      "locations": [
+        "Trishul Tower",
+        "Sector 54",
+        "Gurugram",
+        "Haryana",
+        "India",
+        "New Delhi",
+        "India."
+      ]
+    },
+    "generated_at": "2026-05-13T06:52:23.760904",
+    "llm_model": "phi2",
+    "confidence": 0.8
+  },
+  "enriched_at": "2026-05-13T06:52:23.761904",
+  "processing_time_ms": 320547.8913784027
+}

@@ -60,7 +60,7 @@ class CrewOrchestrator(ICrewOrchestrator):
             Optional[LLM]: Configured LLM instance or None if initialization fails
         """
         try:
-            print(f"Creating CrewAI LLM with llama-server: {settings.CREW_BASE_URL}")
+            logger.info("Creating CrewAI LLM with llama-server: %s", settings.CREW_BASE_URL)
             
             llm = LLM(
                 model="llama",
@@ -69,13 +69,11 @@ class CrewOrchestrator(ICrewOrchestrator):
             )
             
             logger.info("CrewAI LLM successfully loaded with llama-server")
-            print("✅ CrewAI LLM successfully loaded with llama-server")
             return llm
             
         except Exception as e:
             error_msg = f"Failed to create CrewAI LLM with llama-server: {e}"
             logger.error(error_msg)
-            print(f"❌ {error_msg}")
             return None
 
     def _create_agent(self, agent_key: str) -> Agent:

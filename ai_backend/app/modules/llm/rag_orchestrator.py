@@ -1,8 +1,12 @@
 "RAG orchestrator implementation."
 
+import json
 import logging
+import re
 import time
+import traceback
 from datetime import datetime
+from pathlib import Path
 from typing import List, Dict, Any, Optional
 
 from .interfaces import IRAGOrchestrator, RAGRequest, RAGResponse, RetrievedDocument, LLMResponse
@@ -16,6 +20,8 @@ from ..vector_db.interfaces import IVectorStore
 
 logger = logging.getLogger(__name__)
 
+RAG_DEBUG_LOG_DIR = Path("logs") / "rag_debug"
+
 
 class RAGOrchestrator(IRAGOrchestrator):
     """RAG orchestrator implementation."""
@@ -28,6 +34,103 @@ class RAGOrchestrator(IRAGOrchestrator):
         self.prompt_chain = PromptChain(session_manager)
         self.langchain_selector = ConditionalPromptSelector(template_manager)
         self.middleware_stack = create_default_middleware_stack()
+
+    def _get_conversation_debug_log_path(self, conversation_id: Optional[str]) -> Path:
+        """Return the per-conversation RAG debug log path."""
+        raw_id = conversation_id or "no_conversation_id"
+        safe_id = re.sub(r"[^a-zA-Z0-9_.-]+", "_", str(raw_id)).strip("._")
+        safe_id = safe_id[:120] or "no_conversation_id"
+        return RAG_DEBUG_LOG_DIR / f"{safe_id}.rag_debug.log"
+
+    def _json_safe(self, value: Any) -> Any:
+        """Convert common Python objects into JSON-serializable debug data."""
+        if value is None or isinstance(value, (str, int, float, bool)):
+            return value
+        if isinstance(value, datetime):
+            return value.isoformat()
+        if isinstance(value, Path):
+            return str(value)
+        if isinstance(value, dict):
+            return {str(k): self._json_safe(v) for k, v in value.items()}
+        if isinstance(value, (list, tuple, set)):
+            return [self._json_safe(v) for v in value]
+        if hasattr(value, "__dict__"):
+            return self._json_safe(vars(value))
+        return repr(value)
+
+    def _request_debug_payload(self, request: RAGRequest) -> Dict[str, Any]:
+        """Capture request settings relevant to RAG debugging."""
+        return {
+            "question": request.question,
+            "user": request.user,
+            "session_id": request.session_id,
+            "conversation_id": request.conversation_id,
+            "top_k": request.top_k,
+            "use_llm": request.use_llm,
+            "use_documents": request.use_documents,
+            "use_conversation_history": request.use_conversation_history,
+            "enable_agentic_mode": request.enable_agentic_mode,
+            "use_tools": request.use_tools,
+            "max_tokens": request.max_tokens,
+            "temperature": request.temperature,
+            "category": request.category,
+            "debug": request.debug,
+            "provider": request.provider,
+            "provider_specific": request.provider_specific,
+            "metadata": request.metadata,
+            "prompt_template": request.prompt_template,
+        }
+
+    def _provider_debug_payload(self, provider: Any) -> Dict[str, Any]:
+        """Capture provider metadata without letting debug logging affect the RAG flow."""
+        payload = {
+            "class": provider.__class__.__name__ if provider else None,
+            "module": provider.__class__.__module__ if provider else None,
+        }
+        if not provider:
+            return payload
+
+        provider_methods = {
+            "provider_name": "get_provider_name",
+            "model_name": "get_model_name",
+            "is_available": "is_available",
+            "max_context_length": "get_max_context_length",
+        }
+        for field_name, method_name in provider_methods.items():
+            try:
+                method = getattr(provider, method_name, None)
+                payload[field_name] = method() if callable(method) else None
+            except Exception as e:
+                payload[field_name] = f"debug_read_failed: {e}"
+        return payload
+
+    def _write_conversation_debug_log(
+            self,
+            conversation_id: Optional[str],
+            event: str,
+            payload: Dict[str, Any],
+    ) -> None:
+        """Append detailed RAG debug data to a log file scoped by conversation_id."""
+        try:
+            RAG_DEBUG_LOG_DIR.mkdir(parents=True, exist_ok=True)
+            log_path = self._get_conversation_debug_log_path(conversation_id)
+            entry = {
+                "timestamp": datetime.utcnow().isoformat() + "Z",
+                "event": event,
+                "conversation_id": conversation_id,
+                "payload": self._json_safe(payload),
+            }
+            with log_path.open("a", encoding="utf-8") as debug_file:
+                debug_file.write(json.dumps(entry, ensure_ascii=False, indent=2))
+                debug_file.write("\n\n")
+            logger.debug("[RAG DEBUG] Wrote conversation debug event '%s' to %s", event, log_path)
+        except Exception as log_error:
+            logger.warning(
+                "Failed to write conversation RAG debug log for conversation_id=%s event=%s: %s",
+                conversation_id,
+                event,
+                log_error,
+            )
 
     async def process_query(self, request: RAGRequest) -> RAGResponse:
         """Process RAG query with three flows:
@@ -122,6 +225,20 @@ class RAGOrchestrator(IRAGOrchestrator):
             if request.user:
                 request.user.update(profile)
 
+            self._write_conversation_debug_log(
+                conversation_id=conversation_id,
+                event="rag_request_start",
+                payload={
+                    "request": self._request_debug_payload(request),
+                    "session_id": session_id,
+                    "user_id": user_id,
+                    "user_role": user_role,
+                    "profile": profile,
+                    "session_history_count": len(session_history),
+                    "session_history": session_history,
+                },
+            )
+
             # Retrieve documents only if use_documents is True
             documents = []
             if request.use_documents:
@@ -143,6 +260,20 @@ class RAGOrchestrator(IRAGOrchestrator):
 
             # 2. Build context
             context = await self.build_context(documents)
+
+            self._write_conversation_debug_log(
+                conversation_id=conversation_id,
+                event="rag_retrieval_complete",
+                payload={
+                    "use_documents": request.use_documents,
+                    "top_k": request.top_k,
+                    "category": request.category,
+                    "retrieved_document_count": len(documents),
+                    "retrieved_documents": documents,
+                    "context_length_chars": len(context or ""),
+                    "context": context,
+                },
+            )
 
             # Generate response if LLM requested
             answer = None
@@ -169,12 +300,44 @@ class RAGOrchestrator(IRAGOrchestrator):
                 )
                 
                 logger.debug(f"[RAG DEBUG] Generated {messages} messages for LLM")
+                self._write_conversation_debug_log(
+                    conversation_id=conversation_id,
+                    event="llm_messages_built",
+                    payload={
+                        "provider": request.provider,
+                        "provider_details": self._provider_debug_payload(provider),
+                        "provider_specific": request.provider_specific or {},
+                        "prompt_template": request.prompt_template,
+                        "max_tokens": request.max_tokens,
+                        "temperature": request.temperature,
+                        "message_count": len(messages),
+                        "message_roles": [msg.get("role") for msg in messages],
+                        "messages": messages,
+                        "formatted_prompt": self._format_messages_for_debug(messages),
+                    },
+                )
                 
                 # Generate response using messages directly
                 response = await provider.generate(
                     prompt=messages,
                     max_tokens=request.max_tokens,
                     temperature=request.temperature
+                )
+
+                self._write_conversation_debug_log(
+                    conversation_id=conversation_id,
+                    event="llm_provider_response",
+                    payload={
+                        "provider": request.provider,
+                        "provider_details": self._provider_debug_payload(provider),
+                        "response": {
+                            "text": getattr(response, "text", None),
+                            "text_length_chars": len(getattr(response, "text", "") or ""),
+                            "metadata": getattr(response, "metadata", None),
+                            "usage": getattr(response, "usage", None),
+                            "finish_reason": getattr(response, "finish_reason", None),
+                        } if response else None,
+                    },
                 )
                 
                 if response and response.text:
@@ -194,10 +357,10 @@ class RAGOrchestrator(IRAGOrchestrator):
                 ==================================================
                 """)
 
-                logger.info("Storing conversation with RAG logging in conversation {conversation_id}")
+                logger.info("Storing conversation with RAG logging in conversation %s", conversation_id)
                 # Store conversation if session exists (with full RAG logging)
                 if conversation_id:
-                    logger.info("Storing conversation with RAG logging in conversation ::: {conversation_id}")
+                    logger.info("Storing conversation with RAG logging in conversation: %s", conversation_id)
                     processing_time_ms = int((time.time() - start_time) * 1000)
 
                     # Prepare provider info safely
@@ -244,10 +407,33 @@ class RAGOrchestrator(IRAGOrchestrator):
                 metadata={"provider": request.provider}
             )
 
+            self._write_conversation_debug_log(
+                conversation_id=conversation_id,
+                event="rag_response_complete",
+                payload={
+                    "processing_time_ms": int((time.time() - start_time) * 1000),
+                    "answer_length_chars": len(answer or ""),
+                    "answer": answer,
+                    "retrieved_document_count": len(retrieved_docs),
+                    "final_prompt": final_prompt,
+                    "response_metadata": response.metadata,
+                },
+            )
+
             return await self.middleware_stack.process_response(request, response)
 
         except Exception as e:
             logger.error("RAG processing failed: %s", str(e), exc_info=True)
+            self._write_conversation_debug_log(
+                conversation_id=getattr(request, "conversation_id", None),
+                event="rag_error",
+                payload={
+                    "error": str(e),
+                    "error_type": type(e).__name__,
+                    "traceback": traceback.format_exc(),
+                    "request": self._request_debug_payload(request),
+                },
+            )
             error_response = RAGResponse(
                 answer="Sorry, I encountered an error processing your request.",
                 retrieved_documents=[],
@@ -417,7 +603,7 @@ class RAGOrchestrator(IRAGOrchestrator):
                 messages = await self.conversation_manager.get_messages(
                     conversation_id=conversation_id,
                     user_id=user_id,
-                    limit=5
+                    limit=55
                 )
                 logger.debug(f"Retrieved {len(messages)} messages from conversation {conversation_id}")
                 return messages

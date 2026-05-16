@@ -1,5 +1,6 @@
 """Factory for creating agent tools and orchestrators."""
 
+import logging
 from typing import List, Optional
 
 from .interfaces import ITool, IAgentOrchestrator
@@ -9,6 +10,8 @@ from .tools import (
     AnalyzeDataTool, SummarizeStatusTool, ResearchDataTool
 )
 from ..vector_db.interfaces import IVectorStore
+
+logger = logging.getLogger(__name__)
 
 
 class ToolFactory:
@@ -74,7 +77,7 @@ class AgentOrchestratorFactory:
         """Create agent orchestrator based on type."""
         if orchestrator_type.lower() == "autogen":
             if not AUTOGEN_AVAILABLE:
-                print("AutoGen not available, using custom orchestrator")
+                logger.warning("AutoGen not available, using custom orchestrator")
                 orchestrator_type = "custom"
             else:
                 # Create LlamaServerProvider and use its client
