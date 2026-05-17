@@ -11,6 +11,7 @@ import AudioRecorder from './AudioRecorder.jsx'
 import CrewAIChat from './CrewAIChat.jsx'
 import AgentChat from './AgentChat.jsx'
 import ToastList from './ToastList.jsx'
+import ReactMarkdown from 'react-markdown'
 import { BASE_API_URL, CONFIG_TOOLTIPS } from '../utility/const.js'
 import { getStoredToken, getStoredUser, getSessionIdFromToken, clearAuth } from '../utility/auth.js'
 
@@ -786,7 +787,11 @@ export default function RAGChat({ onLogout }) {
                             {m.role === "user" ? "You" : "Assistant"} • {m.ts}
                           </div>
                           <div style={{ whiteSpace: "pre-wrap" }}>
-                            {m.role === "user" ? m.text : m.answer || m.text}
+                            {m.role === "user" ? m.text : (
+                              m.role === "bot"
+                                ? <ReactMarkdown>{m.answer || m.text || ''}</ReactMarkdown>
+                                : m.answer || m.text
+                            )}
                           </div>
 
                           {/* RAG Debug Info */}
