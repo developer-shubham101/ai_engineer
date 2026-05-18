@@ -283,5 +283,5 @@ When adding new features:
 ## 📖 Further Reading
 
 - [APP_CONTEXT.md](../../APP_CONTEXT.md) - Complete system documentation
-- [test_modular_architecture.py](../../test_modular_architecture.py) - Example usage
+- [test_modular_architecture.py](test_module/test_modular_architecture.py) - Example usage
 - Individual module README files (coming soon)

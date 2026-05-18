@@ -405,6 +405,7 @@ class DocumentManager:
                              force_reseed: bool = False) -> List[str]:
         """
         Read the given file or directory and index it.
+        Also builds BM25 index after seeding.
         """
 
         # NEW DEFAULT PATH: data/companyData
@@ -593,6 +594,10 @@ class DocumentManager:
         except Exception as e:
             logger.exception("Failed to seed file %s: %s", path, e)
 
+        # Build BM25 index after seeding
+        if added_ids:
+            await self._build_bm25_index()
+
         return added_ids
 
     def update_metadata(self, ids: List[str], metadata: Dict[str, Any]) -> bool:
@@ -613,3 +618,40 @@ class DocumentManager:
         except Exception as e:
             logger.exception("Error clearing collection: %s", e)
             raise
+    
+    async def _build_bm25_index(self) -> None:
+        """Build BM25 index from all documents in vector store."""
+        try:
+            from app.modules.integration import get_container
+            container = get_container()
+            bm25_index = container.get_bm25_index()
+            
+            if not bm25_index or not bm25_index.is_available():
+                logger.warning("BM25 not available, skipping index build")
+                return
+            
+            # Get all documents from vector store
+            data = self.vector_store.get_collection_data()
+            documents = data.get("documents", [])
+            ids = data.get("ids", [])
+            metadatas = data.get("metadatas", [])
+            
+            if not documents:
+                logger.info("No documents to index in BM25")
+                return
+            
+            # Build document list for BM25
+            bm25_docs = []
+            for i, doc_text in enumerate(documents):
+                bm25_docs.append({
+                    "id": ids[i] if i < len(ids) else f"doc_{i}",
+                    "text": doc_text,
+                    "metadata": metadatas[i] if i < len(metadatas) else {}
+                })
+            
+            # Add to BM25 index
+            bm25_index.add_documents(bm25_docs)
+            logger.info(f"Built BM25 index with {len(bm25_docs)} documents")
+            
+        except Exception as e:
+            logger.warning(f"Failed to build BM25 index (non-fatal): {e}")

@@ -69,11 +69,15 @@ def chunk_by_sections(text: str) -> Optional[List[Dict[str, str]]]:
 
 def chunk_text_basic(text: str, chunk_size: int = 512, overlap: int = 64) -> List[str]:
     """
-    Produce overlapping chunks of the input text using LangChain's RecursiveCharacterTextSplitter.
+    Produce overlapping chunks with paragraph awareness.
+    
+    This implementation respects paragraph boundaries (double newlines) and only
+    splits paragraphs if they exceed the chunk size limit. This keeps semantic
+    units together for better retrieval quality.
     
     Args:
         text: The input text to chunk
-        chunk_size: Maximum size of each chunk (default: 512)
+        chunk_size: Target size of each chunk (default: 512)
         overlap: Number of characters to overlap between chunks (default: 64)
     
     Returns:
@@ -82,22 +86,9 @@ def chunk_text_basic(text: str, chunk_size: int = 512, overlap: int = 64) -> Lis
     if not text:
         return []
     
-    text_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=chunk_size,
-        chunk_overlap=overlap,
-        length_function=len,
-        separators=[
-            "\n\n",  # paragraphs
-            "\n",  # lines
-            ". ",  # sentences
-            " ",  # words
-            ""  # characters (last resort)
-        ],
-        is_separator_regex=False,
-    )
-    
-    chunks = text_splitter.split_text(text)
-    return chunks
+    # Use paragraph-aware chunking for better semantic coherence
+    from app.modules.core.chunking import chunk_text_paragraph_aware_simple
+    return chunk_text_paragraph_aware_simple(text, chunk_size, overlap)
 
 def deprecated_chunk_text_basic(text: str, chunk_size: int = 512, overlap: int = 64) -> List[str]:
     """

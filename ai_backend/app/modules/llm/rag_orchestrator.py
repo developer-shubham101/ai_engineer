@@ -444,32 +444,76 @@ class RAGOrchestrator(IRAGOrchestrator):
 
     async def retrieve_documents(self, query: str, user: Dict[str, Any], top_k: int = 5,
                                  category: Optional[str] = None) -> List[Dict[str, Any]]:
-        """Retrieve relevant documents."""
+        """Retrieve relevant documents with hybrid BM25+vector search and cross-encoder reranking.
+        
+        Pipeline:
+        1. Retrieve top-20 from both BM25 and vector store
+        2. Merge with Reciprocal Rank Fusion (RRF)
+        3. Apply RBAC filtering
+        4. Rerank with cross-encoder
+        5. Return top-k documents
+        """
         try:
-            # Use vector store to search
-            results = await self.vector_store.search_documents(
+            # Step 1: Hybrid retrieval (BM25 + Vector)
+            retrieval_k = max(top_k * 4, 20)  # Retrieve 4x or minimum 20
+            logger.info(f"Hybrid retrieval: fetching top-{retrieval_k} from BM25 and vector store")
+            
+            # Get BM25 index from container
+            from app.modules.integration import get_container
+            container = get_container()
+            bm25_index = container.get_bm25_index()
+            
+            # BM25 search
+            bm25_results = []
+            if bm25_index and bm25_index.is_available():
+                bm25_results = bm25_index.search(query, top_k=retrieval_k)
+                logger.info(f"BM25 retrieved {len(bm25_results)} documents")
+            
+            # Vector search
+            vector_results = await self.vector_store.search_documents(
                 query=query,
-                top_k=top_k,
+                top_k=retrieval_k,
                 metadata_filter={"category": category} if category else None
             )
+            logger.info(f"Vector search retrieved {len(vector_results)} documents")
+            
+            # Step 2: Merge with RRF
+            from app.modules.vector_db.hybrid_retrieval import reciprocal_rank_fusion
+            merged_results = reciprocal_rank_fusion(bm25_results, vector_results, k=60)
+            logger.info(f"RRF fusion: {len(bm25_results)} BM25 + {len(vector_results)} vector → {len(merged_results)} merged")
 
-            # Apply RBAC filtering (simplified)
+            # Step 3: Apply RBAC filtering
             filtered_results = []
             user_role = user.get("role", "Guest")
             user_dept = user.get("department", "General")
 
-            for doc in results:
+            for doc in merged_results:
                 metadata = doc.get("metadata", {})
-
-                # Simple RBAC check
                 doc_dept = metadata.get("department", "General")
                 sensitivity = metadata.get("sensitivity", "public_internal")
 
-                # Allow if public or same department
                 if sensitivity == "public_internal" or doc_dept == user_dept or user_role in ["SuperAdmin", "Manager"]:
                     filtered_results.append(doc)
+            
+            logger.info(f"RBAC filtering: {len(merged_results)} -> {len(filtered_results)} documents")
 
-            return filtered_results
+            # Step 4: Rerank with cross-encoder
+            if len(filtered_results) > top_k:
+                try:
+                    from app.modules.vector_db.reranker import CrossEncoderReranker
+                    reranker = CrossEncoderReranker()
+                    reranked_results = reranker.rerank(
+                        query=query,
+                        documents=filtered_results,
+                        top_k=top_k
+                    )
+                    logger.info(f"Cross-encoder reranking: {len(filtered_results)} -> {top_k} documents")
+                    return reranked_results
+                except Exception as e:
+                    logger.warning(f"Reranking failed, using RRF scores: {e}")
+                    return filtered_results[:top_k]
+            else:
+                return filtered_results[:top_k]
 
         except Exception as e:
             logger.error("Document retrieval failed: %s", str(e), exc_info=True)

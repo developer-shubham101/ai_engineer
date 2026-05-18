@@ -91,6 +91,22 @@ class Container:
         """Get embedding manager instance."""
         return self._instances.get("embedding_manager")
     
+    def get_reranker(self):
+        """Get reranker instance."""
+        if "reranker" not in self._instances:
+            from .vector_db.reranker import CrossEncoderReranker
+            self._instances["reranker"] = CrossEncoderReranker()
+            logger.info("Initialized cross-encoder reranker")
+        return self._instances.get("reranker")
+    
+    def get_bm25_index(self):
+        """Get BM25 index instance."""
+        if "bm25_index" not in self._instances:
+            from .vector_db.bm25_index import BM25Index
+            self._instances["bm25_index"] = BM25Index()
+            logger.info("Initialized BM25 index")
+        return self._instances.get("bm25_index")
+    
     def get_document_manager(self) -> DocumentManager:
         """Get document manager instance."""
         return self._instances.get("document_manager")
