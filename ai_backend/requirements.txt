@@ -43,6 +43,7 @@ sentencepiece
 sentence-transformers
 chromadb
 faiss-cpu
+rank-bm25
 
 # --- Text Parsing & Processing ---
 tiktoken
@@ -71,3 +72,5 @@ pytest
 
 
 yfinance
+
+rank-bm25

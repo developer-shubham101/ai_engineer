@@ -6,7 +6,6 @@ Demonstrates both old and new test approaches.
 import asyncio
 import subprocess
 import sys
-from pathlib import Path
 
 
 async def run_original_validation():
@@ -15,7 +14,7 @@ async def run_original_validation():
     print("=" * 50)
     
     try:
-        from validate_container_full import main
+        from test_module.validate_container_full import main
         await main()
     except Exception as e:
         print(f"Original validation failed: {e}")
