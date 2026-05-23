@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 120" width="400" height="120">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0d6efd"/>
+      <stop offset="100%" stop-color="#0a58ca"/>
+    </linearGradient>
+    <linearGradient id="bubbleGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#93c5fd"/>
+      <stop offset="100%" stop-color="#ffffff"/>
+    </linearGradient>
+    <linearGradient id="textGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#0d6efd"/>
+      <stop offset="100%" stop-color="#0a58ca"/>
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="2" stdDeviation="4" flood-color="#0d6efd" flood-opacity="0.25"/>
+    </filter>
+  </defs>
+
+  <!-- Icon background -->
+  <rect x="10" y="10" width="100" height="100" rx="20" fill="url(#bgGrad)" filter="url(#shadow)"/>
+
+  <!-- Document 1 (back) -->
+  <rect x="24" y="22" width="36" height="46" rx="4" fill="white" opacity="0.2"/>
+  <rect x="24" y="22" width="36" height="46" rx="4" fill="none" stroke="white" stroke-width="1.5" opacity="0.4"/>
+
+  <!-- Document 2 (front) -->
+  <rect x="32" y="30" width="36" height="46" rx="4" fill="white" opacity="0.18"/>
+  <rect x="32" y="30" width="36" height="46" rx="4" fill="none" stroke="white" stroke-width="1.5" opacity="0.55"/>
+  <!-- Doc lines -->
+  <line x1="38" y1="40" x2="62" y2="40" stroke="white" stroke-width="1.5" opacity="0.8" stroke-linecap="round"/>
+  <line x1="38" y1="47" x2="62" y2="47" stroke="white" stroke-width="1.5" opacity="0.8" stroke-linecap="round"/>
+  <line x1="38" y1="54" x2="54" y2="54" stroke="white" stroke-width="1.5" opacity="0.8" stroke-linecap="round"/>
+
+  <!-- Chat bubble -->
+  <rect x="46" y="52" width="52" height="36" rx="10" fill="url(#bubbleGrad)"/>
+  <polygon points="52,88 44,100 60,88" fill="url(#bubbleGrad)"/>
+  <!-- Three dots in bubble -->
+  <circle cx="60"  cy="70" r="4" fill="#0d6efd"/>
+  <circle cx="72"  cy="70" r="4" fill="#0d6efd"/>
+  <circle cx="84"  cy="70" r="4" fill="#0d6efd"/>
+
+  <!-- RAG text -->
+  <text x="128" y="58" font-family="'Segoe UI', system-ui, sans-serif" font-size="42" font-weight="800" fill="url(#textGrad)" letter-spacing="-1">RAG</text>
+
+  <!-- Chat text -->
+  <text x="129" y="90" font-family="'Segoe UI', system-ui, sans-serif" font-size="26" font-weight="400" fill="#6c757d" letter-spacing="6">CHAT</text>
+
+  <!-- Tagline -->
+  <text x="130" y="108" font-family="'Segoe UI', system-ui, sans-serif" font-size="11" fill="#adb5bd" letter-spacing="1">Retrieval · Augmented · Generation</text>
+</svg>

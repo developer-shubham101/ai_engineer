@@ -3,20 +3,63 @@ import { BASE_API_URL } from '../utility/const.js'
 import { getStoredToken, getSessionIdFromToken } from '../utility/auth.js'
 import ReactMarkdown from 'react-markdown'
 
-export default function CrewAIChat({ onLogout, onExit }) {
+export default function CrewAIChat({ onLogout, onExit, onConversationChange, selectedConversationId }) {
   const [topic, setTopic] = useState('')
   const [workflowType, setWorkflowType] = useState('debate')
   const [maxIterations, setMaxIterations] = useState(3)
   const [temperature, setTemperature] = useState(0.7)
-  const [messages, setMessages] = useState([]) // For local history of runs
+  const [messages, setMessages] = useState([])
   const [loading, setLoading] = useState(false)
+  const [loadingHistory, setLoadingHistory] = useState(false)
   const [error, setError] = useState(null)
   const [availableWorkflows, setAvailableWorkflows] = useState([])
-  const [status, setStatus] = useState('idle') // idle, running, error, success
+  const [status, setStatus] = useState('idle')
+  const [conversationId, setConversationId] = useState(selectedConversationId || null)
+  const [crewConversations, setCrewConversations] = useState([])
 
   useEffect(() => {
     fetchWorkflows()
   }, [])
+
+  useEffect(() => {
+    if (conversationId) loadConversationMessages(conversationId)
+  }, [conversationId])
+
+  useEffect(() => {
+    if (selectedConversationId && selectedConversationId !== conversationId) {
+      setConversationId(selectedConversationId)
+    }
+  }, [selectedConversationId])
+
+  useEffect(() => {
+    if (onConversationChange) onConversationChange(crewConversations, conversationId)
+  }, [crewConversations, conversationId])
+
+  async function loadConversationMessages(convId) {
+    setLoadingHistory(true)
+    try {
+      const token = getStoredToken()
+      const headers = {}
+      if (token) headers['Authorization'] = `Bearer ${token}`
+      const res = await fetch(`${BASE_API_URL}/api/conversations/${convId}/messages?history_type=crew`, { headers })
+      if (!res.ok) throw new Error('Failed to load crew messages')
+      const data = await res.json()
+      const transformed = data.messages.map(msg => ({
+        role: msg.speaker === 'user' ? 'user' : 'assistant',
+        content: msg.content,
+        agents_used: msg.agents_used || [],
+        workflow_type: msg.workflow_type,
+        iterations: msg.iterations,
+        execution_time: msg.execution_time_ms,
+        ts: new Date(msg.created_at).toLocaleString()
+      }))
+      setMessages(transformed)
+    } catch (err) {
+      console.error('Failed to load crew conversation messages:', err)
+    } finally {
+      setLoadingHistory(false)
+    }
+  }
 
   async function fetchWorkflows() {
     try {
@@ -72,10 +115,20 @@ export default function CrewAIChat({ onLogout, onExit }) {
 
       const data = await res.json()
 
+      if (data.conversation_id) {
+        setConversationId(data.conversation_id)
+        setCrewConversations(prev => {
+          const exists = prev.find(c => c.id === data.conversation_id)
+          if (exists) return prev
+          return [{ id: data.conversation_id, title: topic.slice(0, 40), created_at: new Date().toISOString() }, ...prev]
+        })
+      }
+
       const botMsg = {
         role: 'assistant',
         content: data.result,
         agents_used: data.agents_used,
+        workflow_type: workflowType,
         execution_time: data.execution_time_ms,
         ts: new Date().toLocaleString()
       }
@@ -120,7 +173,13 @@ export default function CrewAIChat({ onLogout, onExit }) {
 
       {/* Main Content - Results Area */}
       <div className="flex-grow-1 overflow-auto p-4" style={{ backgroundColor: 'var(--bs-body-bg)' }}>
-        {messages.length === 0 && (
+        {loadingHistory && (
+          <div className="text-center my-3">
+            <div className="spinner-border spinner-border-sm text-secondary me-2"></div>
+            <span className="text-muted small">Loading history...</span>
+          </div>
+        )}
+        {!loadingHistory && messages.length === 0 && (
           <div className="text-center text-muted mt-5">
             <i className="bi bi-diagram-3 display-1"></i>
             <p className="lead mt-3">Select a workflow and topic to start a multi-agent session.</p>

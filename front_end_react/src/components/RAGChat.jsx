@@ -12,11 +12,12 @@ import CrewAIChat from './CrewAIChat.jsx'
 import AgentChat from './AgentChat.jsx'
 import ToastList from './ToastList.jsx'
 import ReactMarkdown from 'react-markdown'
+import { setQueryParams } from '../App.jsx'
 import { BASE_API_URL, CONFIG_TOOLTIPS } from '../utility/const.js'
 import { getStoredToken, getStoredUser, getSessionIdFromToken, clearAuth } from '../utility/auth.js'
 
 
-export default function RAGChat({ onLogout }) {
+export default function RAGChat({ onLogout, initialMode = 'rag', initialConvId = null }) {
   const [token, setToken] = useState(getStoredToken())
   const [user, setUser] = useState(getStoredUser())
   const [sessionId, setSessionId] = useState(() => {
@@ -24,9 +25,30 @@ export default function RAGChat({ onLogout }) {
     return storedToken ? getSessionIdFromToken(storedToken) : '';
   })
 
-  // CrewAI Mode
-  const [crewMode, setCrewMode] = useState(false)
-  const [agentMode, setAgentMode] = useState(false)
+  const [crewMode, setCrewMode] = useState(initialMode === 'crew')
+  const [agentMode, setAgentMode] = useState(initialMode === 'agent')
+  const [agentConversations, setAgentConversations] = useState([])
+  const [activeAgentConversationId, setActiveAgentConversationId] = useState(null)
+  const [crewConversations, setCrewConversations] = useState([])
+  const [activeCrewConversationId, setActiveCrewConversationId] = useState(null)
+
+  async function loadAgentConversations(targetConvId = null) {
+    if (!token) return
+    try {
+      const res = await fetch(`${BASE_API_URL}/api/conversations?history_type=agent&limit=50`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+      if (!res.ok) return
+      const data = await res.json()
+      setAgentConversations(data)
+      const target = targetConvId
+        ? data.find(c => c.id === targetConvId)
+        : data.find(c => c.message_count > 0) || data[0]
+      if (target) setActiveAgentConversationId(target.id)
+    } catch (err) {
+      console.error('Failed to load agent conversations', err)
+    }
+  }
 
   // Conversation state
 
@@ -62,13 +84,26 @@ export default function RAGChat({ onLogout }) {
 
   const messagesRef = useRef(null)
 
-  // Load conversations on mount
+  // Load conversations on mount — respect initialConvId and initialMode
   useEffect(() => {
     if (token) {
-      loadConversations()
       fetchPromptTemplates()
+      if (initialMode === 'agent') {
+        loadAgentConversations(initialConvId)
+      } else if (initialMode === 'crew') {
+        // crew handled by CrewAIChat on mount
+      } else {
+        loadConversations(initialConvId)
+      }
     }
   }, [token])
+
+  // Sync URL when mode or active conversation changes
+  useEffect(() => {
+    const mode = agentMode ? 'agent' : crewMode ? 'crew' : 'rag'
+    const convId = agentMode ? activeAgentConversationId : crewMode ? activeCrewConversationId : activeConversationId
+    setQueryParams(mode, convId)
+  }, [agentMode, crewMode, activeConversationId, activeAgentConversationId, activeCrewConversationId])
 
   // Auto-scroll messages
   useEffect(() => {
@@ -121,7 +156,7 @@ export default function RAGChat({ onLogout }) {
 
   // ========== Conversation API Functions ==========
 
-  async function loadConversations() {
+  async function loadConversations(targetConvId = null) {
     if (!token) return
     try {
       const res = await fetch(`${BASE_API_URL}/api/conversations?limit=50&offset=0`, {
@@ -131,11 +166,14 @@ export default function RAGChat({ onLogout }) {
       const data = await res.json()
       setConversations(data)
 
-      // If no active conversation, create one or select the first
-      if (!activeConversationId && data.length > 0) {
-        setActiveConversationId(data[0].id)
-        await loadConversationMessages(data[0].id)
-      } else if (!activeConversationId && data.length === 0) {
+      const target = targetConvId
+        ? data.find(c => c.id === targetConvId)
+        : data[0]
+
+      if (target) {
+        setActiveConversationId(target.id)
+        await loadConversationMessages(target.id)
+      } else if (data.length === 0) {
         await createNewConversation()
       }
     } catch (err) {
@@ -170,7 +208,7 @@ export default function RAGChat({ onLogout }) {
   async function loadConversationMessages(conversationId) {
     if (!token) return
     try {
-      const res = await fetch(`${BASE_API_URL}/api/conversations/${conversationId}/messages?limit=100`, {
+      const res = await fetch(`${BASE_API_URL}/api/conversations/${conversationId}/messages?history_type=rag&limit=100`, {
         headers: { 'Authorization': `Bearer ${token}` }
       })
       if (!res.ok) throw new Error('Failed to load messages')
@@ -718,25 +756,38 @@ export default function RAGChat({ onLogout }) {
     <div className="chat-container">
       {/* Conversation Sidebar */}
       <ConversationSidebar
-        conversations={conversations}
-        activeConversationId={activeConversationId}
-        onSelectConversation={switchConversation}
-        onCreateConversation={() => createNewConversation()}
+        conversations={agentMode ? agentConversations : crewMode ? crewConversations : conversations}
+        activeConversationId={agentMode ? activeAgentConversationId : crewMode ? activeCrewConversationId : activeConversationId}
+        onSelectConversation={agentMode ? (id) => setActiveAgentConversationId(id) : crewMode ? (id) => setActiveCrewConversationId(id) : switchConversation}
+        onCreateConversation={agentMode ? () => {} : crewMode ? () => {} : () => createNewConversation()}
         onRenameConversation={renameConversation}
         onDeleteConversation={deleteConversation}
         isOpen={sidebarOpen}
         onToggle={() => setSidebarOpen(!sidebarOpen)}
+        mode={agentMode ? 'agent' : crewMode ? 'crew' : 'rag'}
       />
 
 
       {/* Main Chat Area */}
       {crewMode ? (
         <div className="chat-main-content">
-          <CrewAIChat onLogout={onLogout} onExit={() => setCrewMode(false)} />
+          <CrewAIChat
+            onLogout={onLogout}
+            onExit={() => setCrewMode(false)}
+            selectedConversationId={activeCrewConversationId}
+            onConversationChange={(convs, activeId) => {
+              setCrewConversations(convs)
+              setActiveCrewConversationId(activeId)
+            }}
+          />
         </div>
       ) : agentMode ? (
         <div className="chat-main-content">
-          <AgentChat onLogout={onLogout} onExit={() => setAgentMode(false)} />
+          <AgentChat
+            onLogout={onLogout}
+            onExit={() => setAgentMode(false)}
+            selectedConversationId={activeAgentConversationId}
+          />
         </div>
       ) : (
         <div className="chat-main-content">
@@ -1121,8 +1172,10 @@ export default function RAGChat({ onLogout }) {
                     <button
                       className={`btn btn-sm w-100 mb-2 ${agentMode ? 'btn-success' : 'btn-outline-success'}`}
                       onClick={() => {
-                        setAgentMode(!agentMode)
+                        const entering = !agentMode
+                        setAgentMode(entering)
                         if (crewMode) setCrewMode(false)
+                        if (entering) loadAgentConversations()
                       }}
                     >
                       <i className="bi bi-cpu me-2"></i>

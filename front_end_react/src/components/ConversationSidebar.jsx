@@ -8,7 +8,8 @@ export default function ConversationSidebar({
   onRenameConversation,
   onDeleteConversation,
   isOpen,
-  onToggle
+  onToggle,
+  mode = 'rag' // 'rag' | 'agent' | 'crew'
 }) {
   const [editingId, setEditingId] = useState(null)
   const [editTitle, setEditTitle] = useState('')
@@ -66,14 +67,20 @@ export default function ConversationSidebar({
       <div className={`conversation-sidebar ${isOpen ? 'open' : 'closed'}`}>
         {/* Header */}
         <div className="conversation-sidebar-header">
+          <div className="d-flex align-items-center gap-2 mb-2">
+            <i className={`bi ${mode === 'agent' ? 'bi-cpu' : mode === 'crew' ? 'bi-robot' : 'bi-chat-dots'} text-muted`}></i>
+            <small className="text-muted fw-semibold text-uppercase" style={{ letterSpacing: '0.05em' }}>
+              {mode === 'agent' ? 'Agent History' : mode === 'crew' ? 'CrewAI History' : 'Conversations'}
+            </small>
+          </div>
           <button
-            className="btn btn-primary w-100 mb-3"
-            onClick={onCreateConversation}
-            title="Start a new conversation"
-          >
-            <i className="bi bi-plus-lg me-2"></i>
-            New Conversation
-          </button>
+              className="btn btn-primary w-100 mb-3"
+              onClick={onCreateConversation}
+              title={mode === 'agent' ? 'New agent session' : mode === 'crew' ? 'New crew session' : 'Start a new conversation'}
+            >
+              <i className="bi bi-plus-lg me-2"></i>
+              {mode === 'agent' ? 'New Agent Session' : mode === 'crew' ? 'New Crew Session' : 'New Conversation'}
+            </button>
         </div>
 
         {/* Conversation List */}

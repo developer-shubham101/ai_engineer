@@ -3,18 +3,24 @@ import RAGChat from './components/RAGChat.jsx'
 import Login from './components/Login.jsx'
 import { getStoredToken, getStoredUser, setStoredToken, setStoredUser } from './utility/auth.js'
 
+export function setQueryParams(mode, convId) {
+  const p = new URLSearchParams()
+  if (mode && mode !== 'rag') p.set('mode', mode)
+  if (convId) p.set('conv', convId)
+  const str = p.toString()
+  window.history.replaceState(null, '', str ? `?${str}` : window.location.pathname)
+}
+
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [initialMode] = useState(() => new URLSearchParams(window.location.search).get('mode') || 'rag')
+  const [initialConvId] = useState(() => new URLSearchParams(window.location.search).get('conv') || null)
 
   useEffect(() => {
-    // Check if user is already logged in
     const token = getStoredToken()
     const user = getStoredUser()
-
-    if (token && user) {
-      setIsAuthenticated(true)
-    }
+    if (token && user) setIsAuthenticated(true)
     setLoading(false)
   }, [])
 
@@ -23,7 +29,6 @@ export default function App() {
       setStoredToken(token)
       setStoredUser(user)
     } else {
-      // Guest mode - don't store token
       setStoredUser(user)
     }
     setIsAuthenticated(true)
@@ -46,7 +51,7 @@ export default function App() {
   return (
     <div className="container-fluid">
       {isAuthenticated ? (
-        <RAGChat onLogout={handleLogout} />
+        <RAGChat onLogout={handleLogout} initialMode={initialMode} initialConvId={initialConvId} />
       ) : (
         <Login onLoginSuccess={handleLoginSuccess} />
       )}
