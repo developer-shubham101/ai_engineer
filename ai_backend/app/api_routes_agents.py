@@ -207,6 +207,7 @@ async def query_agent(
         if not conversation_id:
             conversation_id = await conv_manager.create_conversation(
                 user_id=user_id,
+                chat_type="agent",
                 title=request.question[:50] + ("..." if len(request.question) > 50 else "")
             )
             logger.debug("AGENT_CONV: auto-created conversation_id=%s for user=%s", conversation_id, user_id)

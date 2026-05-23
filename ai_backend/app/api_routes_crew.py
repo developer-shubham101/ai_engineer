@@ -145,6 +145,7 @@ async def crew_query(
             if not conversation_id:
                 conversation_id = await conv_manager.create_conversation(
                     user_id=user_id,
+                    chat_type="crew",
                     title=request.topic[:50] + ("..." if len(request.topic) > 50 else "")
                 )
                 logger.debug("CREW_CONV: auto-created conversation_id=%s", conversation_id)
