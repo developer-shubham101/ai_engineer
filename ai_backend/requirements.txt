@@ -73,5 +73,6 @@ pytest
 
 
 yfinance
+duckduckgo-search
 
 rank-bm25

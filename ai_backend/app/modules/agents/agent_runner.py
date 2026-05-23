@@ -11,6 +11,8 @@ from typing import Dict, Any, List, Tuple
 from .function_tools.tool_stock import get_stock_price
 from .function_tools.tool_weather import get_weather
 from .function_tools.tool_file import save_text_file
+from .function_tools.tool_web_search import web_search
+from .function_tools.tool_web_scraper import scrape_url
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +32,16 @@ REGISTRY: Dict[str, Dict[str, Any]] = {
         "fn": save_text_file,
         "args": ["filename", "content"],
         "description": "Save text content to a file"
+    },
+    "web_search": {
+        "fn": web_search,
+        "args": ["query"],
+        "description": "Search the internet for real-time information. Use for current events, facts, or anything not in internal documents"
+    },
+    "scrape_url": {
+        "fn": scrape_url,
+        "args": ["url"],
+        "description": "Fetch and extract full text content from a URL. Use after web_search to get detailed information from a specific result"
     }
 }
 
@@ -170,6 +182,16 @@ async def run_agent(user_prompt: str, llm_provider) -> str:
                                 summary_parts.append(f"Weather in {tr['result']['city']}: {tr['result']['temperature']}, {tr['result']['description']}")
                             else:
                                 summary_parts.append(f"Failed to get weather for {tr['args']['city']}: {tr['result'].get('error', 'Unknown error')}")
+                        elif tr["tool"] == "web_search":
+                            if tr["result"].get("status") == "success":
+                                summary_parts.append(f"Web search for '{tr['args']['query']}': Found {tr['result']['count']} results via {tr['result']['source']}\n{tr['result']['formatted']}")
+                            else:
+                                summary_parts.append(f"Web search failed: {tr['result'].get('error', 'Unknown error')}")
+                        elif tr["tool"] == "scrape_url":
+                            if tr["result"].get("status") == "success":
+                                summary_parts.append(f"Content from {tr['args']['url']}:\n{tr['result']['content']}")
+                            else:
+                                summary_parts.append(f"Failed to scrape {tr['args']['url']}: {tr['result'].get('error', 'Unknown error')}")
                         elif tr["tool"] == "save_text_file":
                             if tr["result"].get("status") == "success":
                                 summary_parts.append(f"Saved file: {tr['result']['filename']} ({tr['result']['size']} characters)")
