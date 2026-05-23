@@ -10,6 +10,95 @@ from ..interfaces import ILLMProvider, LLMResponse
 logger = logging.getLogger(__name__)
 
 
+def _sanitize_messages_for_alternation(messages: list) -> list:
+    """
+    Merge consecutive same-role messages into one to satisfy llama-server's
+    strict user/assistant alternation requirement.
+    System messages are collapsed into the first user message as a prefix.
+    """
+    from autogen_core.models import (
+        UserMessage as CoreUserMessage,
+        SystemMessage as CoreSystemMessage,
+        AssistantMessage as CoreAssistantMessage,
+    )
+
+    # 1. Extract system messages and merge into a single prefix
+    system_parts = []
+    non_system = []
+    for m in messages:
+        if isinstance(m, CoreSystemMessage):
+            system_parts.append(m.content)
+        else:
+            non_system.append(m)
+
+    # 2. Merge consecutive same-role messages
+    merged: list = []
+    for m in non_system:
+        if merged and type(merged[-1]) is type(m):
+            # Same role — append content to previous
+            prev = merged[-1]
+            if isinstance(prev, CoreUserMessage):
+                merged[-1] = CoreUserMessage(
+                    content=prev.content + "\n" + m.content,
+                    source=prev.source
+                )
+            elif isinstance(prev, CoreAssistantMessage):
+                merged[-1] = CoreAssistantMessage(
+                    content=prev.content + "\n" + m.content,
+                    source=prev.source
+                )
+        else:
+            merged.append(m)
+
+    # 3. Prepend system context into the first user message
+    if system_parts and merged:
+        system_text = "\n".join(system_parts)
+        first = merged[0]
+        if isinstance(first, CoreUserMessage):
+            merged[0] = CoreUserMessage(
+                content=system_text + "\n\n" + first.content,
+                source=first.source
+            )
+        else:
+            # Insert a user message carrying the system context before the first message
+            merged.insert(0, CoreUserMessage(
+                content=system_text,
+                source="user"
+            ))
+    elif system_parts and not merged:
+        system_text = "\n".join(system_parts)
+        merged = [CoreUserMessage(content=system_text, source="user")]
+
+    # 4. Ensure conversation starts with a user message
+    if merged and not isinstance(merged[0], CoreUserMessage):
+        merged.insert(0, CoreUserMessage(content="Continue.", source="user"))
+
+    return merged
+
+class _SanitizingClient:
+    """
+    Thin wrapper around OpenAIChatCompletionClient that sanitizes messages
+    before forwarding to llama-server, enforcing strict user/assistant alternation.
+    """
+
+    def __init__(self, inner: OpenAIChatCompletionClient):
+        self._inner = inner
+
+    async def create(self, messages, **kwargs):
+        sanitized = _sanitize_messages_for_alternation(list(messages))
+        logger.debug(
+            "[LLAMASERVER] sanitized %d -> %d messages: %s",
+            len(messages), len(sanitized),
+            [type(m).__name__ for m in sanitized]
+        )
+        return await self._inner.create(sanitized, **kwargs)
+
+    # Proxy every other attribute to the inner client so AutoGen can
+    # inspect capabilities (model_info, count_tokens, etc.)
+    def __getattr__(self, name: str):
+        return getattr(self._inner, name)
+
+
 class LlamaServerProvider(ILLMProvider):
     """LlamaServer provider using OpenAI-compatible API."""
 
@@ -18,19 +107,20 @@ class LlamaServerProvider(ILLMProvider):
         self.base_url = configs.get("base_url", settings.LLAMASERVER_BASE_URL)
         self.model_name = configs.get("model_name", settings.LLAMASERVER_MODEL_NAME)
         
-        self.client = OpenAIChatCompletionClient(
+        _raw_client = OpenAIChatCompletionClient(
             model=self.model_name,
             base_url=self.base_url,
             api_key="placeholder",
             model_info={
                 "vision": False,
-                "function_calling": False,
+                "function_calling": True,
                 "json_output": False,
                 "structured_output": False,
                 "family": "unknown",
-                "multiple_system_messages": True,  # Allow multiple system messages
+                "multiple_system_messages": False,
             },
         )
+        self.client = _SanitizingClient(_raw_client)
 
     async def generate(
             self,
@@ -67,6 +157,10 @@ class LlamaServerProvider(ILLMProvider):
                 
                 logger.debug(f"[LLAMASERVER] Converted to {len(messages)} core messages")
                 logger.debug(f"[LLAMASERVER] Message types: {[type(m).__name__ for m in messages]}")
+            
+            # Sanitize to enforce user/assistant alternation required by llama-server
+            messages = _sanitize_messages_for_alternation(messages)
+            logger.debug(f"[LLAMASERVER] After sanitization: {len(messages)} messages, types: {[type(m).__name__ for m in messages]}")
             
             logger.debug(f"[LLAMASERVER] Calling llama-server with {len(messages)} messages")
             response = await self.client.create(

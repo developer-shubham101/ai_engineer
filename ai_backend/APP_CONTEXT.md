@@ -360,6 +360,7 @@ The system now supports **persistent conversation history** that is decoupled fr
 1. **conversations** - Conversation metadata
    - `id` (TEXT PRIMARY KEY): Unique conversation ID (conv_xxx)
    - `user_id` (TEXT NOT NULL): Owner of conversation
+   - `chat_type` (TEXT NOT NULL): Type of conversation — `rag`, `agent`, or `crew`
    - `title` (TEXT): Conversation title (auto-generated or user-set)
    - `created_at` (TEXT): Creation timestamp
    - `updated_at` (TEXT): Last update timestamp
@@ -388,12 +389,14 @@ The system now supports **persistent conversation history** that is decoupled fr
 
 **Implementation**: `SQLiteConversationManager`
 
+**Valid chat_type values** (from `VALID_CHAT_TYPES`): `rag`, `agent`, `crew`
+
 **Key Methods**:
 ```python
 # Conversation CRUD
-async def create_conversation(user_id: str, title: Optional[str]) -> str
+async def create_conversation(user_id: str, chat_type: str, title: Optional[str]) -> str
 async def get_conversation(conversation_id: str, user_id: str) -> Optional[Dict]
-async def list_conversations(user_id: str, limit: int, offset: int) -> List[Dict]
+async def list_conversations(user_id: str, chat_type: Optional[str], limit: int, offset: int) -> List[Dict]
 async def update_conversation(conversation_id: str, user_id: str, **kwargs) -> bool
 async def delete_conversation(conversation_id: str, user_id: str) -> bool
 
@@ -421,19 +424,19 @@ async def generate_title(conversation_id: str) -> str
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | `/api/conversations` | List all conversations for user |
-| POST | `/api/conversations` | Create new conversation |
+| GET | `/api/conversations` | List conversations (optional `?chat_type=` filter) |
+| POST | `/api/conversations` | Create new conversation (`chat_type` required) |
 | GET | `/api/conversations/{id}` | Get specific conversation |
 | PUT | `/api/conversations/{id}` | Update conversation (rename) |
 | DELETE | `/api/conversations/{id}` | Delete conversation (soft delete) |
-| GET | `/api/conversations/{id}/messages` | Get messages with RAG logging |
+| GET | `/api/conversations/{id}/messages` | Get unified messages (all chat types) |
 | POST | `/api/conversations/{id}/restore` | Restore conversation to session |
 
 ### Integration with Authentication
 
 **Login Flow**:
 1. User authenticates via `/api/auth/token`
-2. System creates new conversation automatically
+2. System creates new conversation automatically (default `chat_type="rag"`)
 3. System creates session
 4. Returns JWT with `session_id`
 
@@ -443,6 +446,7 @@ async def generate_title(conversation_id: str) -> str
 conversation_manager = container.get_conversation_manager()
 conversation_id = await conversation_manager.create_conversation(
     user_id=user_data["user_id"],
+    chat_type="rag",
     title="New Conversation"
 )
 ```
@@ -914,10 +918,14 @@ Response: {
 ### Conversation Management (`/api/conversations/`)
 
 **GET /api/conversations** - List user conversations
+```
+Query params: ?chat_type=rag|agent|crew (optional), ?limit=50, ?offset=0
+```
 ```json
 Response: [{
   "id": "conv_xxx",
   "user_id": "string",
+  "chat_type": "rag",
   "title": "string",
   "created_at": "2024-01-01T12:00:00Z",
   "updated_at": "2024-01-01T12:05:00Z",
@@ -925,12 +933,13 @@ Response: [{
 }]
 ```
 
-**POST /api/conversations** - Create new conversation
+**POST /api/conversations** - Create new conversation (`chat_type` is required)
 ```json
-Request: {"title": "Optional conversation title"}
+Request: {"chat_type": "rag", "title": "Optional title"}
 Response: {
   "id": "conv_xxx",
   "user_id": "string",
+  "chat_type": "rag",
   "title": "string",
   "created_at": "2024-01-01T12:00:00Z",
   "updated_at": "2024-01-01T12:00:00Z",
@@ -938,26 +947,51 @@ Response: {
 }
 ```
 
-**GET /api/conversations/{id}/messages** - Get conversation messages with RAG logging
+**GET /api/conversations/{id}/messages** - Get unified messages for any chat_type
+
+Messages include a `chat_type` field. Unused fields for a given type are `null`.
 ```json
-Response: [{
-  "id": 1,
-  "speaker": "user|assistant",
-  "content": "string",
-  "created_at": "2024-01-01T12:00:00Z",
-  "sentiment": "positive",
-  "tone": "professional",
-  // RAG Pipeline Logging
-  "user_query": "original question",
-  "retrieved_context": [{"id": "doc1", "text": "..."}],
-  "llm_prompt": "final prompt sent to LLM",
-  "llm_response_raw": "raw LLM response",
-  "llm_provider": "local|google|gpt|hf",
-  "llm_model": "model name",
-  "llm_temperature": 0.1,
-  "processing_time_ms": 1250,
-  "error_message": null
-}]
+Response: {
+  "conversation_id": "conv_xxx",
+  "chat_type": "rag",
+  "messages": [{
+    "id": 1,
+    "conversation_id": "conv_xxx",
+    "chat_type": "rag",
+    "speaker": "user|assistant",
+    "content": "string",
+    "created_at": "2024-01-01T12:00:00Z",
+    "processing_time_ms": 1250,
+    "error_message": null,
+    // RAG fields (populated when chat_type=rag)
+    "user_query": "original question",
+    "llm_provider": "local|google|gpt|hf",
+    "llm_model": "model name",
+    "llm_prompt": "final prompt sent to LLM",
+    "llm_response_raw": "raw LLM response",
+    "llm_tokens_used": 512,
+    "llm_temperature": 0.1,
+    "llm_max_tokens": 256,
+    "retrieval_top_k": 3,
+    "use_documents": true,
+    "use_llm": true,
+    "sentiment": "positive",
+    "tone": "professional",
+    "retrieved_context": [{"id": "doc1", "text": "..."}],
+    "embeddings_used": {"model": "bge-small-en-v1.5"},
+    "retrieved_doc_ids": ["doc1"],
+    "sentiment_meta": {},
+    // Agent fields (populated when chat_type=agent)
+    "orchestrator_type": null,
+    "tools_used": null,
+    "steps": null,
+    // Crew fields (populated when chat_type=crew)
+    "workflow_type": null,
+    "iterations": null,
+    "agents_used": null
+  }],
+  "count": 1
+}
 ```
 
 **PUT /api/conversations/{id}** - Update conversation (rename)

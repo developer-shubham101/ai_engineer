@@ -72,8 +72,7 @@ class AutoGenOrchestrator(IAgentOrchestrator):
         )
 
         # 2. Define Termination Condition
-        # Stop after 6 messages or if "TERMINATE" is mentioned (optional)
-        termination = MaxMessageTermination(max_messages=6)
+        termination = MaxMessageTermination(max_messages=4)
 
         # 3. Create Team
         team = RoundRobinGroupChat(
@@ -81,23 +80,16 @@ class AutoGenOrchestrator(IAgentOrchestrator):
             termination_condition=termination
         )
 
-        # 4. Run Team with proper task formatting
-        # Ensure the task is treated as a user message
-        task_message = f"Debate topic: {query}\n\nAdvocate, please start by presenting arguments FOR this topic."
+        # 4. Run Team — single user-turn task
+        task_message = f"Debate topic: {query}"
         stream = team.run_stream(task=task_message)
 
         steps = []
         final_result = ""
 
-        # Collect output
         async for message in stream:
-            # We can log steps here
-            if hasattr(message, 'content'):
-                # This might need adjustment based on exact v0.4 message structure
+            if hasattr(message, 'content') and hasattr(message, 'source'):
                 steps.append(f"{message.source}: {str(message.content)[:100]}...")
-
-            # Keep track of the last response as result
-            if hasattr(message, 'content'):
                 final_result = str(message.content)
 
         return AgentResponse(
@@ -185,15 +177,15 @@ class AutoGenOrchestrator(IAgentOrchestrator):
                 tools=all_tools,
             )
 
-            termination = MaxMessageTermination(max_messages=8)
+            termination = MaxMessageTermination(max_messages=4)
 
             team = RoundRobinGroupChat(
                 participants=[researcher, analyst],
                 termination_condition=termination
             )
 
-            # Ensure proper task formatting as user message
-            task_message = f"Research this topic using available tools: {query}\n\nResearcher, please start by gathering information."
+            # Single clean user-turn task
+            task_message = f"Research this topic using available tools: {query}"
             stream = team.run_stream(task=task_message)
 
             steps = []
