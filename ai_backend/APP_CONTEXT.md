@@ -50,7 +50,8 @@ This system is built as a **learning playground and reference implementation** f
 - ✅ **Session-aware conversations** with profile management
 - ✅ **Persistent conversation history** with cross-device access
 - ✅ **Agentic mode** with step-by-step reasoning capabilities
-- ✅ **Agent Tools System** with real-time stock data and file operations
+- ✅ **Agent Tools System** with real-time stock, weather, web search, URL scraping and file operations
+- ✅ **Internet Search** - DuckDuckGo (free) or SerpAPI for real-time information in agents
 - ✅ **Multimodal AI capabilities** - Audio, Vision, and Media processing
 - ✅ **Agent Framework** - Modular architecture with AutoGen and custom orchestrators
 - ✅ **CrewAI Integration** - Multi-agent workflows with debate and research capabilities
@@ -1490,83 +1491,73 @@ vision_provider = create_vision_provider("paddleocr")  # Switch to PaddleOCR
 - **Whisper.cpp**: Faster CPU inference
 - **Custom Emotion Models**: ML-based emotion detection
 
-### Agent Tools System (NEW)
+### Agent Tools System
 
 **Function-Based Tools** (`app/modules/agents/function_tools/`):
-- **`tool_stock.py`** - Real-time stock price lookup using yfinance
-- **`tool_weather.py`** - Weather information with demo fallback
-- **`tool_file.py`** - Text file saving with security measures
+- **`tool_stock.py`** - Real-time stock price lookup using yfinance (no API key)
+- **`tool_weather.py`** - Weather information with OpenWeatherMap + demo fallback
+- **`tool_file.py`** - Text file saving with path sanitization
+- **`tool_web_search.py`** - Internet search via DuckDuckGo (free) or SerpAPI (`SERPAPI_KEY` env var)
+- **`tool_web_scraper.py`** - URL content fetcher with HTML noise removal (3000 char limit)
 
-**Agent Runner** (`app/modules/agents/agent_runner.py`):
-- **Static imports** for reliability (no dynamic loading)
-- **UML flow implementation** following the exact pattern:
-  1. Build system prompt with available tools
-  2. LLM decides which tool to use (JSON response)
-  3. Execute tool and feed result back to LLM
-  4. Continue until final answer or max iterations
-- **Smart JSON extraction** with regex patterns for mixed responses
-- **Tool result tracking** and intelligent summarization
-- **Error handling** for malformed responses
-
-**Integration with RAG System**:
-- **`use_tools` parameter** in QueryRequest and RAGRequest
-- **RAG Orchestrator integration** - Tool mode handled in `process_query()`
-- **Provider factory support** for LLM selection
-- **Unified API** - Same `/api/rag/{provider}/query` endpoint
-
-**Tool Registry**:
+**Tool Registry** (`agent_runner.py` REGISTRY):
 ```python
 REGISTRY = {
-    "get_stock_price": {
-        "fn": get_stock_price,
-        "args": ["symbol"],
-        "description": "Get current stock price for a symbol"
-    },
-    "get_weather": {
-        "fn": get_weather,
-        "args": ["city"],
-        "description": "Get current weather for a city"
-    },
-    "save_text_file": {
-        "fn": save_text_file,
-        "args": ["filename", "content"],
-        "description": "Save text content to a file"
-    }
+    "get_stock_price": {"fn": get_stock_price, "args": ["symbol"], "description": "Get current stock price"},
+    "get_weather":     {"fn": get_weather,     "args": ["city"],   "description": "Get current weather for a city"},
+    "save_text_file":  {"fn": save_text_file,  "args": ["filename", "content"], "description": "Save text to file"},
+    "web_search":      {"fn": web_search,      "args": ["query"],  "description": "Search internet for real-time info"},
+    "scrape_url":      {"fn": scrape_url,      "args": ["url"],    "description": "Fetch full content from a URL"}
 }
 ```
 
-**Stock Tool Implementation**:
-- **yfinance library** for real stock data from Yahoo Finance
-- **No API key required** - Free access to market data
-- **Real-time prices** with proper error handling
-- **Simple response format**: `{"symbol": "AAPL", "price": 150.25, "status": "success"}`
+**AutoGen Orchestrator — Shared Tool Architecture**:
 
-**Usage Example**:
+Both `Researcher` and `Analyst` agents share **all 5 tools** via `_build_all_tools()` helper:
+
+| Tool function | Wraps | Purpose |
+|---|---|---|
+| `search_internet(query)` | `tool_web_search` | DuckDuckGo / SerpAPI search |
+| `fetch_url(url)` | `tool_web_scraper` | Full page content extraction |
+| `get_stock(symbol)` | `tool_stock` | Real-time stock price via yfinance |
+| `get_city_weather(city)` | `tool_weather` | Current weather conditions |
+| `save_file(filename, content)` | `tool_file` | Persist content to disk |
+
+- **Researcher**: Uses tools to gather data — search, fetch, stock, weather
+- **Analyst**: Uses same tools to verify, enrich, cross-check findings, and save final report
+- **max_messages**: 8 (increased from 6 to allow richer multi-tool workflows)
+
+**Custom Orchestrator — Keyword Routing**:
+- `web` / `internet` / `latest` / `current` / `news` → routes to `web_search` then auto-scrapes first URL
+- `ticket` → `get_user_tickets` → `get_ticket_comments`
+- `search` / `document` → `search_documents`
+- `analyze` / `data` → `analyze_data` or `research_data`
+
+**Web Search Configuration**:
 ```bash
-curl -X POST "/api/rag/local/query" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "question": "Get the stock price for AAPL and save it to a file",
-    "use_llm": true,
-    "use_tools": true,
-    "conversation_id": "test123"
-  }'
+# Optional: upgrade from DuckDuckGo to SerpAPI
+SERPAPI_KEY=your_serpapi_key  # If not set, uses DuckDuckGo (free)
 ```
 
-**Expected Flow**:
-1. **Tool Call 1**: `{"tool": "get_stock_price", "args": {"symbol": "AAPL"}}`
-2. **Tool Result**: `{"symbol": "AAPL", "price": 150.25, "status": "success"}`
-3. **Tool Call 2**: `{"tool": "save_text_file", "args": {"filename": "AAPL_stock.txt", "content": "AAPL: $150.25"}}`
-4. **Final Response**: `"Stock price for AAPL: $150.25\nSaved file: AAPL_stock.txt (15 characters)"`
+**Dependencies**: `duckduckgo-search`, `beautifulsoup4`, `requests` (all in requirements.txt)
 
-**Key Features**:
-- ✅ **Static imports** for better reliability and IDE support
-- ✅ **Regex JSON extraction** handles mixed LLM responses
-- ✅ **Tool result summarization** provides meaningful final answers
-- ✅ **Error recovery** for malformed or incomplete responses
-- ✅ **Real stock data** via yfinance (no demo/fallback data)
-- ✅ **Secure file operations** with path sanitization
-- ✅ **Integrated with RAG** - Same API, enhanced capabilities
+**Example — Multi-tool research workflow**:
+```bash
+# AutoGen research with all tools available
+curl -X POST "/api/agents/query" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "question": "Research Tesla stock and weather at their Austin HQ",
+    "orchestrator_type": "autogen"
+  }'
+# Flow: Researcher → get_stock(TSLA) + search_internet + get_city_weather(Austin)
+#       Analyst   → fetch_url(article) + save_file(report.txt)
+
+# agent_runner with web search
+curl -X POST "/api/rag/local/query" \
+  -d '{"question": "Latest AI news", "use_llm": true, "use_tools": true}'
+# Flow: web_search("Latest AI news") → scrape_url(top result) → final answer
+```
 
 ## 11. Paragraph-Aware Chunking System (NEW - Tier 1 Optimization)
 
@@ -2786,7 +2777,7 @@ python tests/test_rbac_comprehensive.py
 
 ---
 
-**Last Updated**: 2025-01-11 (Synced with project structure - added missing LLM submodules, config files, api_routes_templates)
+**Last Updated**: 2025-01-11 (Agent tools expanded: web search, URL scraper, shared tool architecture for Researcher+Analyst)
 
 ---
 
