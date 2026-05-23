@@ -286,7 +286,7 @@ class SQLiteConversationManager(IConversationManager):
                     workflow_type, iterations,
                     retrieved_context, embeddings_used, retrieved_doc_ids, sentiment_meta,
                     tools_used, steps, agents_used
-                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                ) VALUES (?,?,?,?,?, ?,?, ?,?,?,?,?, ?,?,?, ?,?,?,?,?, ?, ?,?, ?,?,?,?, ?,?,?)
             """, (
                 conversation_id, chat_type, speaker, content, ts,
                 e.get("processing_time_ms"), e.get("error_message"),
@@ -356,17 +356,3 @@ class SQLiteConversationManager(IConversationManager):
                 c = row["content"]
                 return c[:50] + "..." if len(c) > 50 else c
             return "New Conversation"
-
-    # ── Legacy compatibility helpers (used by existing /query routes) ─────────
-
-    async def add_rag_message(self, conversation_id: str, speaker: str, content: str,
-                               **kwargs) -> int:
-        return await self.add_message(conversation_id, speaker, content, "rag", extra=kwargs)
-
-    async def add_agent_message(self, conversation_id: str, speaker: str, content: str,
-                                 **kwargs) -> int:
-        return await self.add_message(conversation_id, speaker, content, "agent", extra=kwargs)
-
-    async def add_crew_message(self, conversation_id: str, speaker: str, content: str,
-                                **kwargs) -> int:
-        return await self.add_message(conversation_id, speaker, content, "crew", extra=kwargs)

@@ -30,10 +30,11 @@ class AutoGenOrchestrator(IAgentOrchestrator):
             query = request.question
             lower_q = query.lower()
 
-            if "research" in lower_q:
-                return await self._execute_research_workflow(query)
-            else:
-                return await self._execute_debate_workflow(query)
+            return await self._execute_research_workflow(query)
+            # if "research" in lower_q:
+            #     return await self._execute_research_workflow(query)
+            # else:
+            #     return await self._execute_debate_workflow(query)
 
         except Exception as e:
             logger.error(f"AutoGen workflow failed: {e}")
@@ -58,19 +59,19 @@ class AutoGenOrchestrator(IAgentOrchestrator):
         # 1. Create Agents
         advocate = AssistantAgent(
             name="Advocate",
-            system_message="You argue FOR the given topic with strong supporting evidence.",
+            system_message="You argue FOR the given topic with strong supporting evidence. Keep responses concise.",
             model_client=self.model_client,
         )
 
         critic = AssistantAgent(
             name="Critic",
-            system_message="You argue AGAINST the given topic with counterarguments.",
+            system_message="You argue AGAINST the given topic with counterarguments. Keep responses concise.",
             model_client=self.model_client,
         )
 
         moderator = AssistantAgent(
             name="Moderator",
-            system_message="You moderate the debate and provide final balanced summary.",
+            system_message="You moderate the debate and provide final balanced summary. Keep responses concise.",
             model_client=self.model_client,
         )
 
@@ -84,8 +85,10 @@ class AutoGenOrchestrator(IAgentOrchestrator):
             termination_condition=termination
         )
 
-        # 4. Run Team
-        stream = team.run_stream(task=f"Let's debate: {query}")
+        # 4. Run Team with proper task formatting
+        # Ensure the task is treated as a user message
+        task_message = f"Debate topic: {query}\n\nAdvocate, please start by presenting arguments FOR this topic."
+        stream = team.run_stream(task=task_message)
 
         steps = []
         final_result = ""
@@ -166,7 +169,7 @@ class AutoGenOrchestrator(IAgentOrchestrator):
                 "You are a research agent with access to internet search, stock prices, weather, and file saving. "
                 "Use search_internet to find real-time information, fetch_url to read full articles, "
                 "get_stock for financial data, get_city_weather for weather data. "
-                "Always use tools to gather real data before answering. Cite your sources."
+                "Always use tools to gather real data before answering. Cite your sources. Keep responses concise."
             ),
             model_client=self.model_client,
             tools=all_tools,
@@ -178,7 +181,7 @@ class AutoGenOrchestrator(IAgentOrchestrator):
                 "You are an analyst with access to the same tools as the Researcher. "
                 "Review the research findings, use tools to verify or enrich data if needed, "
                 "then provide a structured analysis with key takeaways. "
-                "You can also use save_file to persist the final report."
+                "You can also use save_file to persist the final report. Keep responses concise."
             ),
             model_client=self.model_client,
             tools=all_tools,
@@ -191,7 +194,9 @@ class AutoGenOrchestrator(IAgentOrchestrator):
             termination_condition=termination
         )
 
-        stream = team.run_stream(task=f"Research this topic using available tools: {query}")
+        # Ensure proper task formatting as user message
+        task_message = f"Research this topic using available tools: {query}\n\nResearcher, please start by gathering information."
+        stream = team.run_stream(task=task_message)
 
         steps = []
         final_result = ""

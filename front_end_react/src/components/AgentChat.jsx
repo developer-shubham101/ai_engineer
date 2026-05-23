@@ -41,7 +41,7 @@ export default function AgentChat({ onLogout, onExit, selectedConversationId }) 
   async function loadConversationMessages(convId) {
     setLoadingHistory(true)
     try {
-      const res = await fetch(`${BASE_API_URL}/api/conversations/${convId}/messages?history_type=agent`, {
+      const res = await fetch(`${BASE_API_URL}/api/conversations/${convId}/messages?limit=100`, {
         headers: getHeaders()
       })
       if (!res.ok) throw new Error('Failed to load agent messages')

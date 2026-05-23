@@ -214,24 +214,30 @@ async def query_agent(
         else:
             logger.debug("AGENT_CONV: using existing conversation_id=%s", conversation_id)
 
-        await conv_manager.add_agent_message(
+        await conv_manager.add_message(
             conversation_id=conversation_id,
             speaker="user",
             content=request.question,
-            user_query=request.question,
-            orchestrator_type=request.orchestrator_type,
+            chat_type="agent",
+            extra={
+                "user_query": request.question,
+                "orchestrator_type": request.orchestrator_type,
+            }
         )
 
-        await conv_manager.add_agent_message(
+        await conv_manager.add_message(
             conversation_id=conversation_id,
             speaker="assistant",
             content=response.answer if response else f"Error: {error_msg}",
-            user_query=request.question,
-            tools_used=response.tools_used if response else [],
-            steps=response.steps if response else [],
-            orchestrator_type=request.orchestrator_type,
-            processing_time_ms=processing_time_ms,
-            error_message=error_msg
+            chat_type="agent",
+            extra={
+                "user_query": request.question,
+                "tools_used": response.tools_used if response else [],
+                "steps": response.steps if response else [],
+                "orchestrator_type": request.orchestrator_type,
+                "processing_time_ms": processing_time_ms,
+                "error_message": error_msg
+            }
         )
         logger.debug("AGENT_CONV: saved 2 messages to conversation_id=%s", conversation_id)
 

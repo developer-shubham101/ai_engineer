@@ -41,10 +41,11 @@ export default function CrewAIChat({ onLogout, onExit, onConversationChange, sel
       const token = getStoredToken()
       const headers = {}
       if (token) headers['Authorization'] = `Bearer ${token}`
-      const res = await fetch(`${BASE_API_URL}/api/conversations/${convId}/messages?history_type=crew`, { headers })
+      const res = await fetch(`${BASE_API_URL}/api/conversations/${convId}/messages?limit=100`, { headers })
       if (!res.ok) throw new Error('Failed to load crew messages')
       const data = await res.json()
-      const transformed = data.messages.map(msg => ({
+      const msgs = Array.isArray(data) ? data : (data.messages || [])
+      const transformed = msgs.map(msg => ({
         role: msg.speaker === 'user' ? 'user' : 'assistant',
         content: msg.content,
         agents_used: msg.agents_used || [],

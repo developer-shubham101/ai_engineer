@@ -622,9 +622,12 @@ class RAGOrchestrator(IRAGOrchestrator):
 
                 # Save user response
                 if self.conversation_manager and conversation_id:
-                    await self.conversation_manager.add_rag_message(
-                        conversation_id=conversation_id, speaker="user", content=question,
-                        user_query=question, use_llm=False, use_documents=False
+                    await self.conversation_manager.add_message(
+                        conversation_id=conversation_id,
+                        speaker="user",
+                        content=question,
+                        chat_type="rag",
+                        extra={"user_query": question, "use_llm": False, "use_documents": False}
                     )
 
                 self.session_manager.set_profile_value(session_id, next_field["key"], question.strip())
@@ -633,25 +636,34 @@ class RAGOrchestrator(IRAGOrchestrator):
                 next_field = self.session_manager.get_next_missing_profile_key(session_id)
                 if next_field:
                     if self.conversation_manager and conversation_id:
-                        await self.conversation_manager.add_rag_message(
-                            conversation_id=conversation_id, speaker="assistant", content=next_field["question"],
-                            llm_response_raw=next_field["question"], use_llm=False, use_documents=False
+                        await self.conversation_manager.add_message(
+                            conversation_id=conversation_id,
+                            speaker="assistant",
+                            content=next_field["question"],
+                            chat_type="rag",
+                            extra={"llm_response_raw": next_field["question"], "use_llm": False, "use_documents": False}
                         )
                     return RAGResponse(answer=next_field["question"], retrieved_documents=[], context="")
                 else:
                     completion_msg = "Thank you! Your details have been saved."
                     if self.conversation_manager and conversation_id:
-                        await self.conversation_manager.add_rag_message(
-                            conversation_id=conversation_id, speaker="assistant", content=completion_msg,
-                            llm_response_raw=completion_msg, use_llm=False, use_documents=False
+                        await self.conversation_manager.add_message(
+                            conversation_id=conversation_id,
+                            speaker="assistant",
+                            content=completion_msg,
+                            chat_type="rag",
+                            extra={"llm_response_raw": completion_msg, "use_llm": False, "use_documents": False}
                         )
                     return RAGResponse(answer=completion_msg, retrieved_documents=[], context="")
 
         # Ask first onboarding question
         if self.conversation_manager and conversation_id:
-            await self.conversation_manager.add_rag_message(
-                conversation_id=conversation_id, speaker="assistant", content=next_field["question"],
-                llm_response_raw=next_field["question"], use_llm=False, use_documents=False
+            await self.conversation_manager.add_message(
+                conversation_id=conversation_id,
+                speaker="assistant",
+                content=next_field["question"],
+                chat_type="rag",
+                extra={"llm_response_raw": next_field["question"], "use_llm": False, "use_documents": False}
             )
         return RAGResponse(answer=next_field["question"], retrieved_documents=[], context="")
 
@@ -709,7 +721,8 @@ class RAGOrchestrator(IRAGOrchestrator):
             await self.conversation_manager.add_message(
                 conversation_id=conversation_id,
                 speaker="user",
-                content=question
+                content=question,
+                chat_type="rag"
             )
 
             # Store assistant message with full RAG logging
@@ -737,27 +750,29 @@ class RAGOrchestrator(IRAGOrchestrator):
                         "dimensions": getattr(self.vector_store, 'embedding_dimensions', None)
                     }
 
-                await self.conversation_manager.add_rag_message(
+                await self.conversation_manager.add_message(
                     conversation_id=conversation_id,
                     speaker="assistant",
                     content=answer,
-                    # RAG Pipeline Data
-                    user_query=question,
-                    retrieved_context=retrieved_context,
-                    embeddings_used=embeddings_used,
-                    llm_prompt=final_prompt,
-                    llm_response_raw=answer,
-                    llm_provider=provider_name,
-                    llm_model=model_name,
-                    llm_tokens_used=None,  # TODO: Extract from provider if available
-                    llm_temperature=temperature,
-                    llm_max_tokens=max_tokens,
-                    retrieved_doc_ids=retrieved_doc_ids,
-                    retrieval_top_k=top_k,
-                    use_documents=use_documents,
-                    use_llm=use_llm,
-                    processing_time_ms=processing_time_ms,
-                    error_message=error_message
+                    chat_type="rag",
+                    extra={
+                        "user_query": question,
+                        "retrieved_context": retrieved_context,
+                        "embeddings_used": embeddings_used,
+                        "llm_prompt": final_prompt,
+                        "llm_response_raw": answer,
+                        "llm_provider": provider_name,
+                        "llm_model": model_name,
+                        "llm_tokens_used": None,
+                        "llm_temperature": temperature,
+                        "llm_max_tokens": max_tokens,
+                        "retrieved_doc_ids": retrieved_doc_ids,
+                        "retrieval_top_k": top_k,
+                        "use_documents": use_documents,
+                        "use_llm": use_llm,
+                        "processing_time_ms": processing_time_ms,
+                        "error_message": error_message
+                    }
                 )
             logger.debug(f"Stored conversation with RAG logging in conversation {conversation_id}")
 

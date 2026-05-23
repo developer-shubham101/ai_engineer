@@ -35,7 +35,7 @@ export default function RAGChat({ onLogout, initialMode = 'rag', initialConvId =
   async function loadAgentConversations(targetConvId = null) {
     if (!token) return
     try {
-      const res = await fetch(`${BASE_API_URL}/api/conversations?history_type=agent&limit=50`, {
+      const res = await fetch(`${BASE_API_URL}/api/conversations?chat_type=agent&limit=50`, {
         headers: { 'Authorization': `Bearer ${token}` }
       })
       if (!res.ok) return
@@ -104,7 +104,6 @@ export default function RAGChat({ onLogout, initialMode = 'rag', initialConvId =
     const convId = agentMode ? activeAgentConversationId : crewMode ? activeCrewConversationId : activeConversationId
     setQueryParams(mode, convId)
   }, [agentMode, crewMode, activeConversationId, activeAgentConversationId, activeCrewConversationId])
-
   // Auto-scroll messages
   useEffect(() => {
     if (messagesRef.current) messagesRef.current.scrollTop = messagesRef.current.scrollHeight
@@ -159,7 +158,7 @@ export default function RAGChat({ onLogout, initialMode = 'rag', initialConvId =
   async function loadConversations(targetConvId = null) {
     if (!token) return
     try {
-      const res = await fetch(`${BASE_API_URL}/api/conversations?limit=50&offset=0`, {
+      const res = await fetch(`${BASE_API_URL}/api/conversations?chat_type=rag&limit=50&offset=0`, {
         headers: { 'Authorization': `Bearer ${token}` }
       })
       if (!res.ok) throw new Error('Failed to load conversations')
@@ -172,7 +171,10 @@ export default function RAGChat({ onLogout, initialMode = 'rag', initialConvId =
 
       if (target) {
         setActiveConversationId(target.id)
-        await loadConversationMessages(target.id)
+        // Only load messages if switching to a different conversation
+        if (target.id !== activeConversationId) {
+          await loadConversationMessages(target.id)
+        }
       } else if (data.length === 0) {
         await createNewConversation()
       }
@@ -187,11 +189,8 @@ export default function RAGChat({ onLogout, initialMode = 'rag', initialConvId =
     try {
       const res = await fetch(`${BASE_API_URL}/api/conversations`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ title })
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ title, chat_type: 'rag' })
       })
       if (!res.ok) throw new Error('Failed to create conversation')
       const newConv = await res.json()
@@ -208,14 +207,13 @@ export default function RAGChat({ onLogout, initialMode = 'rag', initialConvId =
   async function loadConversationMessages(conversationId) {
     if (!token) return
     try {
-      const res = await fetch(`${BASE_API_URL}/api/conversations/${conversationId}/messages?history_type=rag&limit=100`, {
+      const res = await fetch(`${BASE_API_URL}/api/conversations/${conversationId}/messages?limit=100`, {
         headers: { 'Authorization': `Bearer ${token}` }
       })
       if (!res.ok) throw new Error('Failed to load messages')
       const data = await res.json()
-
-      // Transform backend messages to frontend format
-      const transformedMessages = data.map(msg => ({
+      const msgs = Array.isArray(data) ? data : (data.messages || [])
+      const transformedMessages = msgs.map(msg => ({
         role: msg.speaker === 'user' ? 'user' : 'bot',
         text: msg.speaker === 'user' ? msg.content : undefined,
         answer: msg.speaker === 'assistant' ? msg.content : undefined,
@@ -492,8 +490,8 @@ export default function RAGChat({ onLogout, initialMode = 'rag', initialConvId =
       }
       setMessages(m => [...m, botMsg])
 
-      // Reload conversations to update message count
-      await loadConversations()
+      // Reload conversations to update message count without resetting active conversation
+      await loadConversations(activeConversationId)
 
       if (botMsg.filtered_out_count > 0) {
         addToast(`${botMsg.filtered_out_count} results filtered for your role`, 'warning', 'Filtered')

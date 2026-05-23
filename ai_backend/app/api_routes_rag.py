@@ -48,7 +48,7 @@ class QueryRequest(BaseModel):
     question: str
     top_k: int = DEFAULT_TOP_K
     use_llm: bool = False
-    conversation_id: str
+    conversation_id: Optional[str] = None  # Made optional
     use_documents: bool = True  # Flag to control document retrieval
     use_conversation_history: bool = True
     enable_agentic_mode: bool = False  # Flag to enable agentic mode
@@ -58,7 +58,7 @@ class QueryRequest(BaseModel):
     category: Optional[str] = None
     debug: bool = False
     local_llm_model: Optional[str] = None
-    prompt_template: str
+    prompt_template: Optional[str] = None  # Made optional
 
 
 class QueryResponse(BaseModel):
@@ -172,6 +172,9 @@ async def query_rag(
 ):
     """RAG query endpoint - refactored to use modular RAG Orchestrator."""
     
+    # Log conversation_id for debugging
+    logger.info(f"RAG Query: conversation_id={req.conversation_id}, use_llm={req.use_llm}, provider={model_provider}")
+    
     # Validate model provider
     if model_provider not in VALID_PROVIDERS:
         raise HTTPException(
@@ -203,9 +206,13 @@ async def query_rag(
         provider=model_provider,
         provider_specific={"model_name": req.local_llm_model} if req.local_llm_model else None
     )
+    
+    logger.info(f"RAGRequest created: conversation_id={rag_request.conversation_id}, user={requester.get('user_id') if requester else None}")
 
     try:
         res = await rag_orchestrator.process_query(rag_request)
+        
+        logger.info(f"RAG Query completed: conversation_id={req.conversation_id}, answer_length={len(res.answer) if res.answer else 0}")
 
         # Process results
         docs = []
