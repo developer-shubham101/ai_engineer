@@ -20,14 +20,16 @@ export default function AgentChat({ onLogout, onExit, selectedConversationId }) 
 
   useEffect(() => {
     if (orchestratorType !== 'autogen') return
-    fetch(`${BASE_API_URL}/autogen/workflows`, { headers: getHeaders() })
-      .then(r => r.json())
-      .then(data => {
-        setAutogenMeta(data)
-        setSelectedWorkflow(data.workflows?.[0] || '')
-        setSelectedTools([])
+    fetch(`${BASE_API_URL}/api/agents/autogen/workflows`, {
+      headers: getHeaders(),
+    })
+      .then((r) => r.json())
+      .then((data) => {
+        setAutogenMeta(data);
+        setSelectedWorkflow(data.workflows?.[0] || "");
+        setSelectedTools([]);
       })
-      .catch(console.error)
+      .catch(console.error);
   }, [orchestratorType])
 
   const getHeaders = () => {
