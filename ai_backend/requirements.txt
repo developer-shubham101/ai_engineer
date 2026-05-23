@@ -44,6 +44,7 @@ sentence-transformers
 chromadb
 faiss-cpu
 rank-bm25
+pyspellchecker
 
 # --- Text Parsing & Processing ---
 tiktoken

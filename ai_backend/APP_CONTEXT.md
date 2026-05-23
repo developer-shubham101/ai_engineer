@@ -40,6 +40,8 @@ This system is built as a **learning playground and reference implementation** f
 
 ### Key Features
 - ✅ **Multi-provider LLM support** with unified API
+- ✅ **Complete query preprocessing pipeline** - Normalization, spell correction, synonym expansion, query classification (Tier 1 optimization)
+- ✅ **Multi-variant hybrid retrieval** - Searches with all query variants for maximum coverage (Tier 1 optimization)
 - ✅ **BM25 hybrid retrieval** for keyword + semantic search (Tier 1 optimization)
 - ✅ **Cross-encoder reranking** for improved retrieval quality (Tier 1 optimization)
 - ✅ **Paragraph-aware chunking** for semantic coherence (Tier 1 optimization)
@@ -104,6 +106,7 @@ User Request → FastAPI Router → Container → Modular Services → Response
 - `reranker.py` - Cross-encoder reranking for improved retrieval quality
 - `bm25_index.py` - **NEW: BM25 keyword-based retrieval**
 - `hybrid_retrieval.py` - **NEW: Reciprocal Rank Fusion for hybrid search**
+- `query_preprocessor.py` - **NEW: Query normalization and spell correction**
 - `interfaces.py` - Vector database interfaces
 
 **🔧 Core Module** (`app/modules/core/`)

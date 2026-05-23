@@ -139,6 +139,29 @@ class RAGOrchestrator(IRAGOrchestrator):
         3. Unauthenticated User: Basic RAG without session
         """
         global prompt_data
+        
+        # Step 0: Query Preprocessing (before middleware)
+        from app.modules.vector_db.query_preprocessor import QueryPreprocessor
+        preprocessor = QueryPreprocessor()
+        
+        processed_query = await preprocessor.process_query(
+            query=request.question,
+            use_spell_correction=True,
+            use_expansion=False,
+            use_llm_rewrite=False
+        )
+        
+        # Log preprocessing results
+        logger.info(f"Query preprocessing: original='{processed_query.original}'")
+        logger.info(f"Query type: {processed_query.query_type.value}")
+        if processed_query.corrected:
+            logger.info(f"Spell correction: '{processed_query.corrected}'")
+        logger.info(f"Total query variants: {len(processed_query.all_variants)}")
+        
+        # Update request with corrected query if available
+        if processed_query.corrected:
+            request.question = processed_query.corrected
+        
         request = await self.middleware_stack.process_request(request)
 
         start_time = time.time()
