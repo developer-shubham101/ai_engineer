@@ -92,10 +92,19 @@ User Request → FastAPI Router → Container → Modular Services → Response
 
 **🤖 LLM Module** (`app/modules/llm/`)
 - `rag_orchestrator.py` - RAG workflow orchestration
-- `providers.py` - LLM provider implementations (Local, Google, GPT, HF)
+- `providers/` - LLM provider implementations (Local, Google, GPT, HF, ColabLLM, LlamaServer)
+- `provider_factory.py` - Factory for dynamic provider selection
 - `prompt_manager.py` - Optimized prompt construction with token budgeting
 - `prompt_chain.py` - Chain of Responsibility pattern for dynamic prompt building
+- `prompt_builder.py` - Low-level prompt building utilities
+- `template_manager.py` - Database-backed prompt template management
+- `langchain_prompt_selector.py` - LangChain-based prompt selection
+- `model_manager.py` - Local model loading and caching
+- `middleware.py` - LLM request/response middleware
+- `colabllm_plugin.py` - ColabLLM provider plugin
+- `llamaserver_plugin.py` - LlamaServer provider plugin
 - `interfaces.py` - LLM and RAG interfaces
+- `prompt_templates/` - External prompt template files (balanced_enterprise, strict_rag, pirate, etc.)
 
 **🗄️ Vector DB Module** (`app/modules/vector_db/`)
 - `chroma_impl.py` - ChromaDB implementation
@@ -143,6 +152,10 @@ User Request → FastAPI Router → Container → Modular Services → Response
 - `settings.py` - Environment and application settings
 - `constants.py` - System constants and enums
 - `models.py` - Configuration data models
+- `database_config.py` - Database connection configuration
+- `local_models.json` - Local model definitions
+- `multimodal_models.json` - Multimodal model configurations
+- `onboarding_fields.json` - Guest user onboarding field definitions
 
 **🌐 API Module** (`app/modules/api/`)
 - `models.py` - Pydantic request/response models
@@ -154,15 +167,16 @@ User Request → FastAPI Router → Container → Modular Services → Response
 - `api_routes_rag.py` - RAG endpoints with agentic mode support
 - `api_routes_auth.py` - Authentication endpoints using container
 - `api_routes_conversations.py` - Conversation history with RAG logging
-- `api_routes_audio.py` - **NEW: Audio processing (STT, TTS, Emotion)**
-- `api_routes_vision.py` - **NEW: Vision processing (OCR, Image Analysis)**
-- `api_routes_media.py` - **NEW: Media file serving with RBAC**
+- `api_routes_audio.py` - Audio processing (STT, TTS, Emotion)
+- `api_routes_vision.py` - Vision processing (OCR, Image Analysis)
+- `api_routes_media.py` - Media file serving with RBAC
 - `api_routes_models.py` - Model management endpoints
-- `api_routes_agents.py` - **NEW: Agent workflow endpoints**
-- `api_routes_crew.py` - **NEW: CrewAI multi-agent workflow endpoints**
-- `api_routes_cleanup.py` - **NEW: Document cleanup and metadata enrichment**
+- `api_routes_agents.py` - Agent workflow endpoints
+- `api_routes_crew.py` - CrewAI multi-agent workflow endpoints
+- `api_routes_cleanup.py` - Document cleanup and metadata enrichment
+- `api_routes_templates.py` - Prompt template CRUD endpoints
 - `dependencies.py` - Dependency injection using container
-- `modules/integration.py` - **Dependency injection container**
+- `modules/integration.py` - Dependency injection container
 
 
 **🛠️ Utilities**
@@ -519,9 +533,32 @@ ai_backend/
 │   │   │   ├── emotion_providers.py # Emotion detection
 │   │   │   └── __init__.py        # Module exports
 │   │   ├── llm/             # LLM module
+│   │   │   ├── providers/         # Provider implementations
+│   │   │   │   ├── local.py       # Local llama-cpp provider
+│   │   │   │   ├── openai.py      # OpenAI GPT provider
+│   │   │   │   ├── google.py      # Google Gemini provider
+│   │   │   │   ├── huggingface.py # Hugging Face provider
+│   │   │   │   ├── colabllm.py    # ColabLLM provider
+│   │   │   │   ├── llamaserver.py # LlamaServer provider
+│   │   │   │   └── providers.py   # Provider registry
+│   │   │   ├── prompt_templates/  # External template files
+│   │   │   │   ├── balanced_enterprise.txt
+│   │   │   │   ├── strict_rag.txt
+│   │   │   │   ├── pirate_template.txt
+│   │   │   │   ├── reasoning_analyst.txt
+│   │   │   │   ├── personalized_chat.txt
+│   │   │   │   └── ultra_compact.txt
 │   │   │   ├── rag_orchestrator.py # RAG orchestration
-│   │   │   ├── providers.py       # LLM providers
+│   │   │   ├── provider_factory.py # Provider factory
 │   │   │   ├── prompt_manager.py  # Prompt management
+│   │   │   ├── prompt_chain.py    # Chain of Responsibility
+│   │   │   ├── prompt_builder.py  # Low-level prompt utilities
+│   │   │   ├── template_manager.py # DB-backed template management
+│   │   │   ├── model_manager.py   # Local model loading
+│   │   │   ├── middleware.py      # LLM middleware
+│   │   │   ├── colabllm_plugin.py # ColabLLM plugin
+│   │   │   ├── llamaserver_plugin.py # LlamaServer plugin
+│   │   │   ├── langchain_prompt_selector.py
 │   │   │   └── interfaces.py      # LLM interfaces
 │   │   ├── vector_db/       # Vector database module
 │   │   │   ├── chroma_impl.py     # ChromaDB implementation
@@ -538,7 +575,11 @@ ai_backend/
 │   │   ├── config/          # Configuration module
 │   │   │   ├── settings.py        # Environment settings
 │   │   │   ├── constants.py       # System constants
-│   │   │   └── models.py          # Config data models
+│   │   │   ├── models.py          # Config data models
+│   │   │   ├── database_config.py # Database configuration
+│   │   │   ├── local_models.json  # Local model definitions
+│   │   │   ├── multimodal_models.json # Multimodal configs
+│   │   │   └── onboarding_fields.json # Onboarding fields
 │   │   ├── api/             # API layer components
 │   │   │   ├── models.py          # Pydantic models
 │   │   │   ├── handlers.py        # Request handlers
@@ -550,11 +591,14 @@ ai_backend/
 │   ├── api_routes_auth.py   # Authentication endpoints
 │   ├── api_routes_rag.py    # RAG endpoints
 │   ├── api_routes_conversations.py # Conversation history endpoints
-│   ├── api_routes_audio.py  # Audio processing endpoints (NEW)
-│   ├── api_routes_vision.py # Vision processing endpoints (NEW)
-│   ├── api_routes_media.py  # Media serving endpoints (NEW)
+│   ├── api_routes_audio.py  # Audio processing endpoints
+│   ├── api_routes_vision.py # Vision processing endpoints
+│   ├── api_routes_media.py  # Media serving endpoints
 │   ├── api_routes_models.py # Model management endpoints
-│   ├── api_routes_cleanup.py # Cleanup and enrichment endpoints (NEW)
+│   ├── api_routes_agents.py # Agent workflow endpoints
+│   ├── api_routes_crew.py   # CrewAI workflow endpoints
+│   ├── api_routes_cleanup.py # Cleanup and enrichment endpoints
+│   ├── api_routes_templates.py # Prompt template endpoints
 │   ├── dependencies.py      # FastAPI dependencies
 │   ├── logging_config.py    # Logging configuration
 │   └── main.py             # FastAPI application
@@ -2739,7 +2783,7 @@ python tests/test_rbac_comprehensive.py
 
 ---
 
-**Last Updated**: 2025-01-11 (Agents Module Added - SOLID Architecture Implementation)
+**Last Updated**: 2025-01-11 (Synced with project structure - added missing LLM submodules, config files, api_routes_templates)
 
 ---
 
