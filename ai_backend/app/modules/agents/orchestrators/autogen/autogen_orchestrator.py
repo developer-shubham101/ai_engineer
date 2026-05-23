@@ -28,7 +28,7 @@ def _register_tool_builders() -> Dict[str, Callable]:
     from ...function_tools.tool_web_scraper import scrape_url
     from ...function_tools.tool_stock import get_stock_price
     from ...function_tools.tool_weather import get_weather
-    from ...function_tools.tool_file import save_text_file
+    from ...function_tools.tool_file import save_research_report
 
     def web_search_tool(query: str) -> str:
         """Search the internet for real-time information on any topic."""
@@ -52,17 +52,39 @@ def _register_tool_builders() -> Dict[str, Callable]:
             return f"{result['city']}: {result['temperature']}, {result['description']}, humidity {result['humidity']}"
         return f"Weather lookup failed: {result.get('error')}"
 
-    def save_text_file_tool(filename: str, content: str) -> str:
-        """Save text content to a file in user_uploaded_files/."""
-        result = save_text_file(filename, content)
-        return f"Saved '{result['filename']}' ({result['size']} chars)" if result.get("status") == "success" else f"Save failed: {result.get('error')}"
+    def save_research_report_tool(
+        title: str,
+        query: str,
+        summary: str,
+        markdown: str,
+        metadata: str,
+        sources: str,
+    ) -> str:
+        """Save a structured research report as markdown + JSON sidecar.
+
+        Args:
+            title:    Report title (used as filename base).
+            query:    Original research query.
+            summary:  Executive summary (1-3 sentences).
+            markdown: Full report body in markdown format.
+            metadata: JSON string of extra metadata (tags, topic, etc.).
+            sources:  Newline-separated list of source URLs or citations.
+        """
+        result = save_research_report(title, query, summary, markdown, metadata, sources)
+        if result.get("status") == "success":
+            return (
+                f"Report saved: '{result['title']}' "
+                f"({result['size']} chars, {result['sources_count']} sources) "
+                f"at {result['report_path']}"
+            )
+        return f"Save failed: {result.get('error')}"
 
     _TOOL_BUILDERS.update({
         "web_search": web_search_tool,
         "scrape_url": scrape_url_tool,
         "get_stock_price": get_stock_price_tool,
         "get_weather": get_weather_tool,
-        "save_text_file": save_text_file_tool,
+        "save_research_report": save_research_report_tool,
     })
     return _TOOL_BUILDERS
 
@@ -76,7 +98,7 @@ class AutoGenOrchestrator(IAgentOrchestrator):
     """
 
     # Names match agent_runner.REGISTRY for unified /tools discovery
-    AVAILABLE_TOOLS = ["web_search", "scrape_url", "get_stock_price", "get_weather", "save_text_file"]
+    AVAILABLE_TOOLS = ["web_search", "scrape_url", "get_stock_price", "get_weather", "save_research_report"]
 
     # Map workflow name → handler method name
     WORKFLOW_REGISTRY = {
@@ -136,6 +158,14 @@ class AutoGenOrchestrator(IAgentOrchestrator):
             else:
                 logger.warning("AutoGen: unknown tool '%s' requested, skipping", name)
         return tools
+
+    def _get_research_tools(self, tools: List[Callable]) -> List[Callable]:
+        """Return only data-gathering tools (excludes save_text_file)."""
+        return [t for t in tools if t.__name__ != "save_text_file_tool"]
+
+    def _get_save_tools(self, tools: List[Callable]) -> List[Callable]:
+        """Return only file-saving tools."""
+        return [t for t in tools if t.__name__ == "save_research_report_tool"]
 
     # ------------------------------------------------------------------
     # Shared stream runner
@@ -203,35 +233,63 @@ class AutoGenOrchestrator(IAgentOrchestrator):
         )
 
     async def _execute_research_workflow(self, query: str, tools: List[Callable], max_steps: int) -> AgentResponse:
-        """Two-agent research: Researcher gathers data, Analyst synthesizes."""
+        """Six-agent research pipeline: Plan → Research → Verify → Analyse → Evaluate → Report."""
+        planner = AssistantAgent(
+            name="Planner",
+            system_message="Break research queries into structured tasks.",
+            model_client=self.model_client,
+        )
         researcher = AssistantAgent(
             name="Researcher",
-            system_message=(
-                "You are a research agent. Use available tools to gather real-time data. "
-                "Always cite sources. Be concise."
-            ),
+            system_message="Gather factual evidence with citations only.",
             model_client=self.model_client,
-            tools=tools or None,
+            tools=self._get_research_tools(tools) or None,
+        )
+        verifier = AssistantAgent(
+            name="Verifier",
+            system_message="Verify sources, remove duplicates, check consistency.",
+            model_client=self.model_client,
         )
         analyst = AssistantAgent(
             name="Analyst",
+            system_message="Synthesize verified findings into insights.",
+            model_client=self.model_client,
+        )
+        evaluator = AssistantAgent(
+            name="Evaluator",
+            system_message="Critique analysis for hallucinations, gaps, and weak evidence.",
+            model_client=self.model_client,
+        )
+        report_writer = AssistantAgent(
+            name="ReportWriter",
             system_message=(
-                "You are an analyst. Review research findings, enrich with tools if needed, "
-                "then provide a structured analysis with key takeaways. Be concise."
+                "Convert final analysis into a professional research report.\n"
+                "Call save_research_report with:\n"
+                "  title    = concise report title\n"
+                "  query    = the original research question\n"
+                "  summary  = 1-3 sentence executive summary\n"
+                "  markdown = full report body in markdown (Key Findings, Evidence, Risks, Conclusion)\n"
+                "  metadata = JSON string with tags and topic, e.g. '{\"topic\": \"AI\", \"tags\": [\"research\"]}'\n"
+                "  sources  = newline-separated URLs or citations from Researcher"
             ),
             model_client=self.model_client,
-            tools=tools or None,
+            tools=self._get_save_tools(tools) or None,
         )
 
         team = RoundRobinGroupChat(
-            participants=[researcher, analyst],
+            participants=[planner, researcher, verifier, analyst, evaluator, report_writer],
             termination_condition=MaxMessageTermination(max_messages=max_steps)
         )
-        final_result, steps, tools_used = await self._run_team(team, f"Research this topic: {query}")
+
+        task = (
+            f"Research this topic thoroughly:\n\n{query}\n\n"
+            "Final step: Save the final report using save_text_file tool."
+        )
+        final_result, steps, tools_used = await self._run_team(team, task)
 
         return AgentResponse(
             answer=final_result,
             steps=steps,
-            tools_used=list(tools_used) or [t.__name__ for t in tools],
+            tools_used=list(tools_used),
             final_step=True
         )
