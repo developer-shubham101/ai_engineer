@@ -67,6 +67,7 @@ This system is built as a **learning playground and reference implementation** f
 - ✅ **Production-ready** with 8GB+ RAM support for local models
 - ✅ **Temperature control** - Unified temperature parameter across all providers
 - ✅ **Comprehensive RAG logging** - Full pipeline tracking for debugging
+- ✅ **Agent conversation persistence** - Agent interactions saved to separate `agent_messages` table
 
 ---
 
@@ -365,24 +366,19 @@ The system now supports **persistent conversation history** that is decoupled fr
    - `is_archived` (BOOLEAN): Soft delete flag
    - `metadata` (TEXT): Additional JSON metadata
 
-2. **messages** - Messages with comprehensive RAG logging
+2. **messages** - RAG conversation messages with full pipeline logging
    - Basic fields: `id`, `conversation_id`, `speaker`, `content`, `created_at`
    - Sentiment: `sentiment`, `tone`, `sentiment_meta`
-   - **RAG Pipeline Logging**:
-     - `user_query`: Original user question
-     - `retrieved_context`: Retrieved documents (JSON)
-     - `embeddings_used`: Embedding model metadata (JSON)
-     - `llm_prompt`: Final prompt sent to LLM
-     - `llm_response_raw`: Raw LLM response
-     - `llm_provider`: Provider used (local, google, hf)
-     - `llm_model`: Model name
-     - `llm_tokens_used`: Token count
-     - `llm_temperature`, `llm_max_tokens`: Parameters
-     - `retrieved_doc_ids`: Document IDs retrieved (comma-separated)
-     - `retrieval_top_k`: Top K parameter
-     - `use_documents`, `use_llm`: Flags
-     - `processing_time_ms`: Performance metric
-     - `error_message`: Error tracking
+   - RAG Pipeline: `user_query`, `retrieved_context`, `llm_prompt`, `llm_provider`, `llm_model`, `processing_time_ms`, etc.
+
+3. **agent_messages** - Agent conversation log (completely separate from RAG messages)
+   - `conversation_id`, `speaker`, `content`, `created_at`
+   - `user_query`: Original question
+   - `tools_used`: JSON list of tools that ran
+   - `steps`: JSON full step-by-step execution log
+   - `orchestrator_type`: `custom` or `autogen`
+   - `processing_time_ms`: Execution duration
+   - `error_message`: Error if any
 
 ### Conversation Manager
 
@@ -401,12 +397,19 @@ async def list_conversations(user_id: str, limit: int, offset: int) -> List[Dict
 async def update_conversation(conversation_id: str, user_id: str, **kwargs) -> bool
 async def delete_conversation(conversation_id: str, user_id: str) -> bool
 
-# Message Management
+# Message Management — RAG
 async def add_message(conversation_id: str, speaker: str, content: str, ...) -> int
-async def add_rag_message(conversation_id: str, speaker: str, content: str, 
-                          user_query: str, retrieved_context: List[Dict], 
+async def add_rag_message(conversation_id: str, speaker: str, content: str,
+                          user_query: str, retrieved_context: List[Dict],
                           embeddings_used: Dict, llm_prompt: str, ...) -> int
 async def get_messages(conversation_id: str, user_id: str, limit: Optional[int]) -> List[Dict]
+
+# Message Management — Agent
+async def add_agent_message(conversation_id: str, speaker: str, content: str,
+                            user_query: str, tools_used: List[str],
+                            steps: List[Dict], orchestrator_type: str,
+                            processing_time_ms: int, error_message: str) -> int
+async def get_agent_messages(conversation_id: str, user_id: str, limit: Optional[int]) -> List[Dict]
 
 # Utilities
 async def generate_title(conversation_id: str) -> str
@@ -703,51 +706,82 @@ Response: {
 }
 ```
 
-### Agents (`/api/agents/`) - **NEW**
+### Agents (`/api/agents/`)
 
-**POST /api/agents/query** - Execute agent workflows
+**POST /api/agents/query** - Execute agent workflow
 ```json
 Request: {
   "question": "What is the status of my tickets?",
   "tools": ["get_user_tickets", "get_ticket_comments"],
   "max_steps": 5,
   "temperature": 0.1,
-  "orchestrator_type": "custom",  // "custom" or "autogen"
-  "debug": true
+  "orchestrator_type": "custom",
+  "conversation_id": "conv_xxx",
+  "debug": false
 }
 Response: {
-  "answer": "Based on my analysis:\n\nStep 1 (get_user_tickets): Found 2 tickets...",
-  "steps": [
-    {
-      "step": 1,
-      "tool": "get_user_tickets",
-      "input": "current",
-      "result": "Found 2 tickets for user...",
-      "timestamp": 1640995200.0
-    }
-  ],
+  "answer": "Based on my analysis...",
+  "steps": [{"step": 1, "tool": "get_user_tickets", "input": "current", "result": "..."}],
   "tools_used": ["get_user_tickets"],
-  "available_tools": ["search_documents", "get_user_tickets", ...],
-  "debug_info": {
-    "processing_time_ms": 1250,
-    "enabled_tools": ["get_user_tickets"],
-    "actual_steps": 1
-  }
+  "available_tools": ["search_documents", "web_search", ...],
+  "conversation_id": "conv_xxx",
+  "debug_info": {"processing_time_ms": 1250, "actual_steps": 1}
 }
+```
+- `conversation_id` is auto-created if not provided; always returned in response
+- Saves both turns (user + assistant) to `agent_messages` table after every call
+
+**GET /api/agents/status** - Get agent system status and all available tools
+
+**GET /api/agents/tools** - List all tools (orchestrator tools + REGISTRY, deduped)
+```json
+Response: [
+  {"name": "search_documents", "description": "Search company documents..."},
+  {"name": "web_search",        "description": "Search the internet for real-time info..."},
+  {"name": "scrape_url",        "description": "Fetch full content from a URL..."},
+  {"name": "get_stock_price",   "description": "Get current stock price..."},
+  {"name": "get_weather",       "description": "Get current weather for a city..."},
+  {"name": "save_text_file",    "description": "Save text content to a file..."},
+  ...
+]
 ```
 
-**GET /api/agents/status** - Get agent system status
-**GET /api/agents/tools** - List available tools
-**POST /api/agents/tools/{name}/test** - Test individual tools
+**POST /api/agents/tools/{tool_name}/test** - Test a specific tool directly
 ```json
-Request: POST /api/agents/tools/search_documents/test?input_data=vacation%20policy
+Request body: {"input_data": "AAPL"}
 Response: {
-  "tool": "search_documents",
-  "input": "vacation policy",
-  "result": "...",
-  "status": "success"
+  "tool": "get_stock_price",
+  "input": "AAPL",
+  "result": {"symbol": "AAPL", "price": 150.25, "status": "success"},
+  "status": "success",
+  "source": "registry"
 }
 ```
+- Two-stage lookup: orchestrator tools first, then REGISTRY fallback
+- `source` field indicates which path was used (`orchestrator` or `registry`)
+
+**GET /api/agents/conversations/{conversation_id}/messages** - Get agent conversation history
+```json
+Response: {
+  "conversation_id": "conv_xxx",
+  "messages": [
+    {
+      "id": 1, "speaker": "user", "content": "What is the status?",
+      "created_at": "2025-01-11T10:00:00Z",
+      "tools_used": null, "steps": null, "orchestrator_type": "custom"
+    },
+    {
+      "id": 2, "speaker": "assistant", "content": "Based on my analysis...",
+      "created_at": "2025-01-11T10:00:01Z",
+      "tools_used": ["get_user_tickets"],
+      "steps": [{"step": 1, "tool": "get_user_tickets", ...}],
+      "orchestrator_type": "custom", "processing_time_ms": 1250
+    }
+  ],
+  "count": 2
+}
+```
+- Reads from `agent_messages` table — completely separate from RAG `messages` table
 
 ### CrewAI Multi-Agent Workflows (`/api/crew/`) - **NEW**
 
@@ -2571,46 +2605,37 @@ curl -X POST "/api/audio/tts" \
 
 ### Agent Workflows
 ```bash
-# Ticket Status Query
+# Query (auto-creates conversation if no conversation_id given)
 curl -X POST "/api/agents/query" \
   -H "Authorization: Bearer <token>" \
   -H "Content-Type: application/json" \
-  -d '{
-    "question": "What is the status of my tickets?",
-    "tools": ["get_user_tickets", "get_ticket_comments"],
-    "max_steps": 3,
-    "debug": true
-  }'
+  -d '{"question": "What is the status of my tickets?", "max_steps": 3}'
+# Returns conversation_id — use it for follow-ups and history
 
-# Document Search with Agent
+# Continue existing conversation
 curl -X POST "/api/agents/query" \
   -H "Authorization: Bearer <token>" \
   -H "Content-Type: application/json" \
-  -d '{
-    "question": "Search for vacation policy documents",
-    "tools": ["search_documents"],
-    "max_steps": 2
-  }'
+  -d '{"question": "Any updates?", "conversation_id": "conv_xxx"}'
 
-# Research Data Analysis
-curl -X POST "/api/agents/query" \
-  -H "Authorization: Bearer <token>" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "question": "Analyze user engagement trends",
-    "tools": ["research_data", "analyze_data"],
-    "debug": true
-  }'
-
-# Test Individual Tool
-curl -X POST "/api/agents/tools/search_documents/test" \
-  -H "Authorization: Bearer <token>" \
-  -H "Content-Type: application/json" \
-  -d "vacation policy"
-
-# Get Agent Status
-curl -X GET "/api/agents/status" \
+# Get agent conversation history (from agent_messages table)
+curl -X GET "/api/agents/conversations/conv_xxx/messages" \
   -H "Authorization: Bearer <token>"
+
+# Test a tool (JSON body, not query param)
+curl -X POST "/api/agents/tools/web_search/test" \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"input_data": "latest AI news 2025"}'
+
+# Test stock tool
+curl -X POST "/api/agents/tools/get_stock_price/test" \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"input_data": "AAPL"}'
+
+# List all available tools
+curl -X GET "/api/agents/tools" -H "Authorization: Bearer <token>"
 ```
 
 ### Document Management
@@ -2777,7 +2802,7 @@ python tests/test_rbac_comprehensive.py
 
 ---
 
-**Last Updated**: 2025-01-11 (Agent tools expanded: web search, URL scraper, shared tool architecture for Researcher+Analyst)
+**Last Updated**: 2025-01-11 (Agent conversation persistence: agent_messages table, /tools fixes, conversation_id in response)
 
 ---
 
