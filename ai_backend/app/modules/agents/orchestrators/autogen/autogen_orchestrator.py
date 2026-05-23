@@ -107,7 +107,7 @@ class AutoGenOrchestrator(IAgentOrchestrator):
         handler = getattr(self, handler_name)
 
         try:
-            return await handler(request.question, tools)
+            return await handler(request.question, tools, request.max_steps)
         except Exception as e:
             logger.error("AutoGen workflow '%s' failed: %s", workflow, e, exc_info=True)
             return AgentResponse(answer=f"Workflow failed: {e}", steps=[], tools_used=[], final_step=True)
@@ -169,7 +169,7 @@ class AutoGenOrchestrator(IAgentOrchestrator):
     # Workflows
     # ------------------------------------------------------------------
 
-    async def _execute_debate_workflow(self, query: str, tools: List[Callable]) -> AgentResponse:
+    async def _execute_debate_workflow(self, query: str, tools: List[Callable], max_steps: int) -> AgentResponse:
         """Three-agent debate: Advocate vs Critic, moderated by Moderator."""
         advocate = AssistantAgent(
             name="Advocate",
@@ -191,7 +191,7 @@ class AutoGenOrchestrator(IAgentOrchestrator):
 
         team = RoundRobinGroupChat(
             participants=[advocate, critic, moderator],
-            termination_condition=MaxMessageTermination(max_messages=4)
+            termination_condition=MaxMessageTermination(max_messages=max_steps)
         )
         final_result, steps, tools_used = await self._run_team(team, f"Debate topic: {query}")
 
@@ -202,7 +202,7 @@ class AutoGenOrchestrator(IAgentOrchestrator):
             final_step=True
         )
 
-    async def _execute_research_workflow(self, query: str, tools: List[Callable]) -> AgentResponse:
+    async def _execute_research_workflow(self, query: str, tools: List[Callable], max_steps: int) -> AgentResponse:
         """Two-agent research: Researcher gathers data, Analyst synthesizes."""
         researcher = AssistantAgent(
             name="Researcher",
@@ -225,7 +225,7 @@ class AutoGenOrchestrator(IAgentOrchestrator):
 
         team = RoundRobinGroupChat(
             participants=[researcher, analyst],
-            termination_condition=MaxMessageTermination(max_messages=4)
+            termination_condition=MaxMessageTermination(max_messages=max_steps)
         )
         final_result, steps, tools_used = await self._run_team(team, f"Research this topic: {query}")
 

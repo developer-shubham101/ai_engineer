@@ -130,11 +130,14 @@ User Request → FastAPI Router → Container → Modular Services → Response
 - `cleanup_service.py` - **NEW: Document cleanup and enrichment pipeline**
 
 
-**🤖 CrewAI Module** (`app/modules/crew_ai/`) - **NEW**
-- `interfaces.py` - CrewAI interfaces for multi-agent workflows
-- `orchestrator.py` - CrewAI orchestrator using official library
+**🤖 CrewAI Module** (`app/modules/crew_ai/`)
+- `interfaces.py` - CrewAI interfaces (`ICrewOrchestrator`, `CrewRequest`, `CrewResponse`)
+- `orchestrator.py` - CrewAI orchestrator using official `crewai` library
 - `factory.py` - Factory for creating CrewAI orchestrators
-- YAML configuration files in `crew_config/` directory
+- `crew_config/agents.yaml` - Agent role/goal/backstory definitions
+- `crew_config/tasks.yaml` - Task description/expected_output definitions
+- **Workflows**: `debate` (Advocate, Critic, Moderator), `research` (Researcher, Analyst, Synthesizer)
+- **LLM**: llama-server via `CREW_BASE_URL` (OpenAI-compatible, configured in settings)
 
 **🎭 Multimodal Module** (`app/modules/multimodal/`) - **NEW**
 - `interfaces.py` - Multimodal processing interfaces
@@ -816,11 +819,11 @@ Response: {
 ```json
 Request: {
   "topic": "Should companies adopt remote work policies?",
-  "workflow_type": "debate",  // debate, research
+  "workflow_type": "debate",  // debate | research
   "max_iterations": 3,
   "temperature": 0.7,
   "provider": "local",
-  "conversation_id": "conv_123"
+  "conversation_id": "conv_123"  // optional, auto-created if omitted
 }
 Response: {
   "result": "# Debate Analysis: Topic\n\n## Advocate Position...\n\n## Critic Position...\n\n## Moderator Analysis...",
@@ -831,8 +834,21 @@ Response: {
   "available_workflows": ["debate", "research"]
 }
 ```
+- `conversation_id` is auto-created if not provided; saved to DB but **not returned** in response
+- Both user and assistant messages saved to `messages` table with `chat_type="crew"`
+- Assistant message persists: `workflow_type`, `agents_used`, `iterations`, `processing_time_ms`
 
-**GET /api/crew/status** - Get CrewAI system status
+**GET /api/crew/status** - Get CrewAI system status and workflow details
+```json
+Response: {
+  "available_workflows": [
+    {"name": "debate",   "description": "...", "agents": ["Advocate", "Critic", "Moderator"]},
+    {"name": "research", "description": "...", "agents": ["Researcher", "Analyst", "Synthesizer"]}
+  ],
+  "status": "active"
+}
+```
+
 **GET /api/crew/workflows** - List available workflows
 
 **Available Workflows:**
@@ -841,10 +857,10 @@ Response: {
 
 **Key Features:**
 - **Official CrewAI Library**: Uses `crewai.Agent`, `crewai.Task`, `crewai.Crew`
-- **YAML Configuration**: Agent and task definitions in `crew_config/`
-- **Sequential Processing**: Tasks executed in proper order with context
-- **LLM Integration**: Works with local and cloud providers
-- **Structured Output**: Formatted results with clear agent contributions
+- **YAML Configuration**: Agent and task definitions in `crew_config/agents.yaml` and `crew_config/tasks.yaml`
+- **Sequential Processing**: Tasks executed in order with context passed between agents
+- **LLM**: llama-server via `CREW_BASE_URL` (OpenAI-compatible endpoint)
+- **DB Persistence**: Every query saved to `messages` table (`chat_type="crew"`)
 
 ### Audio Processing (`/api/audio/`) - **NEW**
 
