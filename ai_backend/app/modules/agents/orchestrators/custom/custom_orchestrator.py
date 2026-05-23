@@ -113,6 +113,16 @@ class CustomOrchestrator(IAgentOrchestrator):
             if "search_documents" in enabled_tools:
                 await self._execute_tool("search_documents", question, context, steps, tools_used)
         
+        elif "web" in question.lower() or "internet" in question.lower() or "latest" in question.lower() or "current" in question.lower() or "news" in question.lower():
+            if "web_search" in enabled_tools:
+                result = await self._execute_tool("web_search", question, context, steps, tools_used)
+                # Auto-scrape first URL if content is needed
+                if "scrape_url" in enabled_tools and len(steps) < max_steps:
+                    import re
+                    urls = re.findall(r'https?://[^\s]+', result)
+                    if urls:
+                        await self._execute_tool("scrape_url", urls[0], context, steps, tools_used)
+        
         elif "analyze" in question.lower() or "data" in question.lower():
             if "analyze_data" in enabled_tools:
                 await self._execute_tool("analyze_data", question, context, steps, tools_used)

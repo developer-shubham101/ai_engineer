@@ -130,6 +130,45 @@ class ResearchDataTool(ITool):
         return MockDataProvider.get_research_data(data_type)
 
 
+class WebSearchTool(ITool):
+    """Search the internet for real-time information."""
+
+    @property
+    def name(self) -> str:
+        return "web_search"
+
+    @property
+    def description(self) -> str:
+        return "Search the internet for real-time information. Use for current events, facts, or anything not in internal documents. Input: search query string"
+
+    async def execute(self, input_data: str, context: Dict[str, Any]) -> str:
+        from ..function_tools.tool_web_search import web_search
+        result = web_search(input_data.strip())
+        if result.get("status") == "success":
+            return f"Web search results for '{input_data}':\n\n{result['formatted']}"
+        return f"Web search failed: {result.get('error', 'Unknown error')}"
+
+
+class ScrapeUrlTool(ITool):
+    """Fetch and extract full text content from a URL."""
+
+    @property
+    def name(self) -> str:
+        return "scrape_url"
+
+    @property
+    def description(self) -> str:
+        return "Fetch and extract full text content from a URL. Use after web_search to get detailed information. Input: URL string"
+
+    async def execute(self, input_data: str, context: Dict[str, Any]) -> str:
+        from ..function_tools.tool_web_scraper import scrape_url
+        result = scrape_url(input_data.strip())
+        if result.get("status") == "success":
+            truncated_note = " (truncated)" if result.get("truncated") else ""
+            return f"Content from {input_data}{truncated_note}:\n\n{result['content']}"
+        return f"Scrape failed: {result.get('error', 'Unknown error')}"
+
+
 # Deprecated: Use ToolFactory.create_default_tools() instead
 # This function is kept for backward compatibility
 def create_default_tools(vector_store=None):

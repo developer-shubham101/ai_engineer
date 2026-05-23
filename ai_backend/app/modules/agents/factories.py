@@ -7,7 +7,8 @@ from .interfaces import ITool, IAgentOrchestrator
 from .orchestrators import CustomOrchestrator, AutoGenOrchestrator, AUTOGEN_AVAILABLE
 from .tools import (
     SearchDocumentsTool, GetUserTicketsTool, GetTicketCommentsTool,
-    AnalyzeDataTool, SummarizeStatusTool, ResearchDataTool
+    AnalyzeDataTool, SummarizeStatusTool, ResearchDataTool,
+    WebSearchTool, ScrapeUrlTool
 )
 from ..vector_db.interfaces import IVectorStore
 
@@ -47,6 +48,16 @@ class ToolFactory:
         """Create research data tool."""
         return ResearchDataTool()
 
+    @staticmethod
+    def create_web_search_tool() -> ITool:
+        """Create internet web search tool."""
+        return WebSearchTool()
+
+    @staticmethod
+    def create_scrape_url_tool() -> ITool:
+        """Create URL scraper tool."""
+        return ScrapeUrlTool()
+
     @classmethod
     def create_default_tools(cls, vector_store: Optional[IVectorStore] = None) -> List[ITool]:
         """Create default tool set."""
@@ -55,7 +66,9 @@ class ToolFactory:
             cls.create_comments_tool(),
             cls.create_analysis_tool(),
             cls.create_summary_tool(),
-            cls.create_research_tool()
+            cls.create_research_tool(),
+            cls.create_web_search_tool(),
+            cls.create_scrape_url_tool(),
         ]
 
         if vector_store:
