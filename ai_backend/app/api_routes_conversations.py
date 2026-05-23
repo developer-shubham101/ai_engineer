@@ -1,24 +1,28 @@
 # app/api_routes_conversations.py
 """
 Conversation history API routes.
-Provides endpoints for managing conversation history across devices.
+Supports filtering by history type: rag | agent | crew
 """
 
 import logging
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Literal
 
-from fastapi import APIRouter, HTTPException, Depends, status
-from pydantic import BaseModel, Field
+from fastapi import APIRouter, HTTPException, Depends, Query
+from pydantic import BaseModel
 
 from app.dependencies import get_current_user
 from app.modules.integration import get_container
+from app.logging_config import log_user_action
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/conversations", tags=["Conversations"])
 
+VALID_HISTORY_TYPES = {"rag", "agent", "crew"}
 
-# Request/Response Models
+
+# ── Models ────────────────────────────────────────────────────────────────────
+
 class ConversationResponse(BaseModel):
     id: str
     user_id: str
@@ -28,19 +32,15 @@ class ConversationResponse(BaseModel):
     message_count: Optional[int] = 0
 
 
-class MessageResponse(BaseModel):
-    """Enhanced message response with full RAG pipeline logging."""
+class RagMessageResponse(BaseModel):
+    """RAG pipeline message with full retrieval + LLM logging."""
     id: int
     speaker: str
     content: str
     created_at: str
-    
-    # Sentiment/Tone
     sentiment: Optional[str] = None
     tone: Optional[str] = None
     sentiment_meta: Optional[Dict[str, Any]] = None
-    
-    # RAG Pipeline Logging
     user_query: Optional[str] = None
     retrieved_context: Optional[List[Dict[str, Any]]] = None
     embeddings_used: Optional[Dict[str, Any]] = None
@@ -59,11 +59,48 @@ class MessageResponse(BaseModel):
     error_message: Optional[str] = None
 
 
+class AgentMessageResponse(BaseModel):
+    """Agent workflow message with steps + tools logging."""
+    id: int
+    speaker: str
+    content: str
+    created_at: str
+    user_query: Optional[str] = None
+    tools_used: Optional[List[str]] = None
+    steps: Optional[List[Dict[str, Any]]] = None
+    orchestrator_type: Optional[str] = None
+    processing_time_ms: Optional[int] = None
+    error_message: Optional[str] = None
+
+
+class CrewMessageResponse(BaseModel):
+    """CrewAI workflow message with agents + workflow logging."""
+    id: int
+    speaker: str
+    content: str
+    created_at: str
+    user_topic: Optional[str] = None
+    workflow_type: Optional[str] = None
+    agents_used: Optional[List[str]] = None
+    iterations: Optional[int] = None
+    processing_time_ms: Optional[int] = None
+    error_message: Optional[str] = None
+
+
 class UpdateConversationRequest(BaseModel):
     title: Optional[str] = None
 
 
-# Endpoints
+# ── Helpers ───────────────────────────────────────────────────────────────────
+
+def _get_manager():
+    container = get_container()
+    container.initialize()
+    return container.get_conversation_manager()
+
+
+# ── Conversation CRUD ─────────────────────────────────────────────────────────
+
 @router.get("", response_model=List[ConversationResponse])
 async def list_conversations(
     limit: int = 50,
@@ -72,19 +109,13 @@ async def list_conversations(
 ):
     """List all conversations for the authenticated user."""
     try:
-        container = get_container()
-        container.initialize()
-        conversation_manager = container.get_conversation_manager()
-        
-        conversations = await conversation_manager.list_conversations(
-            user_id=current_user["user_id"],
-            limit=limit,
-            offset=offset
+        conversations = await _get_manager().list_conversations(
+            user_id=current_user["user_id"], limit=limit, offset=offset
         )
-        
-        return [ConversationResponse(**conv) for conv in conversations]
+        logger.debug("CONV_LIST: user=%s | count=%d", current_user["user_id"], len(conversations))
+        return [ConversationResponse(**c) for c in conversations]
     except Exception as e:
-        logger.exception("Failed to list conversations: %s", e)
+        logger.exception("CONV_LIST: failed | error=%s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -95,24 +126,13 @@ async def create_conversation(
 ):
     """Create a new conversation."""
     try:
-        container = get_container()
-        container.initialize()
-        conversation_manager = container.get_conversation_manager()
-        
-        conv_id = await conversation_manager.create_conversation(
-            user_id=current_user["user_id"],
-            title=title
-        )
-        
-        # Get the created conversation
-        conversation = await conversation_manager.get_conversation(
-            conversation_id=conv_id,
-            user_id=current_user["user_id"]
-        )
-        
+        mgr = _get_manager()
+        conv_id = await mgr.create_conversation(user_id=current_user["user_id"], title=title)
+        conversation = await mgr.get_conversation(conv_id, current_user["user_id"])
+        log_user_action(logger, "CONV_CREATED", current_user["user_id"], conversation_id=conv_id)
         return ConversationResponse(**conversation)
     except Exception as e:
-        logger.exception("Failed to create conversation: %s", e)
+        logger.exception("CONV_CREATE: failed | error=%s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -123,23 +143,14 @@ async def get_conversation(
 ):
     """Get a specific conversation."""
     try:
-        container = get_container()
-        container.initialize()
-        conversation_manager = container.get_conversation_manager()
-        
-        conversation = await conversation_manager.get_conversation(
-            conversation_id=conversation_id,
-            user_id=current_user["user_id"]
-        )
-        
+        conversation = await _get_manager().get_conversation(conversation_id, current_user["user_id"])
         if not conversation:
             raise HTTPException(status_code=404, detail="Conversation not found")
-        
         return ConversationResponse(**conversation)
     except HTTPException:
         raise
     except Exception as e:
-        logger.exception("Failed to get conversation: %s", e)
+        logger.exception("CONV_GET: failed | error=%s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -151,30 +162,16 @@ async def update_conversation(
 ):
     """Update conversation metadata (e.g., rename)."""
     try:
-        container = get_container()
-        container.initialize()
-        conversation_manager = container.get_conversation_manager()
-        
-        success = await conversation_manager.update_conversation(
-            conversation_id=conversation_id,
-            user_id=current_user["user_id"],
-            title=request.title
-        )
-        
+        mgr = _get_manager()
+        success = await mgr.update_conversation(conversation_id, current_user["user_id"], title=request.title)
         if not success:
             raise HTTPException(status_code=404, detail="Conversation not found")
-        
-        # Get updated conversation
-        conversation = await conversation_manager.get_conversation(
-            conversation_id=conversation_id,
-            user_id=current_user["user_id"]
-        )
-        
+        conversation = await mgr.get_conversation(conversation_id, current_user["user_id"])
         return ConversationResponse(**conversation)
     except HTTPException:
         raise
     except Exception as e:
-        logger.exception("Failed to update conversation: %s", e)
+        logger.exception("CONV_UPDATE: failed | error=%s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -185,47 +182,82 @@ async def delete_conversation(
 ):
     """Delete a conversation (soft delete)."""
     try:
-        container = get_container()
-        container.initialize()
-        conversation_manager = container.get_conversation_manager()
-        
-        success = await conversation_manager.delete_conversation(
-            conversation_id=conversation_id,
-            user_id=current_user["user_id"]
-        )
-        
+        success = await _get_manager().delete_conversation(conversation_id, current_user["user_id"])
         if not success:
             raise HTTPException(status_code=404, detail="Conversation not found")
-        
+        log_user_action(logger, "CONV_DELETED", current_user["user_id"], conversation_id=conversation_id)
         return {"message": "Conversation deleted successfully"}
     except HTTPException:
         raise
     except Exception as e:
-        logger.exception("Failed to delete conversation: %s", e)
+        logger.exception("CONV_DELETE: failed | error=%s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/{conversation_id}/messages", response_model=List[MessageResponse])
+# ── Messages with history_type filter ────────────────────────────────────────
+
+@router.get("/{conversation_id}/messages")
 async def get_conversation_messages(
     conversation_id: str,
+    history_type: str = Query(
+        default="rag",
+        description="Filter message history by source: `rag` (default), `agent`, or `crew`"
+    ),
     limit: Optional[int] = None,
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
-    """Get all messages from a conversation with full RAG logging details."""
-    try:
-        container = get_container()
-        container.initialize()
-        conversation_manager = container.get_conversation_manager()
-        
-        messages = await conversation_manager.get_messages(
-            conversation_id=conversation_id,
-            user_id=current_user["user_id"],
-            limit=limit
+    """Get messages from a conversation filtered by history type.
+
+    - **rag** (default): RAG pipeline messages — retrieved docs, LLM prompt, provider, tokens
+    - **agent**: Agent workflow messages — tools used, step-by-step execution log
+    - **crew**: CrewAI workflow messages — agents used, workflow type, iterations
+    """
+    if history_type not in VALID_HISTORY_TYPES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid history_type '{history_type}'. Valid values: {sorted(VALID_HISTORY_TYPES)}"
         )
-        
-        return [MessageResponse(**msg) for msg in messages]
+
+    user_id = current_user["user_id"]
+    logger.debug("CONV_MESSAGES: conversation_id=%s | history_type=%s | user=%s", conversation_id, history_type, user_id)
+
+    try:
+        mgr = _get_manager()
+
+        if history_type == "rag":
+            messages = await mgr.get_messages(conversation_id, user_id, limit=limit)
+            logger.info("CONV_MESSAGES: rag | count=%d | conversation_id=%s", len(messages), conversation_id)
+            return {
+                "conversation_id": conversation_id,
+                "history_type": "rag",
+                "messages": [RagMessageResponse(**m) for m in messages],
+                "count": len(messages)
+            }
+
+        elif history_type == "agent":
+            messages = await mgr.get_agent_messages(conversation_id, user_id, limit=limit)
+            logger.info("CONV_MESSAGES: agent | count=%d | conversation_id=%s", len(messages), conversation_id)
+            return {
+                "conversation_id": conversation_id,
+                "history_type": "agent",
+                "messages": [AgentMessageResponse(**m) for m in messages],
+                "count": len(messages)
+            }
+
+        elif history_type == "crew":
+            messages = await mgr.get_crew_messages(conversation_id, user_id, limit=limit)
+            logger.info("CONV_MESSAGES: crew | count=%d | conversation_id=%s", len(messages), conversation_id)
+            return {
+                "conversation_id": conversation_id,
+                "history_type": "crew",
+                "messages": [CrewMessageResponse(**m) for m in messages],
+                "count": len(messages)
+            }
+
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.exception("Failed to get messages: %s", e)
+        logger.exception("CONV_MESSAGES: failed | history_type=%s | error=%s", history_type, e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -234,38 +266,20 @@ async def restore_conversation(
     conversation_id: str,
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
-    """
-    Restore a conversation to the current session.
-    This links the conversation to the user's current session.
-    """
+    """Restore a conversation to the current session."""
     try:
-        container = get_container()
-        container.initialize()
-        conversation_manager = container.get_conversation_manager()
-        session_manager = container.get_session_manager()
-        
-        # Verify conversation exists and user owns it
-        conversation = await conversation_manager.get_conversation(
-            conversation_id=conversation_id,
-            user_id=current_user["user_id"]
-        )
-        
+        mgr = _get_manager()
+        conversation = await mgr.get_conversation(conversation_id, current_user["user_id"])
         if not conversation:
             raise HTTPException(status_code=404, detail="Conversation not found")
-        
-        # Update session to link to this conversation
+
         session_id = current_user.get("session_id")
-        if session_id:
-            # Note: This requires updating session_manager to support conversation_id
-            # For now, we'll just return success
-            logger.info(f"Restored conversation {conversation_id} for user {current_user['user_id']}")
-        
-        return {
-            "message": "Conversation restored successfully",
-            "conversation_id": conversation_id
-        }
+        logger.info("CONV_RESTORE: conversation_id=%s | user=%s | session_id=%s",
+                    conversation_id, current_user["user_id"], session_id)
+
+        return {"message": "Conversation restored successfully", "conversation_id": conversation_id}
     except HTTPException:
         raise
     except Exception as e:
-        logger.exception("Failed to restore conversation: %s", e)
+        logger.exception("CONV_RESTORE: failed | error=%s", e)
         raise HTTPException(status_code=500, detail=str(e))

@@ -1,6 +1,7 @@
 """CrewAI API routes for multi-agent workflows."""
 
 import logging
+import time
 from typing import Dict, Any, Optional, List
 
 from fastapi import APIRouter, HTTPException, Depends
@@ -118,6 +119,7 @@ async def crew_query(
     """
     try:
         orchestrator = get_crew_orchestrator()
+        start_time = time.time()
         
         # Create crew request
         crew_request = CrewRequest(
@@ -131,13 +133,50 @@ async def crew_query(
         
         # Execute workflow
         response = await orchestrator.execute_workflow(crew_request, user)
+        processing_time_ms = int((time.time() - start_time) * 1000)
+
+        # --- Save to crew_messages table ---
+        conversation_id = request.conversation_id
+        try:
+            container = get_container()
+            conv_manager = container.get_conversation_manager()
+            user_id = (user or {}).get("user_id", "anonymous")
+
+            if not conversation_id:
+                conversation_id = await conv_manager.create_conversation(
+                    user_id=user_id,
+                    title=request.topic[:50] + ("..." if len(request.topic) > 50 else "")
+                )
+                logger.debug("CREW_CONV: auto-created conversation_id=%s", conversation_id)
+
+            await conv_manager.add_crew_message(
+                conversation_id=conversation_id,
+                speaker="user",
+                content=request.topic,
+                user_topic=request.topic,
+                workflow_type=request.workflow_type,
+            )
+            await conv_manager.add_crew_message(
+                conversation_id=conversation_id,
+                speaker="assistant",
+                content=response.result,
+                user_topic=request.topic,
+                workflow_type=response.workflow_type,
+                agents_used=response.agents_used,
+                iterations=response.iterations,
+                processing_time_ms=processing_time_ms,
+            )
+            logger.info("CREW_CONV: saved | conversation_id=%s | workflow=%s | agents=%s",
+                        conversation_id, response.workflow_type, response.agents_used)
+        except Exception as save_err:
+            logger.warning("CREW_CONV: failed to save (non-fatal) | error=%s", save_err)
         
         return CrewQueryResponse(
             result=response.result,
             workflow_type=response.workflow_type,
             agents_used=response.agents_used,
             iterations=response.iterations,
-            execution_time_ms=response.execution_time_ms,
+            execution_time_ms=processing_time_ms,
             available_workflows=orchestrator.get_available_workflows(),
             debug_info=response.debug_info
         )

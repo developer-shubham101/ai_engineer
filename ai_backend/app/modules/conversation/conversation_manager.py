@@ -41,6 +41,22 @@ class IConversationManager(ABC):
         pass
     
     @abstractmethod
+    async def add_crew_message(
+        self,
+        conversation_id: str,
+        speaker: str,
+        content: str,
+        user_topic: Optional[str] = None,
+        workflow_type: Optional[str] = None,
+        agents_used: Optional[List[str]] = None,
+        iterations: Optional[int] = None,
+        processing_time_ms: Optional[int] = None,
+        error_message: Optional[str] = None
+    ) -> int:
+        """Add a message with CrewAI workflow logging to crew_messages table."""
+        pass
+
+    @abstractmethod
     async def add_agent_message(
         self,
         conversation_id: str,
@@ -199,6 +215,26 @@ class SQLiteConversationManager(IConversationManager):
             """)
             conn.execute("CREATE INDEX IF NOT EXISTS idx_agent_messages_conv_id ON agent_messages(conversation_id)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_agent_messages_created_at ON agent_messages(created_at DESC)")
+
+            # Crew messages table — separate from RAG and agent messages
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS crew_messages (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    conversation_id TEXT NOT NULL,
+                    speaker TEXT NOT NULL,
+                    content TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    user_topic TEXT,
+                    workflow_type TEXT,
+                    agents_used TEXT,
+                    iterations INTEGER,
+                    processing_time_ms INTEGER,
+                    error_message TEXT,
+                    FOREIGN KEY(conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
+                )
+            """)
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_crew_messages_conv_id ON crew_messages(conversation_id)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_crew_messages_created_at ON crew_messages(created_at DESC)")
             
             conn.commit()
         
@@ -540,6 +576,86 @@ class SQLiteConversationManager(IConversationManager):
                             msg[key] = json.loads(msg[key])
                         except json.JSONDecodeError:
                             msg[key] = None
+                messages.append(msg)
+
+            return messages
+
+    async def add_crew_message(
+        self,
+        conversation_id: str,
+        speaker: str,
+        content: str,
+        user_topic: Optional[str] = None,
+        workflow_type: Optional[str] = None,
+        agents_used: Optional[List[str]] = None,
+        iterations: Optional[int] = None,
+        processing_time_ms: Optional[int] = None,
+        error_message: Optional[str] = None
+    ) -> int:
+        """Add a message with CrewAI workflow logging to crew_messages table."""
+        timestamp = datetime.utcnow().isoformat() + "Z"
+        agents_used_json = json.dumps(agents_used) if agents_used else None
+
+        with self._connect() as conn:
+            cursor = conn.execute("""
+                INSERT INTO crew_messages (
+                    conversation_id, speaker, content, created_at,
+                    user_topic, workflow_type, agents_used, iterations,
+                    processing_time_ms, error_message
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                conversation_id, speaker, content, timestamp,
+                user_topic, workflow_type, agents_used_json, iterations,
+                processing_time_ms, error_message
+            ))
+            message_id = cursor.lastrowid
+
+            conn.execute("""
+                UPDATE conversations SET updated_at = ? WHERE id = ?
+            """, (timestamp, conversation_id))
+
+            conn.commit()
+
+        logger.debug(f"Added crew message {message_id} to conversation {conversation_id}")
+        return message_id
+
+    async def get_crew_messages(
+        self, conversation_id: str, user_id: str, limit: Optional[int] = None
+    ) -> List[Dict[str, Any]]:
+        """Get CrewAI messages from crew_messages table for a conversation."""
+        conv = await self.get_conversation(conversation_id, user_id)
+        if not conv:
+            return []
+
+        with self._connect() as conn:
+            if limit:
+                query = """
+                    SELECT * FROM (
+                        SELECT * FROM crew_messages
+                        WHERE conversation_id = ?
+                        ORDER BY created_at DESC
+                        LIMIT ?
+                    ) ORDER BY created_at ASC
+                """
+                params = (conversation_id, limit)
+            else:
+                query = """
+                    SELECT * FROM crew_messages
+                    WHERE conversation_id = ?
+                    ORDER BY created_at ASC
+                """
+                params = (conversation_id,)
+
+            rows = conn.execute(query, params).fetchall()
+
+            messages = []
+            for row in rows:
+                msg = dict(row)
+                if msg.get("agents_used") and isinstance(msg["agents_used"], str):
+                    try:
+                        msg["agents_used"] = json.loads(msg["agents_used"])
+                    except json.JSONDecodeError:
+                        msg["agents_used"] = None
                 messages.append(msg)
 
             return messages
