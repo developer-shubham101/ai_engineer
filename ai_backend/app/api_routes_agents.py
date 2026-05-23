@@ -9,7 +9,7 @@ from pydantic import BaseModel
 
 from app.dependencies import get_current_user_optional
 from app.modules.agents.interfaces import AgentRequest
-from app.modules.agents.agent_runner import REGISTRY, call_tool
+from app.modules.agents.orchestrators.autogen.autogen_orchestrator import _register_tool_builders
 from app.modules.integration import get_container
 from app.logging_config import log_user_action, log_performance_metric, log_security_event
 
@@ -21,7 +21,8 @@ router = APIRouter(prefix="/api/agents", tags=["Agents"])
 class AgentQueryRequest(BaseModel):
     """Agent query request model."""
     question: str
-    tools: List[str] = []
+    workflow: str = "debate"          # AutoGen workflow: debate, research (ignored for custom orchestrator)
+    tools: List[str] = []             # Tool names to enable (empty = all available)
     max_steps: int = 5
     temperature: float = 0.1
     provider: str = "local"
@@ -67,13 +68,14 @@ def get_agent_orchestrator():
 
 def _get_all_tool_info() -> List[ToolInfo]:
     """
-    Build unified ToolInfo list from both sources:
+    Build unified ToolInfo list from two sources:
     - Custom orchestrator .tools dict  (ITool-based)
-    - agent_runner REGISTRY            (function-based)
+    - AutoGen _TOOL_BUILDERS           (function-based, shared underlying functions)
     """
     seen = set()
     tools = []
 
+    # 1. ITool-based tools from custom orchestrator
     try:
         orchestrator = get_agent_orchestrator()
         if hasattr(orchestrator, "tools"):
@@ -81,18 +83,16 @@ def _get_all_tool_info() -> List[ToolInfo]:
                 if name not in seen:
                     tools.append(ToolInfo(name=tool.name, description=tool.description))
                     seen.add(name)
-        logger.debug("AGENT_TOOLS: loaded %d tools from orchestrator", len(tools))
     except Exception as e:
         logger.warning("AGENT_TOOLS: could not load orchestrator tools: %s", e)
 
-    registry_count = 0
-    for name, meta in REGISTRY.items():
+    # 2. Function-based tools from AutoGen tool builders
+    for name, fn in _register_tool_builders().items():
         if name not in seen:
-            tools.append(ToolInfo(name=name, description=meta["description"]))
+            tools.append(ToolInfo(name=name, description=fn.__doc__ or name))
             seen.add(name)
-            registry_count += 1
 
-    logger.debug("AGENT_TOOLS: loaded %d tools from REGISTRY, total=%d", registry_count, len(tools))
+    logger.debug("AGENT_TOOLS: total=%d", len(tools))
     return tools
 
 
@@ -169,6 +169,7 @@ async def query_agent(
 
         agent_request = AgentRequest(
             question=request.question,
+            workflow=request.workflow,
             tools=request.tools,
             max_steps=request.max_steps,
             temperature=request.temperature,
@@ -222,6 +223,7 @@ async def query_agent(
             extra={
                 "user_query": request.question,
                 "orchestrator_type": request.orchestrator_type,
+                "workflow_type": request.workflow,
             }
         )
 
@@ -232,11 +234,12 @@ async def query_agent(
             chat_type="agent",
             extra={
                 "user_query": request.question,
+                "orchestrator_type": request.orchestrator_type,
+                "workflow_type": request.workflow,
                 "tools_used": response.tools_used if response else [],
                 "steps": response.steps if response else [],
-                "orchestrator_type": request.orchestrator_type,
                 "processing_time_ms": processing_time_ms,
-                "error_message": error_msg
+                "error_message": error_msg,
             }
         )
         logger.debug("AGENT_CONV: saved 2 messages to conversation_id=%s", conversation_id)
@@ -266,17 +269,14 @@ async def query_agent(
     )
 
 
-@router.get("/tools", response_model=List[ToolInfo])
-async def list_tools():
-    """List all available agent tools (orchestrator tools + function-based registry tools)."""
-    logger.debug("AGENT_TOOLS_LIST: request received")
-    try:
-        tools = _get_all_tool_info()
-        logger.info("AGENT_TOOLS_LIST: returning %d tools", len(tools))
-        return tools
-    except Exception as e:
-        logger.error("AGENT_TOOLS_LIST: failed | error=%s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+@router.get("/autogen/workflows")
+async def list_autogen_workflows():
+    """List available AutoGen workflows and tools."""
+    from app.modules.agents.orchestrators.autogen.autogen_orchestrator import AutoGenOrchestrator
+    return {
+        "workflows": list(AutoGenOrchestrator.WORKFLOW_REGISTRY.keys()),
+        "tools": AutoGenOrchestrator.AVAILABLE_TOOLS
+    }
 
 
 @router.post("/tools/{tool_name}/test")
@@ -287,63 +287,49 @@ async def test_tool(
 ):
     """Test a specific tool directly.
 
-    Accepts input as a JSON body: `{"input_data": "your input here"}`
-
-    Supports both orchestrator tools (search_documents, get_user_tickets, etc.)
-    and function-based tools (web_search, scrape_url, get_stock_price, get_weather, save_text_file).
+    Single-arg tools: pass plain string as `input_data`.
+    Multi-arg tools (e.g. save_text_file): pass JSON string as `input_data`,
+    e.g. `{"filename": "out.txt", "content": "hello"}`
     """
+    import inspect, json as _json
+
     user_id = (user or {}).get("user_id", "anonymous")
     start_time = time.time()
-
     log_user_action(logger, "AGENT_TOOL_TEST", user_id, tool=tool_name, input_len=len(body.input_data))
-    logger.debug("AGENT_TOOL_TEST: tool=%s | input=%r", tool_name, body.input_data[:100])
+
+    def _elapsed() -> int:
+        return int((time.time() - start_time) * 1000)
 
     try:
-        context = {"user": user or {}}
+        # 1. ITool-based (custom orchestrator) — async, always single string in
+        orchestrator = get_agent_orchestrator()
+        itool = getattr(orchestrator, "tools", {}).get(tool_name)
+        if itool:
+            result = await itool.execute(body.input_data, {"user": user or {}})
+            log_performance_metric(logger, "AGENT_TOOL_TEST", _elapsed(), tool=tool_name, source="orchestrator")
+            return {"tool": tool_name, "input": body.input_data, "result": result, "status": "success", "source": "orchestrator"}
 
-        # 1. Try orchestrator tools first (ITool interface — async execute)
-        try:
-            orchestrator = get_agent_orchestrator()
-            if hasattr(orchestrator, "tools"):
-                tool = orchestrator.tools.get(tool_name)
-                if tool:
-                    logger.debug("AGENT_TOOL_TEST: found in orchestrator, executing")
-                    result = await tool.execute(body.input_data, context)
-                    duration_ms = int((time.time() - start_time) * 1000)
-                    log_performance_metric(logger, "AGENT_TOOL_TEST", duration_ms, tool=tool_name, source="orchestrator")
-                    logger.info("AGENT_TOOL_TEST: success | tool=%s | source=orchestrator | duration_ms=%d", tool_name, duration_ms)
-                    return {
-                        "tool": tool_name,
-                        "input": body.input_data,
-                        "result": result,
-                        "status": "success",
-                        "source": "orchestrator"
-                    }
-        except Exception as e:
-            logger.debug("AGENT_TOOL_TEST: orchestrator lookup failed, trying registry | error=%s", e)
+        # 2. Function-based tools — resolve kwargs, support multi-arg via JSON
+        fn = _register_tool_builders().get(tool_name)
+        if fn:
+            params = list(inspect.signature(fn).parameters.keys())
+            if len(params) == 1:
+                kwargs = {params[0]: body.input_data}
+            else:
+                try:
+                    kwargs = _json.loads(body.input_data)
+                except _json.JSONDecodeError:
+                    raise HTTPException(
+                        status_code=422,
+                        detail=f"'{tool_name}' requires JSON input with keys: {params}"
+                    )
+            result = fn(**kwargs)
+            log_performance_metric(logger, "AGENT_TOOL_TEST", _elapsed(), tool=tool_name, source="function")
+            return {"tool": tool_name, "input": body.input_data, "result": result, "status": "success", "source": "function"}
 
-        # 2. Fall back to REGISTRY (function-based tools)
-        if tool_name in REGISTRY:
-            meta = REGISTRY[tool_name]
-            first_arg = meta["args"][0]
-            logger.debug("AGENT_TOOL_TEST: found in REGISTRY, executing | arg=%s", first_arg)
-            result = call_tool(tool_name, {first_arg: body.input_data})
-            duration_ms = int((time.time() - start_time) * 1000)
-            log_performance_metric(logger, "AGENT_TOOL_TEST", duration_ms, tool=tool_name, source="registry")
-            logger.info("AGENT_TOOL_TEST: success | tool=%s | source=registry | duration_ms=%d", tool_name, duration_ms)
-            return {
-                "tool": tool_name,
-                "input": body.input_data,
-                "result": result,
-                "status": "success",
-                "source": "registry"
-            }
-
-        all_tools = [t.name for t in _get_all_tool_info()]
-        logger.warning("AGENT_TOOL_TEST: tool not found | tool=%s | available=%s", tool_name, all_tools)
         raise HTTPException(
             status_code=404,
-            detail=f"Tool '{tool_name}' not found. Available tools: {all_tools}"
+            detail=f"Tool '{tool_name}' not found. Available: {[t.name for t in _get_all_tool_info()]}"
         )
 
     except HTTPException:

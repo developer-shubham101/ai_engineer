@@ -13,7 +13,22 @@ export default function AgentChat({ onLogout, onExit, selectedConversationId }) 
   const [maxSteps, setMaxSteps] = useState(5)
   const [temperature, setTemperature] = useState(0.1)
   const [debug, setDebug] = useState(false)
+  const [autogenMeta, setAutogenMeta] = useState({ workflows: [], tools: [] })
+  const [selectedWorkflow, setSelectedWorkflow] = useState('')
+  const [selectedTools, setSelectedTools] = useState([])
   const messagesRef = useRef(null)
+
+  useEffect(() => {
+    if (orchestratorType !== 'autogen') return
+    fetch(`${BASE_API_URL}/autogen/workflows`, { headers: getHeaders() })
+      .then(r => r.json())
+      .then(data => {
+        setAutogenMeta(data)
+        setSelectedWorkflow(data.workflows?.[0] || '')
+        setSelectedTools([])
+      })
+      .catch(console.error)
+  }, [orchestratorType])
 
   const getHeaders = () => {
     const token = getStoredToken()
@@ -76,11 +91,12 @@ export default function AgentChat({ onLogout, onExit, selectedConversationId }) 
     try {
       const payload = {
         question: currentQuery,
-        tools: [],
+        tools: orchestratorType === 'autogen' ? selectedTools : [],
         max_steps: maxSteps,
         temperature,
         orchestrator_type: orchestratorType,
         debug,
+        ...(orchestratorType === 'autogen' && selectedWorkflow && { workflow: selectedWorkflow }),
         ...(conversationId && { conversation_id: conversationId })
       }
 
@@ -145,6 +161,45 @@ export default function AgentChat({ onLogout, onExit, selectedConversationId }) 
             <option value="custom">Custom</option>
             <option value="autogen">AutoGen</option>
           </select>
+          {orchestratorType === 'autogen' && (
+            <>
+              <select
+                className="form-select form-select-sm"
+                style={{ width: 'auto' }}
+                value={selectedWorkflow}
+                onChange={e => setSelectedWorkflow(e.target.value)}
+                disabled={loading}
+              >
+                {autogenMeta.workflows.map(w => <option key={w} value={w}>{w}</option>)}
+              </select>
+              <div className="dropdown">
+                <button
+                  className="btn btn-sm btn-outline-secondary dropdown-toggle"
+                  type="button"
+                  data-bs-toggle="dropdown"
+                  disabled={loading}
+                >
+                  Tools {selectedTools.length > 0 && `(${selectedTools.length})`}
+                </button>
+                <ul className="dropdown-menu p-2" style={{ minWidth: 180 }}>
+                  {autogenMeta.tools.map(t => (
+                    <li key={t}>
+                      <label className="dropdown-item d-flex align-items-center gap-2" style={{ cursor: 'pointer' }}>
+                        <input
+                          type="checkbox"
+                          checked={selectedTools.includes(t)}
+                          onChange={e => setSelectedTools(prev =>
+                            e.target.checked ? [...prev, t] : prev.filter(x => x !== t)
+                          )}
+                        />
+                        {t}
+                      </label>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </>
+          )}
           <div className="input-group input-group-sm" style={{ width: 110 }}>
             <span className="input-group-text">Steps</span>
             <input

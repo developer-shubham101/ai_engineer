@@ -8,7 +8,8 @@ from pydantic import BaseModel
 class AgentRequest(BaseModel):
     """Agent request model."""
     question: str
-    tools: List[str] = []  # Tool names to enable
+    workflow: str = "debate"  # Workflow to execute: debate, research, etc.
+    tools: List[str] = []  # Tool names to enable (empty = all available)
     max_steps: int = 5
     temperature: float = 0.1
     provider: str = "local"

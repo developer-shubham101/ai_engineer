@@ -716,53 +716,76 @@ Response: {
 ```json
 Request: {
   "question": "What is the status of my tickets?",
-  "tools": ["get_user_tickets", "get_ticket_comments"],
+  "workflow": "debate",           // AutoGen only: debate, research (ignored for custom)
+  "tools": ["web_search", "get_stock_price"],  // empty = all available
   "max_steps": 5,
   "temperature": 0.1,
-  "orchestrator_type": "custom",
+  "orchestrator_type": "custom",  // custom | autogen
   "conversation_id": "conv_xxx",
   "debug": false
 }
 Response: {
   "answer": "Based on my analysis...",
-  "steps": [{"step": 1, "tool": "get_user_tickets", "input": "current", "result": "..."}],
-  "tools_used": ["get_user_tickets"],
-  "available_tools": ["search_documents", "web_search", ...],
+  "steps": [{"source": "autogen", "content": "Advocate: ..."}],
+  "tools_used": ["web_search"],
+  "available_tools": ["web_search", "scrape_url", ...],
   "conversation_id": "conv_xxx",
-  "debug_info": {"processing_time_ms": 1250, "actual_steps": 1}
+  "debug_info": null
 }
 ```
 - `conversation_id` is auto-created if not provided; always returned in response
 - Saves both turns (user + assistant) to `agent_messages` table after every call
+- `workflow` controls which AutoGen workflow runs; ignored by custom orchestrator
+- `tools` filters which function-based tools are injected (empty = all)
 
 **GET /api/agents/status** - Get agent system status and all available tools
 
-**GET /api/agents/tools** - List all tools (orchestrator tools + REGISTRY, deduped)
+**GET /api/agents/autogen/workflows** - List available AutoGen workflows and tools
+```json
+Response: {
+  "workflows": ["debate", "research"],
+  "tools": ["web_search", "scrape_url", "get_stock_price", "get_weather", "save_text_file"]
+}
+```
+
+**GET /api/agents/tools** - List all tools (ITool orchestrator tools + AutoGen function tools, deduped)
 ```json
 Response: [
   {"name": "search_documents", "description": "Search company documents..."},
+  {"name": "get_user_tickets",  "description": "Get user support tickets..."},
   {"name": "web_search",        "description": "Search the internet for real-time info..."},
   {"name": "scrape_url",        "description": "Fetch full content from a URL..."},
   {"name": "get_stock_price",   "description": "Get current stock price..."},
   {"name": "get_weather",       "description": "Get current weather for a city..."},
-  {"name": "save_text_file",    "description": "Save text content to a file..."},
-  ...
+  {"name": "save_text_file",    "description": "Save text content to a file..."}
 ]
 ```
 
 **POST /api/agents/tools/{tool_name}/test** - Test a specific tool directly
 ```json
+// Single-arg tool
 Request body: {"input_data": "AAPL"}
 Response: {
   "tool": "get_stock_price",
   "input": "AAPL",
-  "result": {"symbol": "AAPL", "price": 150.25, "status": "success"},
+  "result": "AAPL: $150.25",
   "status": "success",
-  "source": "registry"
+  "source": "function"
+}
+
+// Multi-arg tool (save_text_file) — pass JSON string
+Request body: {"input_data": "{\"filename\": \"out.txt\", \"content\": \"hello\"}"}
+Response: {
+  "tool": "save_text_file",
+  "input": "{\"filename\": \"out.txt\", \"content\": \"hello\"}",
+  "result": "Saved 'out.txt' (5 chars)",
+  "status": "success",
+  "source": "function"
 }
 ```
-- Two-stage lookup: orchestrator tools first, then REGISTRY fallback
-- `source` field indicates which path was used (`orchestrator` or `registry`)
+- Two-stage lookup: ITool orchestrator tools first (`source: orchestrator`), then AutoGen function tools (`source: function`)
+- Multi-arg tools require JSON string as `input_data`; returns HTTP 422 with expected keys if plain string given
+- `source` field indicates which path was used: `orchestrator` or `function`
 
 **GET /api/agents/conversations/{conversation_id}/messages** - Get agent conversation history
 ```json
@@ -1568,38 +1591,45 @@ vision_provider = create_vision_provider("paddleocr")  # Switch to PaddleOCR
 - **`tool_web_search.py`** - Internet search via DuckDuckGo (free) or SerpAPI (`SERPAPI_KEY` env var)
 - **`tool_web_scraper.py`** - URL content fetcher with HTML noise removal (3000 char limit)
 
-**Tool Registry** (`agent_runner.py` REGISTRY):
-```python
-REGISTRY = {
-    "get_stock_price": {"fn": get_stock_price, "args": ["symbol"], "description": "Get current stock price"},
-    "get_weather":     {"fn": get_weather,     "args": ["city"],   "description": "Get current weather for a city"},
-    "save_text_file":  {"fn": save_text_file,  "args": ["filename", "content"], "description": "Save text to file"},
-    "web_search":      {"fn": web_search,      "args": ["query"],  "description": "Search internet for real-time info"},
-    "scrape_url":      {"fn": scrape_url,      "args": ["url"],    "description": "Fetch full content from a URL"}
-}
-```
+**AutoGen Orchestrator — API-Controlled Workflows & Tools**:
 
-**AutoGen Orchestrator — Shared Tool Architecture**:
+`AutoGenOrchestrator` is fully controlled from the API via `AgentRequest`:
+- `request.workflow` → selects which workflow to run (dispatched via `WORKFLOW_REGISTRY`)
+- `request.tools` → filters which tools are injected (empty = all available)
 
-Both `Researcher` and `Analyst` agents share **all 5 tools** via `_build_all_tools()` helper:
-
-| Tool function | Wraps | Purpose |
+**`WORKFLOW_REGISTRY`** (extensible dispatch map):
+| Workflow | Handler | Agents |
 |---|---|---|
-| `search_internet(query)` | `tool_web_search` | DuckDuckGo / SerpAPI search |
-| `fetch_url(url)` | `tool_web_scraper` | Full page content extraction |
-| `get_stock(symbol)` | `tool_stock` | Real-time stock price via yfinance |
-| `get_city_weather(city)` | `tool_weather` | Current weather conditions |
-| `save_file(filename, content)` | `tool_file` | Persist content to disk |
+| `debate` | `_execute_debate_workflow` | Advocate, Critic, Moderator |
+| `research` | `_execute_research_workflow` | Researcher, Analyst |
 
-- **Researcher**: Uses tools to gather data — search, fetch, stock, weather
-- **Analyst**: Uses same tools to verify, enrich, cross-check findings, and save final report
-- **max_messages**: 8 (increased from 6 to allow richer multi-tool workflows)
+**AutoGen Tool Builders** (`_register_tool_builders()`) — names match function tools:
+
+| Tool name | Wraps | Purpose |
+|---|---|---|
+| `web_search` | `tool_web_search` | DuckDuckGo / SerpAPI search |
+| `scrape_url` | `tool_web_scraper` | Full page content extraction |
+| `get_stock_price` | `tool_stock` | Real-time stock price via yfinance |
+| `get_weather` | `tool_weather` | Current weather conditions |
+| `save_text_file` | `tool_file` | Persist content to disk |
+
+- Tool names are **unified** with `agent_runner.REGISTRY` so `/tools` and `/tools/{name}/test` work for both orchestrators
+- `_run_team()` is a shared async stream runner used by all workflows
+- Adding a new workflow: add entry to `WORKFLOW_REGISTRY` + implement `_execute_{name}_workflow(query, tools)`
 
 **Custom Orchestrator — Keyword Routing**:
 - `web` / `internet` / `latest` / `current` / `news` → routes to `web_search` then auto-scrapes first URL
 - `ticket` → `get_user_tickets` → `get_ticket_comments`
 - `search` / `document` → `search_documents`
 - `analyze` / `data` → `analyze_data` or `research_data`
+
+**Tool Discovery — Unified `/tools` endpoint**:
+
+Tools are sourced from two layers (deduped by name):
+1. **ITool-based** (custom orchestrator `.tools` dict): `search_documents`, `get_user_tickets`, `get_ticket_comments`, `analyze_data`, `summarize_status`, `research_data`, `web_search`, `scrape_url`
+2. **Function-based** (`_register_tool_builders()`): `web_search`, `scrape_url`, `get_stock_price`, `get_weather`, `save_text_file`
+
+`agent_runner.REGISTRY` is **no longer used** by API routes — all function-based tool discovery goes through `_register_tool_builders()`.
 
 **Web Search Configuration**:
 ```bash
@@ -2668,8 +2698,29 @@ curl -X POST "/api/agents/tools/get_stock_price/test" \
   -H "Content-Type: application/json" \
   -d '{"input_data": "AAPL"}'
 
+# Test multi-arg tool (save_text_file)
+curl -X POST "/api/agents/tools/save_text_file/test" \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"input_data": "{\"filename\": \"out.txt\", \"content\": \"hello world\"}"}"
+
 # List all available tools
 curl -X GET "/api/agents/tools" -H "Authorization: Bearer <token>"
+
+# List AutoGen workflows and tools
+curl -X GET "/api/agents/autogen/workflows" -H "Authorization: Bearer <token>"
+
+# AutoGen debate workflow with specific tools
+curl -X POST "/api/agents/query" \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"question": "Should AI replace human jobs?", "orchestrator_type": "autogen", "workflow": "debate", "tools": ["web_search", "get_stock_price"]}'
+
+# AutoGen research workflow with all tools
+curl -X POST "/api/agents/query" \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"question": "Research Tesla stock and Austin weather", "orchestrator_type": "autogen", "workflow": "research"}'
 ```
 
 ### Document Management
@@ -2836,7 +2887,7 @@ python tests/test_rbac_comprehensive.py
 
 ---
 
-**Last Updated**: 2025-01-11 (Agent conversation persistence: agent_messages table, /tools fixes, conversation_id in response)
+**Last Updated**: 2025-01-12 (AutoGen API-controlled workflows/tools, unified tool discovery via _register_tool_builders, /autogen/workflows endpoint, multi-arg tool test support, REGISTRY removed from API routes)
 
 ---
 
