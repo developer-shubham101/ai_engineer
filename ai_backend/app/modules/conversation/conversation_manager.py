@@ -41,6 +41,23 @@ class IConversationManager(ABC):
         pass
     
     @abstractmethod
+    async def add_agent_message(
+        self,
+        conversation_id: str,
+        speaker: str,
+        content: str,
+        # Agent-specific fields
+        user_query: Optional[str] = None,
+        tools_used: Optional[List[str]] = None,
+        steps: Optional[List[Dict[str, Any]]] = None,
+        orchestrator_type: Optional[str] = None,
+        processing_time_ms: Optional[int] = None,
+        error_message: Optional[str] = None
+    ) -> int:
+        """Add a message with agent pipeline logging (steps, tools used)."""
+        pass
+
+    @abstractmethod
     async def add_message(self, conversation_id: str, speaker: str, content: str, 
                          sentiment: Optional[str] = None, tone: Optional[str] = None) -> int:
         """Add a simple message to a conversation (for basic user/assistant messages)."""
@@ -162,6 +179,26 @@ class SQLiteConversationManager(IConversationManager):
             conn.execute("CREATE INDEX IF NOT EXISTS idx_conversations_updated_at ON conversations(updated_at DESC)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_messages_conversation_id ON messages(conversation_id)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages(created_at DESC)")
+
+            # Agent conversations table — separate from RAG messages
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS agent_messages (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    conversation_id TEXT NOT NULL,
+                    speaker TEXT NOT NULL,
+                    content TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    user_query TEXT,
+                    tools_used TEXT,
+                    steps TEXT,
+                    orchestrator_type TEXT,
+                    processing_time_ms INTEGER,
+                    error_message TEXT,
+                    FOREIGN KEY(conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
+                )
+            """)
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_agent_messages_conv_id ON agent_messages(conversation_id)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_agent_messages_created_at ON agent_messages(created_at DESC)")
             
             conn.commit()
         
@@ -423,3 +460,86 @@ class SQLiteConversationManager(IConversationManager):
                 return title
             
             return "New Conversation"
+
+    async def add_agent_message(
+        self,
+        conversation_id: str,
+        speaker: str,
+        content: str,
+        user_query: Optional[str] = None,
+        tools_used: Optional[List[str]] = None,
+        steps: Optional[List[Dict[str, Any]]] = None,
+        orchestrator_type: Optional[str] = None,
+        processing_time_ms: Optional[int] = None,
+        error_message: Optional[str] = None
+    ) -> int:
+        """Add a message with agent pipeline logging to agent_messages table."""
+        timestamp = datetime.utcnow().isoformat() + "Z"
+
+        tools_used_json = json.dumps(tools_used) if tools_used else None
+        steps_json = json.dumps(steps) if steps else None
+
+        with self._connect() as conn:
+            cursor = conn.execute("""
+                INSERT INTO agent_messages (
+                    conversation_id, speaker, content, created_at,
+                    user_query, tools_used, steps, orchestrator_type,
+                    processing_time_ms, error_message
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                conversation_id, speaker, content, timestamp,
+                user_query, tools_used_json, steps_json, orchestrator_type,
+                processing_time_ms, error_message
+            ))
+            message_id = cursor.lastrowid
+
+            conn.execute("""
+                UPDATE conversations SET updated_at = ? WHERE id = ?
+            """, (timestamp, conversation_id))
+
+            conn.commit()
+
+        logger.debug(f"Added agent message {message_id} to conversation {conversation_id}")
+        return message_id
+
+    async def get_agent_messages(
+        self, conversation_id: str, user_id: str, limit: Optional[int] = None
+    ) -> List[Dict[str, Any]]:
+        """Get agent messages from agent_messages table for a conversation."""
+        conv = await self.get_conversation(conversation_id, user_id)
+        if not conv:
+            return []
+
+        with self._connect() as conn:
+            if limit:
+                query = """
+                    SELECT * FROM (
+                        SELECT * FROM agent_messages
+                        WHERE conversation_id = ?
+                        ORDER BY created_at DESC
+                        LIMIT ?
+                    ) ORDER BY created_at ASC
+                """
+                params = (conversation_id, limit)
+            else:
+                query = """
+                    SELECT * FROM agent_messages
+                    WHERE conversation_id = ?
+                    ORDER BY created_at ASC
+                """
+                params = (conversation_id,)
+
+            rows = conn.execute(query, params).fetchall()
+
+            messages = []
+            for row in rows:
+                msg = dict(row)
+                for key in ["tools_used", "steps"]:
+                    if msg.get(key) and isinstance(msg[key], str):
+                        try:
+                            msg[key] = json.loads(msg[key])
+                        except json.JSONDecodeError:
+                            msg[key] = None
+                messages.append(msg)
+
+            return messages

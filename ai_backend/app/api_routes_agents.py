@@ -1,6 +1,7 @@
-"""Agent API routes for LangChain agent workflows."""
+"""Agent API routes."""
 
 import logging
+import time
 from typing import Dict, Any, Optional, List
 
 from fastapi import APIRouter, HTTPException, Depends
@@ -34,6 +35,7 @@ class AgentQueryResponse(BaseModel):
     steps: List[Dict[str, Any]] = []
     tools_used: List[str] = []
     available_tools: List[str] = []
+    conversation_id: Optional[str] = None
     debug_info: Optional[Dict[str, Any]] = None
 
 
@@ -65,13 +67,12 @@ def get_agent_orchestrator():
 def _get_all_tool_info() -> List[ToolInfo]:
     """
     Build unified ToolInfo list from both sources:
-    - Custom orchestrator .tools dict  (ITool-based: search_documents, tickets, etc.)
-    - agent_runner REGISTRY            (function-based: web_search, scrape_url, stock, weather, file)
+    - Custom orchestrator .tools dict  (ITool-based)
+    - agent_runner REGISTRY            (function-based)
     """
     seen = set()
     tools = []
 
-    # 1. Orchestrator tools (ITool interface)
     try:
         orchestrator = get_agent_orchestrator()
         if hasattr(orchestrator, "tools"):
@@ -82,7 +83,6 @@ def _get_all_tool_info() -> List[ToolInfo]:
     except Exception as e:
         logger.warning(f"Could not load orchestrator tools: {e}")
 
-    # 2. Function-based tools from REGISTRY
     for name, meta in REGISTRY.items():
         if name not in seen:
             tools.append(ToolInfo(name=name, description=meta["description"]))
@@ -116,11 +116,8 @@ async def query_agent(
 ):
     """Execute agent workflow with tools.
 
-    **Safety Features:**
-    - Hard step limit (max 5 steps)
-    - Tool whitelisting (only pre-approved tools)
-    - No direct database access
-    - Sandboxed execution
+    Saves the conversation (user question + agent answer + steps + tools used)
+    to the agent_messages table — separate from RAG /query conversations.
 
     **Available Tools:**
     - `search_documents`: Search company knowledge base
@@ -135,6 +132,10 @@ async def query_agent(
     - `get_weather`: Get current weather for a city
     - `save_text_file`: Save text content to a file
     """
+    start_time = time.time()
+    error_msg = None
+    response = None
+
     try:
         from app.modules.agents.factories import AgentOrchestratorFactory
         container = get_container()
@@ -155,17 +156,62 @@ async def query_agent(
 
         response = await orchestrator.process_request(agent_request, user)
 
-        return AgentQueryResponse(
-            answer=response.answer,
-            steps=response.steps,
-            tools_used=response.tools_used,
-            available_tools=orchestrator.get_available_tools(),
-            debug_info=response.debug_info
+    except Exception as e:
+        error_msg = str(e)
+        logger.error(f"Agent query failed: {e}")
+
+    processing_time_ms = int((time.time() - start_time) * 1000)
+
+    # --- Save to agent_messages table ---
+    conversation_id = request.conversation_id
+    try:
+        container = get_container()
+        conv_manager = container.get_conversation_manager()
+        user_id = (user or {}).get("user_id", "anonymous")
+
+        # Auto-create conversation if none provided
+        if not conversation_id:
+            conversation_id = await conv_manager.create_conversation(
+                user_id=user_id,
+                title=request.question[:50] + ("..." if len(request.question) > 50 else "")
+            )
+
+        # Save user turn
+        await conv_manager.add_agent_message(
+            conversation_id=conversation_id,
+            speaker="user",
+            content=request.question,
+            user_query=request.question,
+            orchestrator_type=request.orchestrator_type,
         )
 
-    except Exception as e:
-        logger.error(f"Agent query failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        # Save assistant turn
+        await conv_manager.add_agent_message(
+            conversation_id=conversation_id,
+            speaker="assistant",
+            content=response.answer if response else f"Error: {error_msg}",
+            user_query=request.question,
+            tools_used=response.tools_used if response else [],
+            steps=response.steps if response else [],
+            orchestrator_type=request.orchestrator_type,
+            processing_time_ms=processing_time_ms,
+            error_message=error_msg
+        )
+
+    except Exception as save_err:
+        logger.warning(f"Failed to save agent conversation (non-fatal): {save_err}")
+
+    if error_msg and response is None:
+        raise HTTPException(status_code=500, detail=error_msg)
+
+    return AgentQueryResponse(
+        answer=response.answer,
+        steps=response.steps,
+        tools_used=response.tools_used,
+        available_tools=orchestrator.get_available_tools(),
+        conversation_id=conversation_id,
+        debug_info=response.debug_info
+    )
 
 
 @router.get("/tools", response_model=List[ToolInfo])
@@ -214,7 +260,6 @@ async def test_tool(
         # 2. Fall back to REGISTRY (function-based tools)
         if tool_name in REGISTRY:
             meta = REGISTRY[tool_name]
-            # Pass input_data as the first positional arg
             first_arg = meta["args"][0]
             result = call_tool(tool_name, {first_arg: body.input_data})
             return {
@@ -235,4 +280,27 @@ async def test_tool(
         raise
     except Exception as e:
         logger.error(f"Tool test failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/conversations/{conversation_id}/messages")
+async def get_agent_conversation_messages(
+        conversation_id: str,
+        user: Optional[Dict[str, Any]] = Depends(get_current_user_optional)
+):
+    """Get agent conversation messages from agent_messages table.
+
+    Returns the full history of a specific agent conversation including
+    steps taken and tools used per turn.
+    """
+    try:
+        user_id = (user or {}).get("user_id", "anonymous")
+        container = get_container()
+        conv_manager = container.get_conversation_manager()
+
+        messages = await conv_manager.get_agent_messages(conversation_id, user_id)
+        return {"conversation_id": conversation_id, "messages": messages, "count": len(messages)}
+
+    except Exception as e:
+        logger.error(f"Failed to get agent messages: {e}")
         raise HTTPException(status_code=500, detail=str(e))
