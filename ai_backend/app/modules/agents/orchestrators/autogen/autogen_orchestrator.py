@@ -23,10 +23,6 @@ class AutoGenOrchestrator(IAgentOrchestrator):
     async def process_request(self, request: AgentRequest, user: Optional[Dict[str, Any]] = None) -> AgentResponse:
         """Process agent request using AutoGen."""
         try:
-            # Check if workflow type is mentioned in the question (simple heuristic for now)
-            # or default to debate if acceptable. 
-            # Ideally AgentRequest should have workflow_type. 
-            # For this review fix, we'll default to debate or simple detection.
             query = request.question
             lower_q = query.lower()
 
@@ -37,7 +33,7 @@ class AutoGenOrchestrator(IAgentOrchestrator):
             #     return await self._execute_debate_workflow(query)
 
         except Exception as e:
-            logger.error(f"AutoGen workflow failed: {e}")
+            logger.error(f"AutoGen workflow failed: {e}", exc_info=True)
             return AgentResponse(
                 answer=f"Workflow failed: {str(e)}",
                 steps=[],
@@ -160,61 +156,68 @@ class AutoGenOrchestrator(IAgentOrchestrator):
         return [search_internet, fetch_url, get_stock, get_city_weather, save_file]
 
     async def _execute_research_workflow(self, query: str) -> AgentResponse:
-        """Execute research workflow — both agents share all tools."""
-        all_tools = self._build_all_tools()
+        """Execute research workflow — both agents share all tools.
+        """
+        try:
+            all_tools = self._build_all_tools()
 
-        researcher = AssistantAgent(
-            name="Researcher",
-            system_message=(
-                "You are a research agent with access to internet search, stock prices, weather, and file saving. "
-                "Use search_internet to find real-time information, fetch_url to read full articles, "
-                "get_stock for financial data, get_city_weather for weather data. "
-                "Always use tools to gather real data before answering. Cite your sources. Keep responses concise."
-            ),
-            model_client=self.model_client,
-            tools=all_tools,
-        )
+            researcher = AssistantAgent(
+                name="Researcher",
+                system_message=(
+                    "You are a research agent with access to internet search, stock prices, weather, and file saving. "
+                    "Use search_internet to find real-time information, fetch_url to read full articles, "
+                    "get_stock for financial data, get_city_weather for weather data. "
+                    "Always use tools to gather real data before answering. Cite your sources. Keep responses concise."
+                ),
+                model_client=self.model_client,
+                tools=all_tools,
+            )
 
-        analyst = AssistantAgent(
-            name="Analyst",
-            system_message=(
-                "You are an analyst with access to the same tools as the Researcher. "
-                "Review the research findings, use tools to verify or enrich data if needed, "
-                "then provide a structured analysis with key takeaways. "
-                "You can also use save_file to persist the final report. Keep responses concise."
-            ),
-            model_client=self.model_client,
-            tools=all_tools,
-        )
+            analyst = AssistantAgent(
+                name="Analyst",
+                system_message=(
+                    "You are an analyst with access to the same tools as the Researcher. "
+                    "Review the research findings, use tools to verify or enrich data if needed, "
+                    "then provide a structured analysis with key takeaways. "
+                    "You can also use save_file to persist the final report. Keep responses concise."
+                ),
+                model_client=self.model_client,
+                tools=all_tools,
+            )
 
-        termination = MaxMessageTermination(max_messages=8)
+            termination = MaxMessageTermination(max_messages=8)
 
-        team = RoundRobinGroupChat(
-            participants=[researcher, analyst],
-            termination_condition=termination
-        )
+            team = RoundRobinGroupChat(
+                participants=[researcher, analyst],
+                termination_condition=termination
+            )
 
-        # Ensure proper task formatting as user message
-        task_message = f"Research this topic using available tools: {query}\n\nResearcher, please start by gathering information."
-        stream = team.run_stream(task=task_message)
+            # Ensure proper task formatting as user message
+            task_message = f"Research this topic using available tools: {query}\n\nResearcher, please start by gathering information."
+            stream = team.run_stream(task=task_message)
 
-        steps = []
-        final_result = ""
-        tools_used = set()
+            steps = []
+            final_result = ""
+            tools_used = set()
 
-        async for message in stream:
-            if hasattr(message, 'content'):
-                content_str = str(message.content)
-                steps.append(f"{message.source}: {content_str[:100]}...")
-                final_result = content_str
-            # Track tool calls if available
-            if hasattr(message, 'tool_calls') and message.tool_calls:
-                for tc in message.tool_calls:
-                    tools_used.add(tc.name if hasattr(tc, 'name') else str(tc))
+            async for message in stream:
+                if hasattr(message, 'content'):
+                    content_str = str(message.content)
+                    steps.append(f"{message.source}: {content_str[:100]}...")
+                    final_result = content_str
+                # Track tool calls if available
+                if hasattr(message, 'tool_calls') and message.tool_calls:
+                    for tc in message.tool_calls:
+                        tools_used.add(tc.name if hasattr(tc, 'name') else str(tc))
 
-        return AgentResponse(
-            answer=final_result,
-            steps=[{"source": "autogen", "content": s} for s in steps],
-            tools_used=list(tools_used) or [t.__name__ for t in all_tools],
-            final_step=True
-        )
+            return AgentResponse(
+                answer=final_result,
+                steps=[{"source": "autogen", "content": s} for s in steps],
+                tools_used=list(tools_used) or [t.__name__ for t in all_tools],
+                final_step=True
+            )
+        except Exception as e:
+            logger.error(f"Research workflow failed: {e}")
+            # Fallback to debate workflow if research fails
+            logger.info("Falling back to debate workflow")
+            return await self._execute_debate_workflow(query)

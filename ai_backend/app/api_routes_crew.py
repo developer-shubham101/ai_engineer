@@ -150,22 +150,28 @@ async def crew_query(
                 )
                 logger.debug("CREW_CONV: auto-created conversation_id=%s", conversation_id)
 
-            await conv_manager.add_crew_message(
+            await conv_manager.add_message(
                 conversation_id=conversation_id,
                 speaker="user",
                 content=request.topic,
-                user_topic=request.topic,
-                workflow_type=request.workflow_type,
+                chat_type="crew",
+                extra={
+                    "user_query": request.topic,
+                    "workflow_type": request.workflow_type,
+                }
             )
-            await conv_manager.add_crew_message(
+            await conv_manager.add_message(
                 conversation_id=conversation_id,
                 speaker="assistant",
                 content=response.result,
-                user_topic=request.topic,
-                workflow_type=response.workflow_type,
-                agents_used=response.agents_used,
-                iterations=response.iterations,
-                processing_time_ms=processing_time_ms,
+                chat_type="crew",
+                extra={
+                    "user_query": request.topic,
+                    "workflow_type": response.workflow_type,
+                    "agents_used": response.agents_used,
+                    "iterations": response.iterations,
+                    "processing_time_ms": processing_time_ms,
+                }
             )
             logger.info("CREW_CONV: saved | conversation_id=%s | workflow=%s | agents=%s",
                         conversation_id, response.workflow_type, response.agents_used)

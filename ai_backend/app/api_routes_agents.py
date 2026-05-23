@@ -368,7 +368,7 @@ async def get_agent_conversation_messages(
 
     try:
         conv_manager = get_container().get_conversation_manager()
-        messages = await conv_manager.get_agent_messages(conversation_id, user_id)
+        messages = await conv_manager.get_messages(conversation_id, user_id)
 
         logger.info("AGENT_CONV_HISTORY: returned %d messages | conversation_id=%s | user=%s",
                     len(messages), conversation_id, user_id)
