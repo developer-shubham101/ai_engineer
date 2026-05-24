@@ -118,6 +118,24 @@ def search_places(destination: str, category: str = "tourist") -> Dict[str, Any]
                 {"name": "Periyar Wildlife",   "type": "wildlife",   "entry": "₹150"},
                 {"name": "Kovalam Beach",      "type": "beach",      "entry": "free"},
             ],
+            "dubai": [
+                {"name": "Burj Khalifa",       "type": "landmark",   "entry": "AED 149"},
+                {"name": "Dubai Mall",         "type": "shopping",   "entry": "free"},
+                {"name": "Palm Jumeirah",      "type": "beach",      "entry": "free"},
+                {"name": "Dubai Marina",       "type": "waterfront", "entry": "free"},
+            ],
+            "italy": [
+                {"name": "Colosseum",          "type": "heritage",   "entry": "€16"},
+                {"name": "Vatican Museums",    "type": "museum",     "entry": "€17"},
+                {"name": "Venice Canals",      "type": "waterway",   "entry": "free"},
+                {"name": "Amalfi Coast",       "type": "beach",      "entry": "free"},
+            ],
+            "rome": [
+                {"name": "Colosseum",          "type": "heritage",   "entry": "€16"},
+                {"name": "Vatican Museums",    "type": "museum",     "entry": "€17"},
+                {"name": "Trevi Fountain",     "type": "landmark",   "entry": "free"},
+                {"name": "Roman Forum",        "type": "heritage",   "entry": "€16"},
+            ],
         }
         key = destination.lower()
         attractions = places_db.get(key, [

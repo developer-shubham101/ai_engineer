@@ -279,6 +279,24 @@ async def list_autogen_workflows():
     }
 
 
+@router.get("/tools", response_model=List[ToolInfo])
+async def get_agent_tools():
+    """Get unified list of all available tools from both orchestrators.
+    
+    Returns deduplicated list from:
+    - Custom orchestrator .tools dict (ITool-based)
+    - AutoGen _TOOL_BUILDERS (function-based)
+    """
+    logger.debug("AGENT_TOOLS: request received")
+    try:
+        tool_info = _get_all_tool_info()
+        logger.info("AGENT_TOOLS: returning %d tools", len(tool_info))
+        return tool_info
+    except Exception as e:
+        logger.error("AGENT_TOOLS: failed | error=%s", e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.post("/tools/{tool_name}/test")
 async def test_tool(
         tool_name: str,

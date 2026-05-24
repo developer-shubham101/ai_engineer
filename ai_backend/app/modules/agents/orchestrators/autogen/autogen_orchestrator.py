@@ -654,25 +654,25 @@ class AutoGenOrchestrator(IAgentOrchestrator):
     _TRAVEL_INTENT_KEYWORDS: List[tuple] = [
         ("FLIGHT_SEARCH",        ["flight", "fly", "airline", "airfare", "plane ticket"]),
         ("HOTEL_SEARCH",         ["hotel", "stay", "accommodation", "hostel", "resort", "lodge"]),
-        ("WEATHER_TRAVEL",       ["weather", "climate", "temperature", "rain", "monsoon", "season"]),
+        ("WEATHER_TRAVEL",       ["weather", "climate", "temperature", "rain", "monsoon", "season", "cold", "warm"]),
         ("RESTAURANT_SEARCH",    ["restaurant", "food", "eat", "dining", "cuisine", "cafe"]),
-        ("TRANSPORT_QUERY",      ["transport", "bus", "train", "cab", "taxi", "auto", "how to reach"]),
-        ("LOCAL_ATTRACTIONS",    ["places", "attractions", "sightseeing", "tourist", "things to do", "explore"]),
-        ("BUDGET_TRAVEL",        ["budget", "cheap", "affordable", "under", "cost", "expense", "\u20b9", "inr", "rupee"]),
+        ("TRANSPORT_QUERY",      ["transport", "bus", "train", "cab", "taxi", "auto", "how to reach", "distance"]),
+        ("LOCAL_ATTRACTIONS",    ["places", "attractions", "sightseeing", "tourist", "things to do", "explore", "visit", "beach"]),
+        ("BUDGET_TRAVEL",        ["budget", "cheap", "affordable", "under", "cost", "expense", "\u20b9", "inr", "rupee", "$", "dollar", "ruble", "yuan"]),
         ("ITINERARY_PLANNING",   ["itinerary", "plan", "day", "schedule", "trip plan", "days"]),
         ("GENERAL_TRAVEL_QUERY", []),
     ]
 
     _TRAVEL_INTENT_TOOLS: Dict[str, List[str]] = {
-        "FLIGHT_SEARCH":       ["search_flights"],
-        "HOTEL_SEARCH":        ["search_hotels"],
-        "WEATHER_TRAVEL":      ["get_weather"],
+        "FLIGHT_SEARCH":       ["search_flights", "get_geo_distance"],
+        "HOTEL_SEARCH":        ["search_hotels", "get_weather"],
+        "WEATHER_TRAVEL":      ["get_weather", "search_places"],
         "RESTAURANT_SEARCH":   ["search_restaurants"],
-        "TRANSPORT_QUERY":     ["get_local_transport_info"],
-        "LOCAL_ATTRACTIONS":   ["search_places", "web_search"],
-        "BUDGET_TRAVEL":       ["estimate_trip_budget", "search_hotels", "get_weather"],
-        "ITINERARY_PLANNING":  ["generate_itinerary", "search_places", "get_weather", "estimate_trip_budget"],
-        "GENERAL_TRAVEL_QUERY": ["web_search", "generate_trip_summary"],
+        "TRANSPORT_QUERY":     ["get_local_transport_info", "get_geo_distance"],
+        "LOCAL_ATTRACTIONS":   ["search_places", "get_weather", "web_search"],
+        "BUDGET_TRAVEL":       ["estimate_trip_budget", "search_hotels", "search_flights", "get_weather", "get_currency_exchange"],
+        "ITINERARY_PLANNING":  ["generate_itinerary", "search_places", "get_weather", "estimate_trip_budget", "get_geo_distance"],
+        "GENERAL_TRAVEL_QUERY": ["generate_trip_summary", "get_weather", "search_places", "estimate_trip_budget"],
     }
 
     def _classify_travel_intent(self, query: str) -> str:
@@ -686,33 +686,120 @@ class AutoGenOrchestrator(IAgentOrchestrator):
         return "GENERAL_TRAVEL_QUERY"
 
     def _extract_travel_entities(self, query: str) -> Dict[str, Any]:
-        """Extract destination, days, budget, source, travelers from query."""
+        """Extract destination, days, budget, source, travelers, currency, preferences from query."""
         q = query.lower()
-        known = [
+        
+        # Expanded destination database with regions
+        known_places = [
+            # India
             "goa", "jaipur", "kerala", "mumbai", "delhi", "bangalore", "hyderabad",
             "manali", "shimla", "udaipur", "agra", "varanasi", "kolkata", "chennai",
-            "paris", "london", "dubai", "singapore", "bangkok", "bali", "new york",
+            "kathmandu", "katmandu", "rishikesh", "darjeeling", "ooty", "coorg",
+            # Middle East
+            "dubai", "abu dhabi", "doha", "riyadh", "muscat", "bahrain", "kuwait",
+            # Europe
+            "paris", "london", "rome", "italy", "venice", "milan", "barcelona", "madrid",
+            "berlin", "amsterdam", "prague", "vienna", "budapest", "moscow",
+            # Asia
+            "singapore", "bangkok", "bali", "phuket", "tokyo", "seoul", "beijing",
+            "hong kong", "kuala lumpur", "hanoi", "ho chi minh",
+            # Americas
+            "new york", "los angeles", "san francisco", "miami", "chicago",
+            "toronto", "vancouver", "mexico city", "cancun",
         ]
-        destination = next((d.title() for d in known if d in q), None)
-
+        
+        # Extract destination (check multi-word first)
+        destination = None
+        for place in sorted(known_places, key=len, reverse=True):
+            if place in q:
+                destination = place.title()
+                break
+        
+        # Extract source/origin
+        from_patterns = [
+            r"from\s+([a-z]+(?:\s+[a-z]+)?)",
+            r"coming\s+from\s+([a-z]+(?:\s+[a-z]+)?)",
+            r"traveling\s+from\s+([a-z]+(?:\s+[a-z]+)?)",
+        ]
+        source = None
+        for pattern in from_patterns:
+            from_m = re.search(pattern, q)
+            if from_m:
+                potential_source = from_m.group(1).strip()
+                # Check if it's a known place
+                for place in known_places:
+                    if place in potential_source:
+                        source = place.title()
+                        break
+                if source:
+                    break
+        
+        # Detect origin from country/region mentions if no explicit "from"
+        if not source:
+            if any(word in q for word in ["russia", "russian", "moscow"]):
+                source = "Moscow"
+            elif any(word in q for word in ["china", "chinese", "beijing"]):
+                source = "Beijing"
+            elif any(word in q for word in ["usa", "america", "american"]):
+                source = "New York"
+        
+        # If still no source and destination exists, use a default
+        if not source and destination:
+            source = "Delhi"  # Default for Indian destinations
+        
+        # Extract days
         days_m = re.search(r"(\d+)\s*(?:day|days|night|nights)", q)
         days = int(days_m.group(1)) if days_m else 3
-
-        budget_m = re.search(r"(?:under|below|within|budget|\u20b9|rs\.?|inr)\s*(\d[\d,]*)", q)
-        budget = int(budget_m.group(1).replace(",", "")) if budget_m else None
-
-        from_m = re.search(r"from\s+([a-z]+(?:\s+[a-z]+)?)", q)
-        source = from_m.group(1).title() if from_m else "Delhi"
-
+        
+        # Extract budget with multi-currency support
+        budget = None
+        budget_currency = "INR"
+        
+        # Try different currency patterns
+        currency_patterns = [
+            (r"(?:under|below|within|budget|\$)\s*(\d[\d,]*)", "USD"),
+            (r"(?:under|below|within|budget|\u20b9|rs\.?|inr)\s*(\d[\d,]*)", "INR"),
+            (r"(?:under|below|within|budget|\u20bd|rub|ruble)\s*(\d[\d,]*)", "RUB"),
+            (r"(?:under|below|within|budget|\u00a5|yuan|cny|rmb)\s*(\d[\d,]*)", "CNY"),
+            (r"(?:under|below|within|budget|\u20ac|eur|euro)\s*(\d[\d,]*)", "EUR"),
+        ]
+        
+        for pattern, currency in currency_patterns:
+            budget_m = re.search(pattern, q)
+            if budget_m:
+                budget = int(budget_m.group(1).replace(",", ""))
+                budget_currency = currency
+                break
+        
+        # Extract travelers
         travelers_m = re.search(r"(\d+)\s*(?:person|people|traveler|travellers|pax)", q)
         travelers = int(travelers_m.group(1)) if travelers_m else 1
-
+        
+        # Extract preferences (beach, cold, family, etc.)
+        preferences = []
+        if any(word in q for word in ["beach", "beaches", "coastal", "sea", "ocean"]):
+            preferences.append("beach")
+        if any(word in q for word in ["cold", "snow", "winter", "skiing"]):
+            preferences.append("cold_weather")
+        if any(word in q for word in ["hot", "warm", "summer", "sunny"]):
+            preferences.append("warm_weather")
+        if any(word in q for word in ["family", "families", "kids", "children"]):
+            preferences.append("family_friendly")
+        if any(word in q for word in ["adventure", "trekking", "hiking", "sports"]):
+            preferences.append("adventure")
+        if any(word in q for word in ["luxury", "premium", "5-star", "upscale"]):
+            preferences.append("luxury")
+        if any(word in q for word in ["budget", "cheap", "affordable", "backpack"]):
+            preferences.append("budget_travel")
+        
         return {
             "destination": destination or "the destination",
             "days": days,
             "budget": budget,
+            "budget_currency": budget_currency,
             "source": source,
             "travelers": travelers,
+            "preferences": preferences,
         }
 
     def _select_travel_tools(self, query: str) -> tuple[str, List[str]]:
@@ -729,9 +816,28 @@ class AutoGenOrchestrator(IAgentOrchestrator):
         registry = _register_tool_builders()
         dest = entities["destination"]
         days = str(entities["days"])
-        budget = str(entities.get("budget") or "")
-        source = entities["source"]
+        budget = entities.get("budget")
+        budget_currency = entities.get("budget_currency", "INR")
+        source = entities.get("source")
         travelers = str(entities["travelers"])
+        preferences = entities.get("preferences", [])
+
+        # Convert budget to INR if needed
+        budget_inr = None
+        currency_conversion_result = None
+        if budget and budget_currency != "INR":
+            conv_result = await self._execute_tool(
+                "get_currency_exchange",
+                registry["get_currency_exchange"],
+                {"from_currency": budget_currency, "to_currency": "INR", "amount": float(budget)}
+            )
+            if conv_result["result"].get("status") == "success":
+                budget_inr = int(conv_result["result"]["converted_amount"])
+                currency_conversion_result = conv_result
+        elif budget:
+            budget_inr = budget
+
+        budget_str = str(budget_inr) if budget_inr else ""
 
         # Build (tool_name, func, args) triples
         tool_calls = []
@@ -739,33 +845,47 @@ class AutoGenOrchestrator(IAgentOrchestrator):
             if name not in registry:
                 continue
             if name == "search_flights":
-                args = {"origin": source, "destination": dest, "budget": budget}
+                args = {"origin": source or "Delhi", "destination": dest, "budget": budget_str}
             elif name == "search_hotels":
-                args = {"destination": dest, "budget": budget, "days": days}
+                args = {"destination": dest, "budget": budget_str, "days": days}
             elif name == "estimate_trip_budget":
                 args = {"destination": dest, "days": days, "travelers": travelers}
             elif name == "search_places":
-                args = {"destination": dest}
+                category = "beach" if "beach" in preferences else "tourist"
+                args = {"destination": dest, "category": category}
             elif name == "search_restaurants":
                 args = {"destination": dest}
             elif name == "generate_itinerary":
-                args = {"destination": dest, "days": days, "budget": budget}
+                args = {"destination": dest, "days": days, "budget": budget_str}
             elif name == "get_local_transport_info":
                 args = {"destination": dest}
             elif name == "get_distance_between_places":
-                args = {"origin": source, "destination": dest}
+                args = {"origin": source or "Delhi", "destination": dest}
+            elif name == "get_geo_distance":
+                args = {"origin": source or "Delhi", "destination": dest}
             elif name == "generate_trip_summary":
-                args = {"destination": dest, "days": days, "budget": budget}
+                args = {"destination": dest, "days": days, "budget": budget_str}
             elif name == "get_weather":
                 args = {"city": dest}
             elif name == "web_search":
-                args = {"query": f"travel guide {dest}"}
+                search_query = f"travel guide {dest}"
+                if "beach" in preferences:
+                    search_query = f"best beaches in {dest}"
+                elif "cold_weather" in preferences:
+                    search_query = f"cold weather destinations in {dest}"
+                args = {"query": search_query}
             else:
                 args = {"destination": dest}
             tool_calls.append((name, registry[name], args))
 
         tasks = [self._execute_tool(name, fn, args) for name, fn, args in tool_calls]
-        return list(await asyncio.gather(*tasks))
+        results = list(await asyncio.gather(*tasks))
+        
+        # Prepend currency conversion if it happened
+        if currency_conversion_result:
+            results.insert(0, currency_conversion_result)
+        
+        return results
 
     async def _execute_smart_travel_planner_workflow(
         self, query: str, tools: List[Callable], max_steps: int
@@ -799,24 +919,38 @@ class AutoGenOrchestrator(IAgentOrchestrator):
         ]
 
         # Step 5: LLM aggregation — structured travel plan
+        budget_display = ""
+        if entities.get("budget"):
+            if entities.get("budget_currency") == "INR":
+                budget_display = f"₹{entities['budget']:,}"
+            else:
+                budget_display = f"{entities['budget']:,} {entities['budget_currency']}"
+                if budget_inr:
+                    budget_display += f" (≈₹{budget_inr:,})"
+        else:
+            budget_display = "flexible"
+        
+        preferences_str = ", ".join(entities.get("preferences", [])) or "general travel"
+        
         planner_prompt = (
             f"You are an expert travel planner. The user asked: '{query}'\n\n"
             f"Detected intent: {intent}\n"
-            f"Destination: {entities['destination']} | Days: {entities['days']} "
-            f"| Budget: {'\u20b9' + str(entities['budget']) if entities.get('budget') else 'flexible'} "
-            f"| Travelers: {entities['travelers']}\n\n"
+            f"Origin: {entities.get('source') or 'Not specified'} → Destination: {entities['destination']}\n"
+            f"Duration: {entities['days']} days | Budget: {budget_display} | Travelers: {entities['travelers']}\n"
+            f"Preferences: {preferences_str}\n\n"
             "Tool results (use ONLY these — do not hallucinate):\n"
             f"{json.dumps([r['result'] for r in tool_results], indent=2, default=str)}\n\n"
             "Generate a structured travel plan with:\n"
             "- Destination overview\n"
+            "- Distance & travel time from origin (if available)\n"
             "- Weather summary (if available)\n"
-            "- Recommended hotels\n"
-            "- Day-wise itinerary\n"
-            "- Estimated costs\n"
+            "- Budget breakdown (converted to local currency if needed)\n"
+            "- Recommended hotels matching budget\n"
+            "- Day-wise itinerary aligned with preferences\n"
             "- Local transport options\n"
             "- Top attractions / restaurants\n"
             "- 3-5 practical travel tips\n"
-            "Be concise and practical."
+            "Be concise, practical, and tailor recommendations to user preferences."
         )
 
         planner_agent = AssistantAgent(
@@ -845,9 +979,13 @@ class AutoGenOrchestrator(IAgentOrchestrator):
             final_step=True,
             debug_info={
                 "intent": intent,
+                "origin": entities.get("source"),
                 "destination": entities["destination"],
                 "days": entities["days"],
                 "budget": entities.get("budget"),
+                "budget_currency": entities.get("budget_currency"),
+                "travelers": entities["travelers"],
+                "preferences": entities.get("preferences", []),
                 "selected_tools": selected_tool_names,
             },
         )
