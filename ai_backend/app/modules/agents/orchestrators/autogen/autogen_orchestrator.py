@@ -319,29 +319,57 @@ class AutoGenOrchestrator(IAgentOrchestrator):
             })
         return catalog
 
-    def _extract_json_object(self, text: str) -> Optional[Dict[str, Any]]:
+    def _extract_json_object(
+        self,
+        text: str
+    ) -> Optional[Dict[str, Any]]:
+
+        if not text:
+            return None
+
+        text = text.strip()
+
+        # remove markdown fences
+        text = re.sub(
+            r"^```(?:json)?",
+            "",
+            text,
+            flags=re.MULTILINE,
+        )
+
+        text = text.replace("```", "").strip()
+
+        # remove accidental trailing chars
+        match = re.search(
+            r"\{.*\}",
+            text,
+            re.DOTALL
+        )
+
+        if not match:
+            return None
+
+        candidate = match.group(0)
+
+        # remove trailing ]
+        candidate = re.sub(
+            r"\]+$",
+            "",
+            candidate
+        )
+
         try:
-            parsed = json.loads(text)
-            return parsed if isinstance(parsed, dict) else None
-        except json.JSONDecodeError:
-            pass
+            parsed = json.loads(candidate)
 
-        fenced = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", text, re.DOTALL)
-        if fenced:
-            try:
-                parsed = json.loads(fenced.group(1))
-                return parsed if isinstance(parsed, dict) else None
-            except json.JSONDecodeError:
-                pass
+            if isinstance(parsed, dict):
+                return parsed
 
-        start = text.find("{")
-        end = text.rfind("}")
-        if start != -1 and end != -1 and end > start:
-            try:
-                parsed = json.loads(text[start:end + 1])
-                return parsed if isinstance(parsed, dict) else None
-            except json.JSONDecodeError:
-                return None
+        except Exception as e:
+            logger.warning(
+                "JSON parse failed: %s",
+                e
+            )
+
         return None
 
     def _fallback_tool_plan(self, query: str, available_tool_names: List[str]) -> Dict[str, Any]:
@@ -768,8 +796,42 @@ class AutoGenOrchestrator(IAgentOrchestrator):
             }]
 
         # ── Agent 2: Tool Executor ────────────────────────────────────────────
-        executor_result, executor_steps, executor_tools_used = (
-            await self._execute_smart_assistant_tools_with_agent(query, tool_calls, selected_tool_names)
+        # -------------------------------------------------
+        # DETERMINISTIC TOOL EXECUTION
+        # -------------------------------------------------
+
+        tool_results = await self._execute_tool_calls(
+            tool_calls
+        )
+
+        executor_steps = []
+
+        for idx, result in enumerate(tool_results, start=1):
+
+            executor_steps.append({
+                "step": idx,
+                "agent": "ToolExecutor",
+                "type": "tool_execution",
+                "tool": result["tool"],
+                "args": result["args"],
+                "content": json.dumps(
+                    result["result"],
+                    indent=2,
+                    default=str
+                ),
+                "duration_ms": result.get("duration_ms"),
+                "cached": result.get("cached"),
+            })
+
+        executor_tools_used = {
+            result["tool"]
+            for result in tool_results
+        }
+
+        executor_result = json.dumps(
+            tool_results,
+            indent=2,
+            default=str
         )
 
         # ── Agent 3: Summarizer ───────────────────────────────────────────────
