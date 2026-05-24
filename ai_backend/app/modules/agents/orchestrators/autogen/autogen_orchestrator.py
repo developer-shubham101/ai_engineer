@@ -414,7 +414,11 @@ class AutoGenOrchestrator(IAgentOrchestrator):
                 args = {}
 
             signature = inspect.signature(registry[name])
-            allowed_args = {key: value for key, value in args.items() if key in signature.parameters}
+            allowed_args = {
+                key: value
+                for key, value in args.items()
+                if key in signature.parameters
+            }
 
             if name == "web_search":
                 allowed_args.setdefault("query", query)
@@ -885,30 +889,7 @@ class AutoGenOrchestrator(IAgentOrchestrator):
     # Smart Travel Planner workflow
     # ------------------------------------------------------------------
 
-    # Supported travel intents and their tool mappings
-    _TRAVEL_INTENT_KEYWORDS: List[tuple] = [
-        ("FLIGHT_SEARCH",        ["flight", "fly", "airline", "airfare", "plane ticket"]),
-        ("HOTEL_SEARCH",         ["hotel", "stay", "accommodation", "hostel", "resort", "lodge"]),
-        ("WEATHER_TRAVEL",       ["weather", "climate", "temperature", "rain", "monsoon", "season", "cold", "warm"]),
-        ("RESTAURANT_SEARCH",    ["restaurant", "food", "eat", "dining", "cuisine", "cafe"]),
-        ("TRANSPORT_QUERY",      ["transport", "bus", "train", "cab", "taxi", "auto", "how to reach", "distance"]),
-        ("LOCAL_ATTRACTIONS",    ["places", "attractions", "sightseeing", "tourist", "things to do", "explore", "visit", "beach"]),
-        ("BUDGET_TRAVEL",        ["budget", "cheap", "affordable", "under", "cost", "expense", "\u20b9", "inr", "rupee", "$", "dollar", "ruble", "yuan"]),
-        ("ITINERARY_PLANNING",   ["itinerary", "plan", "day", "schedule", "trip plan", "days"]),
-        ("GENERAL_TRAVEL_QUERY", []),
-    ]
-
-    _TRAVEL_INTENT_TOOLS: Dict[str, List[str]] = {
-        "FLIGHT_SEARCH":       ["search_flights", "get_geo_distance"],
-        "HOTEL_SEARCH":        ["search_hotels", "get_weather"],
-        "WEATHER_TRAVEL":      ["get_weather", "search_places"],
-        "RESTAURANT_SEARCH":   ["search_restaurants"],
-        "TRANSPORT_QUERY":     ["get_local_transport_info", "get_geo_distance"],
-        "LOCAL_ATTRACTIONS":   ["search_places", "get_weather"],
-        "BUDGET_TRAVEL":       ["estimate_trip_budget", "search_hotels", "search_flights", "get_weather", "get_currency_exchange"],
-        "ITINERARY_PLANNING":  ["generate_itinerary", "search_places", "get_weather", "estimate_trip_budget", "get_geo_distance"],
-        "GENERAL_TRAVEL_QUERY": ["generate_trip_summary", "get_weather", "search_places", "estimate_trip_budget"],
-    }
+   
 
     _TRAVEL_TOOL_NAMES: Set[str] = {
         "search_flights",
@@ -925,226 +906,8 @@ class AutoGenOrchestrator(IAgentOrchestrator):
         "get_weather",
         # TODO: Add web_search/scrape_url back later as an optional travel enrichment layer.
     }
-
-    def _classify_travel_intent(self, query: str) -> str:
-        """Classify travel intent via keyword matching."""
-        q = query.lower()
-        for intent, keywords in self._TRAVEL_INTENT_KEYWORDS:
-            if not keywords:
-                return intent
-            if any(kw in q for kw in keywords):
-                return intent
-        return "GENERAL_TRAVEL_QUERY"
-
-    def _extract_travel_entities(self, query: str) -> Dict[str, Any]:
-        """Extract destination, days, budget, source, travelers, currency, preferences from query."""
-        q = query.lower()
-        
-        # Expanded destination database with regions
-        known_places = [
-            # India
-            "goa", "jaipur", "kerala", "mumbai", "delhi", "bangalore", "hyderabad",
-            "manali", "shimla", "udaipur", "agra", "varanasi", "kolkata", "chennai",
-            "kathmandu", "katmandu", "rishikesh", "darjeeling", "ooty", "coorg",
-            # Middle East
-            "dubai", "abu dhabi", "doha", "riyadh", "muscat", "bahrain", "kuwait",
-            # Europe
-            "paris", "london", "rome", "italy", "venice", "milan", "barcelona", "madrid",
-            "berlin", "amsterdam", "prague", "vienna", "budapest", "moscow",
-            # Asia
-            "singapore", "bangkok", "bali", "phuket", "tokyo", "seoul", "beijing",
-            "hong kong", "kuala lumpur", "hanoi", "ho chi minh",
-            # Americas
-            "new york", "los angeles", "san francisco", "miami", "chicago",
-            "toronto", "vancouver", "mexico city", "cancun",
-        ]
-        
-        # Extract destination (check multi-word first)
-        destination = None
-        for place in sorted(known_places, key=len, reverse=True):
-            if place in q:
-                destination = place.title()
-                break
-        
-        # Extract source/origin
-        from_patterns = [
-            r"from\s+([a-z]+(?:\s+[a-z]+)?)",
-            r"coming\s+from\s+([a-z]+(?:\s+[a-z]+)?)",
-            r"traveling\s+from\s+([a-z]+(?:\s+[a-z]+)?)",
-        ]
-        source = None
-        for pattern in from_patterns:
-            from_m = re.search(pattern, q)
-            if from_m:
-                potential_source = from_m.group(1).strip()
-                # Check if it's a known place
-                for place in known_places:
-                    if place in potential_source:
-                        source = place.title()
-                        break
-                if source:
-                    break
-        
-        # Detect origin from country/region mentions if no explicit "from"
-        if not source:
-            if any(word in q for word in ["russia", "russian", "moscow"]):
-                source = "Moscow"
-            elif any(word in q for word in ["china", "chinese", "beijing"]):
-                source = "Beijing"
-            elif any(word in q for word in ["usa", "america", "american"]):
-                source = "New York"
-        
-        # If still no source and destination exists, use a default
-        if not source and destination:
-            source = "Delhi"  # Default for Indian destinations
-        
-        # Extract days
-        days_m = re.search(r"(\d+)\s*(?:day|days|night|nights)", q)
-        days = int(days_m.group(1)) if days_m else 3
-        
-        # Extract budget with multi-currency support
-        budget = None
-        budget_currency = "INR"
-        
-        # Try different currency patterns
-        currency_patterns = [
-            (r"(?:under|below|within|budget|\$)\s*(\d[\d,]*)", "USD"),
-            (r"(?:under|below|within|budget|\u20b9|rs\.?|inr)\s*(\d[\d,]*)", "INR"),
-            (r"(?:under|below|within|budget|\u20bd|rub|ruble)\s*(\d[\d,]*)", "RUB"),
-            (r"(?:under|below|within|budget|\u00a5|yuan|cny|rmb)\s*(\d[\d,]*)", "CNY"),
-            (r"(?:under|below|within|budget|\u20ac|eur|euro)\s*(\d[\d,]*)", "EUR"),
-        ]
-        
-        for pattern, currency in currency_patterns:
-            budget_m = re.search(pattern, q)
-            if budget_m:
-                budget = int(budget_m.group(1).replace(",", ""))
-                budget_currency = currency
-                break
-        
-        # Extract travelers
-        travelers_m = re.search(r"(\d+)\s*(?:person|people|traveler|travellers|pax)", q)
-        travelers = int(travelers_m.group(1)) if travelers_m else 1
-        
-        # Extract preferences (beach, cold, family, etc.)
-        preferences = []
-        if any(word in q for word in ["beach", "beaches", "coastal", "sea", "ocean"]):
-            preferences.append("beach")
-        if any(word in q for word in ["cold", "snow", "winter", "skiing"]):
-            preferences.append("cold_weather")
-        if any(word in q for word in ["hot", "warm", "summer", "sunny"]):
-            preferences.append("warm_weather")
-        if any(word in q for word in ["family", "families", "kids", "children"]):
-            preferences.append("family_friendly")
-        if any(word in q for word in ["adventure", "trekking", "hiking", "sports"]):
-            preferences.append("adventure")
-        if any(word in q for word in ["luxury", "premium", "5-star", "upscale"]):
-            preferences.append("luxury")
-        if any(word in q for word in ["budget", "cheap", "affordable", "backpack"]):
-            preferences.append("budget_travel")
-        
-        return {
-            "destination": destination or "the destination",
-            "days": days,
-            "budget": budget,
-            "budget_currency": budget_currency,
-            "source": source,
-            "travelers": travelers,
-            "preferences": preferences,
-        }
-
-    def _select_travel_tools(self, query: str) -> tuple[str, List[str]]:
-        """Return (intent, tool_names) for the query."""
-        intent = self._classify_travel_intent(query)
-        tools = self._TRAVEL_INTENT_TOOLS.get(intent, ["generate_trip_summary", "get_weather", "search_places"])
-        tools = [name for name in tools if name in self._TRAVEL_TOOL_NAMES]
-        logger.debug("TRAVEL_PLANNER: intent=%s | tools=%s", intent, tools)
-        return intent, tools
-
-    def _normalize_travel_entities(self, raw_entities: Any, query: str) -> Dict[str, Any]:
-        entities = self._extract_travel_entities(query)
-        if not isinstance(raw_entities, dict):
-            return entities
-
-        for key in ["destination", "source", "budget_currency"]:
-            value = raw_entities.get(key)
-            if isinstance(value, str) and value.strip():
-                entities[key] = value.strip().title() if key != "budget_currency" else value.strip().upper()
-
-        for key in ["days", "budget", "travelers"]:
-            value = raw_entities.get(key)
-            if value in (None, ""):
-                continue
-            try:
-                entities[key] = int(str(value).replace(",", ""))
-            except (TypeError, ValueError):
-                continue
-
-        preferences = raw_entities.get("preferences")
-        if isinstance(preferences, list):
-            entities["preferences"] = [str(pref).strip() for pref in preferences if str(pref).strip()]
-        elif isinstance(preferences, str) and preferences.strip():
-            entities["preferences"] = [pref.strip() for pref in preferences.split(",") if pref.strip()]
-
-        return entities
-
-    def _travel_args_for_tool(self, tool_name: str, entities: Dict[str, Any], query: str) -> Dict[str, Any]:
-        dest = entities["destination"]
-        days = str(entities["days"])
-        budget = entities.get("budget")
-        budget_str = str(budget) if budget else ""
-        source = entities.get("source") or "Delhi"
-        travelers = str(entities["travelers"])
-        preferences = entities.get("preferences", [])
-
-        if tool_name == "search_flights":
-            return {"origin": source, "destination": dest, "budget": budget_str}
-        if tool_name == "search_hotels":
-            return {"destination": dest, "budget": budget_str, "days": days}
-        if tool_name == "estimate_trip_budget":
-            return {"destination": dest, "days": days, "travelers": travelers}
-        if tool_name == "search_places":
-            category = "beach" if "beach" in preferences else "tourist"
-            return {"destination": dest, "category": category}
-        if tool_name == "search_restaurants":
-            return {"destination": dest}
-        if tool_name == "generate_itinerary":
-            return {"destination": dest, "days": days, "budget": budget_str}
-        if tool_name == "get_local_transport_info":
-            return {"destination": dest}
-        if tool_name in {"get_distance_between_places", "get_geo_distance"}:
-            return {"origin": source, "destination": dest}
-        if tool_name == "generate_trip_summary":
-            return {"destination": dest, "days": days, "budget": budget_str}
-        if tool_name == "get_weather":
-            return {"city": dest}
-        if tool_name == "get_currency_exchange":
-            return {
-                "from_currency": entities.get("budget_currency", "INR"),
-                "to_currency": "INR",
-                "amount": float(budget or 1),
-            }
-        return {"query": query}
-
-    def _fallback_travel_plan(self, query: str, available_tool_names: List[str]) -> Dict[str, Any]:
-        intent, selected_tool_names = self._select_travel_tools(query)
-        selected_tool_names = [name for name in selected_tool_names if name in available_tool_names]
-        if not selected_tool_names and "generate_trip_summary" in available_tool_names:
-            selected_tool_names = ["generate_trip_summary"]
-
-        entities = self._extract_travel_entities(query)
-        tool_calls = [
-            {"name": name, "args": self._travel_args_for_tool(name, entities, query)}
-            for name in selected_tool_names
-        ]
-
-        return {
-            "intent": intent,
-            "confidence": 0.70,
-            "entities": entities,
-            "tool_calls": tool_calls,
-            "routing_source": "fallback",
-        }
+ 
+ 
 
     def _normalize_travel_tool_plan(
         self,
@@ -1153,7 +916,7 @@ class AutoGenOrchestrator(IAgentOrchestrator):
         available_tool_names: List[str],
     ) -> Dict[str, Any]:
         registry = _register_tool_builders()
-        entities = self._normalize_travel_entities(raw_plan.get("entities"), query)
+         
         intent = str(raw_plan.get("intent") or "GENERAL_TRAVEL_QUERY").upper()
         try:
             confidence = float(raw_plan.get("confidence", 0.75))
@@ -1178,10 +941,13 @@ class AutoGenOrchestrator(IAgentOrchestrator):
                 args = {}
 
             signature = inspect.signature(registry[name])
-            default_args = self._travel_args_for_tool(name, entities, query)
-            allowed_args = {key: value for key, value in args.items() if key in signature.parameters}
-            for key, value in default_args.items():
-                allowed_args.setdefault(key, value)
+             
+            allowed_args = {
+                key: value
+                for key, value in args.items()
+                if key in signature.parameters
+            }
+             
 
             missing_required = [
                 param_name
@@ -1198,273 +964,361 @@ class AutoGenOrchestrator(IAgentOrchestrator):
 
         if not normalized_calls:
             return self._fallback_travel_plan(query, available_tool_names)
+        
+        entities = raw_plan.get("entities") or {}
 
         return {
-            "intent": intent,
-            "confidence": confidence,
-            "entities": entities,
-            "tool_calls": normalized_calls,
-            "routing_source": "llm",
-        }
+        "intent": intent,
+        "confidence": confidence,
+        "entities": entities,
+        "tool_calls": normalized_calls,
+        "routing_source": "llm",
+    }
 
-    async def _plan_smart_travel_tools(self, query: str, available_tool_names: List[str]) -> Dict[str, Any]:
+    def _coerce_tool_args(
+        self,
+        func: Callable,
+        args: Dict[str, Any],
+    ) -> Dict[str, Any]:
+
+        signature = inspect.signature(func)
+        normalized = {}
+
+        for name, value in args.items():
+
+            param = signature.parameters.get(name)
+
+            if not param:
+                continue
+
+            annotation = param.annotation
+
+            try:
+                if annotation == int:
+                    value = int(value)
+
+                elif annotation == float:
+                    value = float(value)
+
+                elif annotation == str:
+                    value = str(value)
+
+            except Exception:
+                pass
+
+            normalized[name] = value
+
+        return normalized
+    def _fallback_travel_plan(
+        self,
+        query: str,
+        available_tool_names: List[str],
+    ) -> Dict[str, Any]:
+
+        tool_calls = []
+
+        if "generate_trip_summary" in available_tool_names:
+            tool_calls.append({
+                "name": "generate_trip_summary",
+                "args": {
+                    "destination": query,
+                    "days": "3",
+                    "budget": "",
+                },
+            })
+
+        return {
+            "intent": "GENERAL_TRAVEL_QUERY",
+            "confidence": 0.0,
+            "entities": {},
+            "tool_calls": tool_calls,
+            "routing_source": "fallback",
+        }
+    
+    
+    async def _select_smart_travel_planner_tools(
+        self,
+        query: str,
+        available_tool_names: List[str],
+    ) -> tuple[Dict[str, Any], List[Dict[str, Any]]]:
+        """
+        AI-based travel tool selector.
+
+        AI decides:
+        - intent
+        - entities
+        - tools
+        - tool arguments
+
+        No keyword routing.
+        No hardcoded intent mapping.
+        """
+
         if not available_tool_names:
-            return {
-                "intent": "GENERAL_TRAVEL_QUERY",
-                "confidence": 0.0,
-                "entities": self._extract_travel_entities(query),
-                "tool_calls": [],
-                "routing_source": "none",
-            }
+            return (
+                {
+                    "intent": "GENERAL_TRAVEL_QUERY",
+                    "confidence": 0.0,
+                    "entities": {},
+                    "tool_calls": [],
+                    "routing_source": "none",
+                },
+                [],
+            )
 
         catalog = self._build_tool_catalog(available_tool_names)
-        prompt = (
-            "You are a tool router for a smart travel planner. Extract travel entities, identify intent, "
-            "and choose the smallest useful set of travel tools with exact arguments.\n\n"
-            "Return only valid JSON with this shape:\n"
-            "{"
-            "\"intent\":\"SHORT_TRAVEL_INTENT\","
-            "\"confidence\":0.0,"
-            "\"entities\":{\"destination\":\"Goa\",\"source\":\"Delhi\",\"days\":3,\"budget\":20000,"
-            "\"budget_currency\":\"INR\",\"travelers\":1,\"preferences\":[\"beach\"]},"
-            "\"tool_calls\":[{\"name\":\"tool_name\",\"args\":{\"arg\":\"value\"}}]"
-            "}\n\n"
-            "Rules:\n"
-            "- Use only tools from the provided catalog.\n"
-            "- Do not use web_search or scrape_url. Web enrichment will be added later.\n"
-            "- Prefer travel-specific tools such as search_places, search_hotels, generate_itinerary, "
-            "estimate_trip_budget, get_weather, and transport/distance tools.\n"
-            "- If the user gives a non-INR budget, include get_currency_exchange.\n"
-            "- If origin is not specified, use a reasonable source only when needed by a selected tool.\n\n"
-            f"Tool catalog:\n{json.dumps(catalog, indent=2, default=str)}\n\n"
-            f"User query: {query}"
-        )
 
-        try:
-            from autogen_core.models import UserMessage
-
-            response = await self.model_client.create([
-                UserMessage(content=prompt, source="user")
-            ])
-            content = response.content if hasattr(response, "content") else str(response)
-            parsed = self._extract_json_object(str(content))
-            if not parsed:
-                raise ValueError(f"Travel router did not return JSON: {content!r}")
-            return self._normalize_travel_tool_plan(parsed, query, available_tool_names)
-        except Exception as exc:
-            logger.warning("AutoGen travel LLM router failed; falling back to keyword routing: %s", exc, exc_info=True)
-            return self._fallback_travel_plan(query, available_tool_names)
-
-    async def _execute_travel_tools_parallel(
-        self, tool_names: List[str], entities: Dict[str, Any]
-    ) -> List[Dict[str, Any]]:
-        """Execute travel tools in parallel using asyncio.gather."""
-        registry = _register_tool_builders()
-        dest = entities["destination"]
-        days = str(entities["days"])
-        budget = entities.get("budget")
-        budget_currency = entities.get("budget_currency", "INR")
-        source = entities.get("source")
-        travelers = str(entities["travelers"])
-        preferences = entities.get("preferences", [])
-
-        # Convert budget to INR if needed
-        budget_inr = None
-        currency_conversion_result = None
-        if budget and budget_currency != "INR":
-            conv_result = await self._execute_tool(
-                "get_currency_exchange",
-                registry["get_currency_exchange"],
-                {"from_currency": budget_currency, "to_currency": "INR", "amount": float(budget)}
-            )
-            if conv_result["result"].get("status") == "success":
-                budget_inr = int(conv_result["result"]["converted_amount"])
-                currency_conversion_result = conv_result
-        elif budget:
-            budget_inr = budget
-
-        budget_str = str(budget_inr) if budget_inr else ""
-
-        # Build (tool_name, func, args) triples
-        tool_calls = []
-        for name in tool_names:
-            if name not in registry:
-                continue
-            if name == "search_flights":
-                args = {"origin": source or "Delhi", "destination": dest, "budget": budget_str}
-            elif name == "search_hotels":
-                args = {"destination": dest, "budget": budget_str, "days": days}
-            elif name == "estimate_trip_budget":
-                args = {"destination": dest, "days": days, "travelers": travelers}
-            elif name == "search_places":
-                category = "beach" if "beach" in preferences else "tourist"
-                args = {"destination": dest, "category": category}
-            elif name == "search_restaurants":
-                args = {"destination": dest}
-            elif name == "generate_itinerary":
-                args = {"destination": dest, "days": days, "budget": budget_str}
-            elif name == "get_local_transport_info":
-                args = {"destination": dest}
-            elif name == "get_distance_between_places":
-                args = {"origin": source or "Delhi", "destination": dest}
-            elif name == "get_geo_distance":
-                args = {"origin": source or "Delhi", "destination": dest}
-            elif name == "generate_trip_summary":
-                args = {"destination": dest, "days": days, "budget": budget_str}
-            elif name == "get_weather":
-                args = {"city": dest}
-            elif name == "get_currency_exchange":
-                args = {
-                    "from_currency": budget_currency,
-                    "to_currency": "INR",
-                    "amount": float(budget or 1),
-                }
-            else:
-                args = {"destination": dest}
-            tool_calls.append((name, registry[name], args))
-
-        tasks = [self._execute_tool(name, fn, args) for name, fn, args in tool_calls]
-        results = list(await asyncio.gather(*tasks))
-        
-        # Prepend currency conversion if it happened
-        if currency_conversion_result:
-            results.insert(0, currency_conversion_result)
-        
-        return results
-
-    async def _execute_smart_travel_planner_workflow(
-        self, query: str, tools: List[Callable], max_steps: int
-    ) -> AgentResponse:
-        """Smart travel planner: classify intent → extract entities → run tools in
-        parallel → hand structured results to an AssistantAgent for a final plan.
-        """
-        registry = _register_tool_builders()
-        if tools:
-            available_tool_names = [
-                name for name, func in registry.items()
-                if func in tools and name in self._TRAVEL_TOOL_NAMES
-            ]
-        else:
-            available_tool_names = [
-                name for name in self._TRAVEL_TOOL_NAMES
-                if name in registry
-            ]
-
-        route_plan = await self._plan_smart_travel_tools(query, available_tool_names)
-        intent = route_plan["intent"]
-        confidence = route_plan["confidence"]
-        entities = route_plan["entities"]
-        tool_calls = route_plan["tool_calls"]
-        selected_tool_names = [tool_call["name"] for tool_call in tool_calls]
-
-        if not tool_calls and "generate_trip_summary" in available_tool_names:
-            tool_calls = [{
-                "name": "generate_trip_summary",
-                "args": self._travel_args_for_tool("generate_trip_summary", entities, query),
-            }]
-            selected_tool_names = ["generate_trip_summary"]
-
-        logger.info(
-            "TRAVEL_PLANNER: intent=%s | dest=%s | days=%s | budget=%s | tools=%s",
-            intent, entities["destination"], entities["days"], entities.get("budget"), selected_tool_names,
-        )
-
-        # Web scraping/search is intentionally excluded for now; add it back later as
-        # an optional enrichment step after the travel-specific tools are stable.
-        tool_results = await self._execute_tool_calls(tool_calls)
-
-        # Build step records for the response
-        tool_steps = [
-            {
-                "step": i + 1,
-                "tool": r["tool"],
-                "args": r["args"],
-                "output": r["result"],
-                "duration_ms": r["duration_ms"],
-                "cached": r["cached"],
-            }
-            for i, r in enumerate(tool_results)
-        ]
-
-        # Step 5: LLM aggregation — structured travel plan
-        budget_inr = None
-        for result in tool_results:
-            if result["tool"] != "get_currency_exchange":
-                continue
-            conversion = result["result"]
-            if isinstance(conversion, dict) and conversion.get("status") == "success":
-                converted_amount = conversion.get("converted_amount")
-                if converted_amount:
-                    budget_inr = int(converted_amount)
-                    break
-
-        budget_display = ""
-        if entities.get("budget"):
-            if entities.get("budget_currency") == "INR":
-                budget_display = f"₹{entities['budget']:,}"
-            else:
-                budget_display = f"{entities['budget']:,} {entities['budget_currency']}"
-                if budget_inr:
-                    budget_display += f" (≈₹{budget_inr:,})"
-        else:
-            budget_display = "flexible"
-        
-        preferences_str = ", ".join(entities.get("preferences", [])) or "general travel"
-        
-        planner_prompt = (
-            f"You are an expert travel planner. The user asked: '{query}'\n\n"
-            f"Detected intent: {intent}\n"
-            f"Origin: {entities.get('source') or 'Not specified'} → Destination: {entities['destination']}\n"
-            f"Duration: {entities['days']} days | Budget: {budget_display} | Travelers: {entities['travelers']}\n"
-            f"Preferences: {preferences_str}\n\n"
-            "Tool results (use ONLY these — do not hallucinate):\n"
-            f"{json.dumps([r['result'] for r in tool_results], indent=2, default=str)}\n\n"
-            "Generate a structured travel plan with:\n"
-            "- Destination overview\n"
-            "- Distance & travel time from origin (if available)\n"
-            "- Weather summary (if available)\n"
-            "- Budget breakdown (converted to local currency if needed)\n"
-            "- Recommended hotels matching budget\n"
-            "- Day-wise itinerary aligned with preferences\n"
-            "- Local transport options\n"
-            "- Top attractions / restaurants\n"
-            "- 3-5 practical travel tips\n"
-            "Be concise, practical, and tailor recommendations to user preferences."
-        )
-
-        planner_agent = AssistantAgent(
-            name="TravelPlanner",
+        selector = AssistantAgent(
+            name="TravelToolSelector",
             system_message=(
-                "You are a structured travel planning assistant. "
-                "Use only the provided tool results to build a clear, day-wise travel plan. "
-                "Do not call any additional tools."
+                "You are an AI travel routing agent.\n\n"
+
+                "Your job:\n"
+                "- Understand the user's travel request\n"
+                "- Extract travel entities\n"
+                "- Select the minimum required tools\n"
+                "- Generate COMPLETE tool arguments\n\n"
+
+                "Return ONLY valid JSON.\n"
+                "No markdown.\n"
+                "No explanation.\n\n"
+
+                "JSON FORMAT:\n"
+                "{\n"
+                '  "intent": "TRAVEL_INTENT",\n'
+                '  "confidence": 0.95,\n'
+                '  "entities": {\n'
+                '      "destination": "Goa",\n'
+                '      "source": "Delhi",\n'
+                '      "days": 3,\n'
+                '      "budget": 25000,\n'
+                '      "budget_currency": "INR",\n'
+                '      "travelers": 2,\n'
+                '      "preferences": ["beach","nightlife"]\n'
+                "  },\n"
+                '  "tool_calls": [\n'
+                "      {\n"
+                '          "name": "search_hotels",\n'
+                '          "args": {\n'
+                '              "destination": "Goa",\n'
+                '              "budget": "25000",\n'
+                '              "days": "3"\n'
+                "          }\n"
+                "      }\n"
+                "  ]\n"
+                "}\n\n"
+
+                "RULES:\n"
+                "- Use ONLY tools from catalog.\n"
+                "- Do NOT use web_search.\n"
+                "- Do NOT use scrape_url.\n"
+                "- Generate COMPLETE args for every tool.\n"
+                "- Avoid unnecessary tools.\n"
+                "- If budget currency is non-INR and conversion is useful, use get_currency_exchange.\n"
+                "- If source city is missing, omit tools needing origin unless required.\n"
+                "- Use smart reasoning instead of keyword matching."
             ),
             model_client=self.model_client,
         )
 
-        team = RoundRobinGroupChat(
-            participants=[planner_agent],
-            termination_condition=MaxMessageTermination(max_messages=max_steps),
+        selector_team = RoundRobinGroupChat(
+            participants=[selector],
+            termination_condition=MaxMessageTermination(max_messages=2),
         )
 
-        final_result, summary_steps, _ = await self._run_team(team, planner_prompt)
-        all_steps = tool_steps + summary_steps
-        tools_used = [r["tool"] for r in tool_results]
+        selector_task = (
+            f"Available tools:\n"
+            f"{json.dumps(catalog, indent=2, default=str)}\n\n"
+            f"User query:\n{query}\n\n"
+            "Return ONLY JSON."
+        )
+
+        try:
+            selector_result, selector_steps, _ = await self._run_team(
+                selector_team,
+                selector_task,
+            )
+
+            parsed = self._extract_json_object(selector_result)
+
+            if not parsed:
+                raise ValueError(
+                    f"Travel selector did not return valid JSON: {selector_result!r}"
+                )
+
+            route_plan = self._normalize_travel_tool_plan(
+                parsed,
+                query,
+                available_tool_names,
+            )
+
+            return route_plan, selector_steps
+
+        except Exception as exc:
+            logger.warning(
+                "Travel selector failed, fallback triggered: %s",
+                exc,
+                exc_info=True,
+            )
+
+            return (
+                self._fallback_travel_plan(
+                    query,
+                    available_tool_names,
+                ),
+                [],
+            )
+
+    async def _execute_smart_travel_planner_workflow(
+        self, query: str, tools: List[Callable], max_steps: int
+    ) -> AgentResponse:
+        """
+        3-agent travel planner pipeline:
+          Agent 1 (TravelToolSelector) - decides which travel tools to call (max 2 steps)
+          Agent 2 (ToolExecutor)       - executes the selected tools
+          Agent 3 (TravelPlanner)      - summarizes into a travel plan (max = user-defined max_steps)
+        """
+        registry = _register_tool_builders()
+        available_tool_names = [
+            name for name, func in registry.items()
+            if (not tools or func in tools) and name in self._TRAVEL_TOOL_NAMES
+        ]
+
+        # -- Agent 1: Travel Tool Selector ------------------------------------
+        route_plan, selector_steps = await self._select_smart_travel_planner_tools(query, available_tool_names)
+        intent = route_plan["intent"]
+        confidence = route_plan["confidence"]
+        entities = route_plan["entities"]
+        tool_calls = route_plan["tool_calls"]
+        selected_tool_names = [tc["name"] for tc in tool_calls]
+
+ 
+
+        if not selector_steps:
+            selector_steps = [{
+                "step": 1,
+                "agent": "TravelToolSelector",
+                "content": json.dumps(
+                    {"intent": intent, "confidence": confidence, "entities": entities,
+                     "routing_source": route_plan.get("routing_source"),
+                     "tool_calls": tool_calls},
+                    default=str,
+                ),
+                "type": "tool_routing",
+            }]
+
+        logger.info(
+            "TRAVEL_PLANNER: intent=%s | dest=%s | days=%s | budget=%s | tools=%s",
+            intent, entities.get("destination"), entities.get("days"), entities.get("budget"), selected_tool_names,
+        )
+
+        # -- Agent 2: Tool Executor -------------------------------------------
+        tool_results = await self._execute_tool_calls(tool_calls)
+
+        if not tool_results:
+            return AgentResponse(
+                answer="Unable to gather travel information right now.",
+                steps=selector_steps,
+                tools_used=[],
+                final_step=True,
+                debug_info={
+                    "intent": intent,
+                    "confidence": confidence,
+                    "routing_source": route_plan.get("routing_source"),
+                },
+            )
+
+        executor_steps = [
+            {
+                "step": idx,
+                "agent": "ToolExecutor",
+                "type": "tool_execution",
+                "tool": result["tool"],
+                "args": result["args"],
+                "content": json.dumps(result["result"], indent=2, default=str),
+                "duration_ms": result.get("duration_ms"),
+                "cached": result.get("cached"),
+            }
+            for idx, result in enumerate(tool_results, start=1)
+        ]
+        executor_tools_used = {result["tool"] for result in tool_results}
+        executor_result = json.dumps(tool_results, indent=2, default=str)
+
+        # -- Agent 3: Travel Planner (Summarizer) -----------------------------
+        preferences = entities.get("preferences") or []
+
+        if not isinstance(preferences, list):
+            preferences = [str(preferences)]
+
+        preferences_str = ", ".join(preferences) or "general travel"
+
+        summarizer = AssistantAgent(
+            name="TravelPlanner",
+            system_message=(
+                "You are an expert AI travel planner.\n\n"
+
+                "Tool results are already provided.\n"
+                "Never call tools.\n\n"
+
+                "Your job:\n"
+                "- Build a clean travel plan\n"
+                "- Combine all tool results intelligently\n"
+                "- Remove duplicate information\n"
+                "- Make recommendations when useful\n\n"
+
+                "Always format response nicely using sections:\n"
+                "- Overview\n"
+                "- Budget\n"
+                "- Hotels\n"
+                "- Attractions\n"
+                "- Weather\n"
+                "- Transport\n"
+                "- Tips\n\n"
+
+                "If some information is unavailable, skip that section.\n"
+                "Be concise but practical."
+            ),
+            model_client=self.model_client,
+        )
+        summarizer_team = RoundRobinGroupChat(
+            participants=[summarizer],
+            termination_condition=MaxMessageTermination(max_messages=max_steps),
+        )
+        summarizer_task = (
+            f"User query: {query}\n"
+            f"Detected intent: {intent}\n"
+            f"Origin: {entities.get('source') or 'Not specified'} | Destination: {entities.get('destination')}\n"
+            f"Duration: {entities.get('days')} days | Travelers: {entities.get('travelers')}\n"
+            f"Preferences: {preferences_str}\n"
+            f"Tools used: {json.dumps(selected_tool_names)}\n"
+            f"Tool results:\n{executor_result}"
+        )
+        final_result, summary_steps, summary_tools_used = await self._run_team(summarizer_team, summarizer_task)
+
+        # -- Merge steps with sequential numbering ----------------------------
+        pre_summary = selector_steps + executor_steps
+        for i, step in enumerate(pre_summary, start=1):
+            step["step"] = i
+        for step in summary_steps:
+            step["step"] = step.get("step", 0) + len(pre_summary)
+
+        tools_used = set(executor_tools_used) or set(selected_tool_names)
+        tools_used.update(summary_tools_used)
 
         return AgentResponse(
             answer=final_result,
-            steps=all_steps,
-            tools_used=tools_used,
+            steps=pre_summary + summary_steps,
+            tools_used=list(tools_used),
             final_step=True,
             debug_info={
                 "intent": intent,
                 "confidence": confidence,
                 "origin": entities.get("source"),
-                "destination": entities["destination"],
-                "days": entities["days"],
+                "destination": entities.get("destination"),
+                "days": entities.get("days"),
                 "budget": entities.get("budget"),
                 "budget_currency": entities.get("budget_currency"),
-                "travelers": entities["travelers"],
+                "travelers": entities.get("travelers"),
                 "preferences": entities.get("preferences", []),
                 "selected_tools": selected_tool_names,
                 "routing_source": route_plan.get("routing_source"),
