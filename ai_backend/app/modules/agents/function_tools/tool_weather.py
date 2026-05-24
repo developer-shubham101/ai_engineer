@@ -1,7 +1,10 @@
 """Weather tool — real OpenWeatherMap API with demo fallback."""
+import logging
 import os
 import requests
 from typing import Dict, Any
+
+logger = logging.getLogger(__name__)
 
 _OWM_BASE = "http://api.openweathermap.org/data/2.5/weather"
 _OWM_KEY = os.getenv("OPENWEATHER_API_KEY", "")
@@ -10,7 +13,9 @@ _OWM_KEY = os.getenv("OPENWEATHER_API_KEY", "")
 def get_weather(city: str) -> Dict[str, Any]:
     """Get current weather for a city via OpenWeatherMap."""
     try:
+        logger.debug("WEATHER_TOOL: request city=%r api_key_configured=%s", city, bool(_OWM_KEY))
         if not _OWM_KEY:
+            logger.debug("WEATHER_TOOL: using demo data for city=%r reason=no_api_key", city)
             return _demo_weather(city, reason="no_api_key")
 
         resp = requests.get(
@@ -18,13 +23,16 @@ def get_weather(city: str) -> Dict[str, Any]:
             params={"q": city, "appid": _OWM_KEY, "units": "metric"},
             timeout=10,
         )
+        logger.debug("WEATHER_TOOL: response city=%r status_code=%s", city, resp.status_code)
         if resp.status_code == 401:
+            logger.debug("WEATHER_TOOL: using demo data for city=%r reason=invalid_api_key", city)
             return _demo_weather(city, reason="invalid_api_key")
         if resp.status_code == 404:
+            logger.debug("WEATHER_TOOL: city not found city=%r", city)
             return {"city": city, "error": "City not found", "status": "error"}
         resp.raise_for_status()
         d = resp.json()
-        return {
+        result = {
             "city": d.get("name", city),
             "country": d.get("sys", {}).get("country", ""),
             "temperature_c": round(d["main"]["temp"], 1),
@@ -34,7 +42,15 @@ def get_weather(city: str) -> Dict[str, Any]:
             "wind_kmh": round(d.get("wind", {}).get("speed", 0) * 3.6, 1),
             "status": "success",
         }
+        logger.debug(
+            "WEATHER_TOOL: success city=%r resolved_city=%r temp_c=%s",
+            city,
+            result["city"],
+            result["temperature_c"],
+        )
+        return result
     except Exception as e:
+        logger.error("WEATHER_TOOL: error city=%r error=%s", city, e, exc_info=True)
         return {"city": city, "error": str(e), "status": "error"}
 
 
@@ -51,4 +67,11 @@ def _demo_weather(city: str, reason: str = "demo") -> Dict[str, Any]:
         "new york":  {"temperature_c": 12, "description": "Partly cloudy", "humidity_pct": 60},
     }
     base = _defaults.get(city.lower(), {"temperature_c": 22, "description": "Partly cloudy", "humidity_pct": 65})
-    return {"city": city, "status": f"demo_data:{reason}", **base}
+    result = {"city": city, "status": f"demo_data:{reason}", **base}
+    logger.debug(
+        "WEATHER_TOOL: demo result city=%r reason=%s temp_c=%s",
+        city,
+        reason,
+        result["temperature_c"],
+    )
+    return result

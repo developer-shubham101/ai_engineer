@@ -70,7 +70,7 @@ export default function AgentChat({ onLogout, onExit, selectedConversationId }) 
         content: msg.content,
         steps: msg.steps || [],
         tools_used: msg.tools_used || [],
-        debug_info: msg.processing_time_ms ? { processing_time_ms: msg.processing_time_ms } : null,
+        debug_info: msg.processing_time_ms ? { processing_time_ms: msg.processing_time_ms, actual_steps: msg.steps?.length } : null,
         ts: new Date(msg.created_at).toLocaleString()
       }))
       setMessages(transformed)
@@ -270,15 +270,18 @@ export default function AgentChat({ onLogout, onExit, selectedConversationId }) 
                   {msg.steps?.length > 0 && (
                     <details className="mb-2">
                       <summary className="small text-muted" style={{ cursor: 'pointer' }}>
-                        Reasoning steps ({msg.steps.length})
+                        Reasoning steps ({msg.steps.filter(s => s.content).length})
                       </summary>
                       <div className="mt-2">
-                        {msg.steps.map((step, i) => (
-                          <div key={i} className="small border rounded p-2 mb-1 font-monospace">
-                            <span className="badge bg-secondary me-1">Step {step.step}</span>
-                            <strong>{step.tool}</strong>
-                            {step.input && <div className="text-muted">Input: {step.input}</div>}
-                            <div>Result: {typeof step.result === 'object' ? JSON.stringify(step.result) : step.result}</div>
+                        {msg.steps.filter(s => s.content).map((step, i) => (
+                          <div key={i} className="small border rounded p-2 mb-1">
+                            <div className="d-flex align-items-center gap-2 mb-1">
+                              <span className="badge bg-secondary">Step {step.step}</span>
+                              <span className="badge bg-primary">{step.agent}</span>
+                            </div>
+                            <div className="font-monospace" style={{ whiteSpace: 'pre-wrap', fontSize: '0.8em' }}>
+                              {step.content}
+                            </div>
                           </div>
                         ))}
                       </div>

@@ -779,7 +779,7 @@ class AutoGenOrchestrator(IAgentOrchestrator):
                 "You are the final assistant. Tool results are already provided — do not call any tools. "
                 "Summarize the results clearly and concisely. "
                 "When the answer contains multiple independent facts (e.g. weather + stock price), "
-                "return a JSON object; otherwise return plain text."
+                "return plain text always in fomated way so user can ready."
             ),
             model_client=self.model_client,
         )
