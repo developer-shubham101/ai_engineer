@@ -147,14 +147,27 @@ User Request → FastAPI Router → Container → Modular Services → Response
 - `vision_providers.py` - Vision providers (Tesseract, PaddleOCR)
 - `emotion_providers.py` - Emotion detection from audio
 
-**🤖 Agents Module** (`app/modules/agents/`) - **NEW**
+**🤖 Agents Module** (`app/modules/agents/`)
 - `interfaces.py` - Agent and tool interfaces following SOLID principles
-- `orchestrators/` - Agent orchestrator implementations
-  - `custom/` - Custom single-agent orchestrator
-  - `autogen/` - AutoGen multi-agent orchestrator
-- `tools.py` - Tool implementations following SRP
 - `factories.py` - Factory pattern for tools and orchestrators
+- `agent_runner.py` - Legacy LLM-loop runner (REGISTRY used by `run_agent()` only)
+- `tools.py` - ITool implementations for custom orchestrator
 - `utils.py` - Utility classes for mock data and formatting
+- `function_tools/` - Standalone callable tool implementations
+  - `tool_web_search.py`, `tool_web_scraper.py`, `tool_stock.py`, `tool_weather.py`
+  - `tool_chart.py`, `tool_file.py`, `tool_travel.py`
+- `orchestrators/custom/` - Custom single-agent orchestrator (keyword routing)
+- `orchestrators/autogen/` - AutoGen multi-agent orchestrator (split into modules)
+  - `autogen_orchestrator.py` - Thin dispatcher; delegates to workflow modules
+  - `tool_registry.py` - Lazy `get_tool_registry()` mapping 21 tool names → callables
+  - `tool_utils.py` - `resolve_tools`, `build_tool_catalog`, `execute_tool`, `execute_tool_calls`, cache helpers
+  - `json_utils.py` - `extract_json_object` (fast-path → markdown block → generic → auto-repair)
+  - `plan_normalizer.py` - `normalize_tool_plan`, `normalize_travel_tool_plan`, shared `_normalize_plan_base`, fallback plans
+  - `step_utils.py` - `run_team`, `build_executor_steps`, `merge_steps`
+  - `workflows/debate.py` - 3-agent debate workflow
+  - `workflows/research.py` - 6-agent research pipeline
+  - `workflows/smart_assistant.py` - ToolSelector → ToolExecutor → Summarizer
+  - `workflows/smart_travel_planner.py` - TravelToolSelector → ToolExecutor → TravelPlanner
 
 **⚙️ Config Module** (`app/modules/config/`)
 - `settings.py` - Environment and application settings
@@ -574,10 +587,36 @@ ai_backend/
 │   │   │   ├── llamaserver_plugin.py # LlamaServer plugin
 │   │   │   ├── langchain_prompt_selector.py
 │   │   │   └── interfaces.py      # LLM interfaces
-│   │   ├── vector_db/       # Vector database module
-│   │   │   ├── chroma_impl.py     # ChromaDB implementation
-│   │   │   ├── embedding_manager.py # Embedding management
-│   │   │   └── interfaces.py      # Vector DB interfaces
+│   │   ├── agents/          # Agent orchestration module
+│   │   │   ├── interfaces.py      # IAgentOrchestrator, AgentRequest, AgentResponse
+│   │   │   ├── factories.py       # AgentOrchestratorFactory
+│   │   │   ├── agent_runner.py    # Legacy LLM-loop runner (REGISTRY)
+│   │   │   ├── tools.py           # ITool implementations (custom orchestrator)
+│   │   │   ├── utils.py           # Mock data and formatting helpers
+│   │   │   ├── function_tools/    # Standalone callable tools
+│   │   │   │   ├── tool_web_search.py
+│   │   │   │   ├── tool_web_scraper.py
+│   │   │   │   ├── tool_stock.py
+│   │   │   │   ├── tool_weather.py
+│   │   │   │   ├── tool_chart.py
+│   │   │   │   ├── tool_file.py
+│   │   │   │   └── tool_travel.py
+│   │   │   └── orchestrators/
+│   │   │       ├── custom/        # Keyword-routing single-agent orchestrator
+│   │   │       └── autogen/       # AutoGen multi-agent orchestrator
+│   │   │           ├── __init__.py
+│   │   │           ├── autogen_orchestrator.py  # Thin dispatcher
+│   │   │           ├── tool_registry.py         # Lazy tool-name → callable map
+│   │   │           ├── tool_utils.py            # Resolve, catalog, execute, cache
+│   │   │           ├── json_utils.py            # LLM output JSON extraction
+│   │   │           ├── plan_normalizer.py       # Tool plan validation & fallbacks
+│   │   │           ├── step_utils.py            # run_team, build_executor_steps, merge_steps
+│   │   │           └── workflows/
+│   │   │               ├── __init__.py
+│   │   │               ├── debate.py
+│   │   │               ├── research.py
+│   │   │               ├── smart_assistant.py
+│   │   │               └── smart_travel_planner.py
 │   │   ├── core/            # Core business logic
 │   │   │   ├── document_manager.py # Document operations
 │   │   │   ├── version_manager.py  # Document versioning
@@ -746,21 +785,40 @@ Response: {
 **GET /api/agents/autogen/workflows** - List available AutoGen workflows and tools
 ```json
 Response: {
-  "workflows": ["debate", "research"],
-  "tools": ["web_search", "scrape_url", "get_stock_price", "get_weather", "save_text_file"]
+  "workflows": ["debate", "research", "smart_assistant", "smart_travel_planner"],
+  "tools": ["web_search", "scrape_url", "get_stock_price", "get_stock_history", "generate_stock_chart",
+            "get_crypto_price", "generate_chart", "get_weather", "save_research_report",
+            "search_flights", "search_hotels", "estimate_trip_budget", "search_places",
+            "search_restaurants", "generate_itinerary", "get_local_transport_info",
+            "get_distance_between_places", "generate_trip_summary", "get_currency_exchange", "get_geo_distance"]
 }
 ```
 
 **GET /api/agents/tools** - List all tools (ITool orchestrator tools + AutoGen function tools, deduped)
 ```json
 Response: [
-  {"name": "search_documents", "description": "Search company documents..."},
-  {"name": "get_user_tickets",  "description": "Get user support tickets..."},
-  {"name": "web_search",        "description": "Search the internet for real-time info..."},
-  {"name": "scrape_url",        "description": "Fetch full content from a URL..."},
-  {"name": "get_stock_price",   "description": "Get current stock price..."},
-  {"name": "get_weather",       "description": "Get current weather for a city..."},
-  {"name": "save_text_file",    "description": "Save text content to a file..."}
+  {"name": "search_documents",          "description": "Search company documents..."},
+  {"name": "get_user_tickets",           "description": "Get user support tickets..."},
+  {"name": "web_search",                 "description": "Search the internet for real-time info..."},
+  {"name": "scrape_url",                 "description": "Fetch full content from a URL..."},
+  {"name": "get_stock_price",            "description": "Get current stock price..."},
+  {"name": "get_stock_history",          "description": "Get historical stock prices..."},
+  {"name": "generate_stock_chart",       "description": "Generate stock performance chart..."},
+  {"name": "get_crypto_price",           "description": "Get current crypto price..."},
+  {"name": "generate_chart",             "description": "Generate generic chart from data..."},
+  {"name": "get_weather",                "description": "Get current weather for a city..."},
+  {"name": "save_research_report",       "description": "Save structured research report as markdown + JSON sidecar..."},
+  {"name": "search_flights",             "description": "Search for flights between two cities..."},
+  {"name": "search_hotels",              "description": "Search for hotels at a destination..."},
+  {"name": "estimate_trip_budget",       "description": "Estimate total trip budget..."},
+  {"name": "search_places",              "description": "Search for tourist attractions..."},
+  {"name": "search_restaurants",         "description": "Search for restaurants at a destination..."},
+  {"name": "generate_itinerary",         "description": "Generate day-wise travel itinerary..."},
+  {"name": "get_local_transport_info",   "description": "Get local transport options..."},
+  {"name": "get_distance_between_places","description": "Get distance and travel time between places..."},
+  {"name": "generate_trip_summary",      "description": "Generate trip summary with highlights..."},
+  {"name": "get_currency_exchange",      "description": "Convert amount between currencies..."},
+  {"name": "get_geo_distance",           "description": "Get real straight-line distance via OpenStreetMap..."}
 ]
 ```
 
@@ -1601,37 +1659,101 @@ vision_provider = create_vision_provider("paddleocr")  # Switch to PaddleOCR
 ### Agent Tools System
 
 **Function-Based Tools** (`app/modules/agents/function_tools/`):
-- **`tool_stock.py`** - Real-time stock price lookup using yfinance (no API key)
-- **`tool_weather.py`** - Weather information with OpenWeatherMap + demo fallback
-- **`tool_file.py`** - Text file saving with path sanitization
-- **`tool_web_search.py`** - Internet search via DuckDuckGo (free) or SerpAPI (`SERPAPI_KEY` env var)
-- **`tool_web_scraper.py`** - URL content fetcher with HTML noise removal (3000 char limit)
+
+| Tool file | Function | Data source | API key required |
+|---|---|---|---|
+| `tool_stock.py` | `get_stock_price` | ✅ Real — yfinance (Yahoo Finance) | No |
+| `tool_stock.py` | `get_stock_history` | ✅ Real — yfinance (Yahoo Finance) | No |
+| `tool_stock.py` | `get_crypto_price` | ✅ Real — yfinance (Yahoo Finance) | No |
+| `tool_weather.py` | `get_weather` | ✅ Real — OpenWeatherMap API; falls back to demo data if `OPENWEATHER_API_KEY` not set | Optional (`OPENWEATHER_API_KEY`) |
+| `tool_web_search.py` | `web_search` | ✅ Real — DuckDuckGo (free, no key) or SerpAPI if `SERPAPI_KEY` set | Optional (`SERPAPI_KEY`) |
+| `tool_web_scraper.py` | `scrape_url` | ✅ Real — live HTTP fetch + BeautifulSoup HTML parsing (3000 char limit) | No |
+| `tool_chart.py` | `generate_stock_chart` | ✅ Real — yfinance data + matplotlib render; returns demo metadata if matplotlib not installed | No |
+| `tool_chart.py` | `generate_chart` | ✅ Real — matplotlib render from structured data; returns demo metadata if matplotlib not installed | No |
+| `tool_file.py` | `save_text_file` | ✅ Real — writes to `user_uploaded_files/` | No |
+| `tool_file.py` | `save_research_report` | ✅ Real — writes markdown + JSON sidecar to `user_uploaded_files/research_reports/` | No |
+| `tool_travel.py` | `get_currency_exchange` | ✅ Real — exchangerate.host API (free, no key) | No |
+| `tool_travel.py` | `get_geo_distance` | ✅ Real — OpenStreetMap Nominatim geocoding + Haversine formula | No |
+| `tool_travel.py` | `search_flights` | 🔶 Demo — structured simulated data (no live booking API) | No |
+| `tool_travel.py` | `search_hotels` | 🔶 Demo — structured simulated data | No |
+| `tool_travel.py` | `estimate_trip_budget` | 🔶 Demo — fixed cost estimates per day/traveler | No |
+| `tool_travel.py` | `search_places` | 🔶 Demo — hardcoded attractions for known cities (Goa, Jaipur, Kerala, Dubai, Rome, Italy); generic fallback for others | No |
+| `tool_travel.py` | `search_restaurants` | 🔶 Demo — structured simulated data | No |
+| `tool_travel.py` | `generate_itinerary` | 🔶 Demo — hardcoded day plans for Goa/Jaipur; generic template for others | No |
+| `tool_travel.py` | `get_local_transport_info` | 🔶 Demo — generic transport options (auto, taxi, rental bike, bus) | No |
+| `tool_travel.py` | `get_distance_between_places` | 🔶 Demo — hardcoded lookup table for common Indian city pairs; falls back to "varies" | No |
+| `tool_travel.py` | `generate_trip_summary` | 🔶 Demo — generic highlights and travel tips template | No |
+
+**Status legend**: ✅ Real API/live data — 🔶 Demo/simulated data
+
+**Environment variables for tools**:
+```bash
+OPENWEATHER_API_KEY=your_key   # Optional: enables real weather data (falls back to demo if not set)
+SERPAPI_KEY=your_key           # Optional: upgrades web_search from DuckDuckGo to SerpAPI
+```
 
 **AutoGen Orchestrator — API-Controlled Workflows & Tools**:
 
-`AutoGenOrchestrator` is fully controlled from the API via `AgentRequest`:
-- `request.workflow` → selects which workflow to run (dispatched via `WORKFLOW_REGISTRY`)
-- `request.tools` → filters which tools are injected (empty = all available)
+`AutoGenOrchestrator` is a thin dispatcher. All logic lives in focused sub-modules:
+- `request.workflow` → dispatched via `WORKFLOW_REGISTRY` to a workflow module
+- `request.tools` → filtered via `resolve_tools()` in `tool_utils.py`
+- `_tool_cache` (dict) → passed into workflows for deterministic tool result caching
 
 **`WORKFLOW_REGISTRY`** (extensible dispatch map):
-| Workflow | Handler | Agents |
+| Workflow | Module | Agents |
 |---|---|---|
-| `debate` | `_execute_debate_workflow` | Advocate, Critic, Moderator |
-| `research` | `_execute_research_workflow` | Researcher, Analyst |
+| `debate` | `workflows/debate.py` | Advocate, Critic, Moderator |
+| `research` | `workflows/research.py` | Planner, Researcher, Verifier, Analyst, Evaluator, ReportWriter |
+| `smart_assistant` | `workflows/smart_assistant.py` | ToolSelector, ToolExecutor (deterministic), Summarizer |
+| `smart_travel_planner` | `workflows/smart_travel_planner.py` | TravelToolSelector, ToolExecutor (deterministic), TravelPlanner |
 
-**AutoGen Tool Builders** (`_register_tool_builders()`) — names match function tools:
+**Adding a new workflow**: create `workflows/my_workflow.py`, add entry to `WORKFLOW_REGISTRY` in `autogen_orchestrator.py`, add dispatcher method `_run_my_workflow`.
+
+**Tool registry** (`tool_registry.py` → `get_tool_registry()`) — names match `agent_runner.REGISTRY`:
 
 | Tool name | Wraps | Purpose |
 |---|---|---|
 | `web_search` | `tool_web_search` | DuckDuckGo / SerpAPI search |
 | `scrape_url` | `tool_web_scraper` | Full page content extraction |
 | `get_stock_price` | `tool_stock` | Real-time stock price via yfinance |
+| `get_stock_history` | `tool_stock` | Historical stock prices |
+| `generate_stock_chart` | `tool_chart` | Stock performance chart (matplotlib) |
+| `get_crypto_price` | `tool_stock` | Real-time crypto price via yfinance |
+| `generate_chart` | `tool_chart` | Generic chart from structured data |
 | `get_weather` | `tool_weather` | Current weather conditions |
-| `save_text_file` | `tool_file` | Persist content to disk |
+| `save_research_report` | `tool_file` | Structured markdown report + JSON sidecar |
+| `search_flights` | `tool_travel` | Flight search (demo data) |
+| `search_hotels` | `tool_travel` | Hotel search (demo data) |
+| `estimate_trip_budget` | `tool_travel` | Trip budget estimation |
+| `search_places` | `tool_travel` | Tourist attractions lookup |
+| `search_restaurants` | `tool_travel` | Restaurant search |
+| `generate_itinerary` | `tool_travel` | Day-wise itinerary generation |
+| `get_local_transport_info` | `tool_travel` | Local transport options |
+| `get_distance_between_places` | `tool_travel` | Distance/travel time between cities |
+| `generate_trip_summary` | `tool_travel` | Trip highlights and tips |
+| `get_currency_exchange` | `tool_travel` | Real currency conversion (exchangerate.host) |
+| `get_geo_distance` | `tool_travel` | Real straight-line distance (OpenStreetMap) |
+
+**`smart_assistant` workflow — 3-agent pipeline**:
+1. **ToolSelector** (LLM, max 2 steps) — analyses query, returns JSON tool plan with intent + args
+2. **ToolExecutor** (deterministic, parallel) — runs selected tools via `_execute_tool_calls()` with caching
+3. **Summarizer** (LLM) — synthesizes tool results into final answer
+
+**`smart_travel_planner` workflow — 3-agent pipeline**:
+1. **TravelToolSelector** (LLM, max 2 steps) — extracts travel entities (destination, days, budget, travelers, preferences), selects travel-only tools
+2. **ToolExecutor** (deterministic, parallel) — runs selected travel tools
+3. **TravelPlanner** (LLM) — formats structured travel plan (Overview, Budget, Hotels, Attractions, Weather, Transport, Tips)
+- Travel tools are restricted to `_TRAVEL_TOOL_NAMES` set (excludes `web_search`/`scrape_url`)
+
+**`research` workflow — 6-agent pipeline**:
+- Planner → Researcher (with data tools) → Verifier → Analyst → Evaluator → ReportWriter (with `save_research_report`)
+- ReportWriter saves final report as markdown + JSON sidecar to `user_uploaded_files/research_reports/`
 
 - Tool names are **unified** with `agent_runner.REGISTRY` so `/tools` and `/tools/{name}/test` work for both orchestrators
-- `_run_team()` is a shared async stream runner used by all workflows
-- Adding a new workflow: add entry to `WORKFLOW_REGISTRY` + implement `_execute_{name}_workflow(query, tools)`
+- `run_team()` (`step_utils.py`) is the shared async stream runner used by all workflows
+- Tool results are **cached** in `_tool_cache` passed from `AutoGenOrchestrator` (keyed by `tool_name:json(args)`)
+- `build_executor_steps()` and `merge_steps()` (`step_utils.py`) are shared by smart_assistant and smart_travel_planner
+- `_normalize_plan_base()` (`plan_normalizer.py`) is the shared core for both `normalize_tool_plan` and `normalize_travel_tool_plan`
 
 **Custom Orchestrator — Keyword Routing**:
 - `web` / `internet` / `latest` / `current` / `news` → routes to `web_search` then auto-scrapes first URL
@@ -1643,9 +1765,9 @@ vision_provider = create_vision_provider("paddleocr")  # Switch to PaddleOCR
 
 Tools are sourced from two layers (deduped by name):
 1. **ITool-based** (custom orchestrator `.tools` dict): `search_documents`, `get_user_tickets`, `get_ticket_comments`, `analyze_data`, `summarize_status`, `research_data`, `web_search`, `scrape_url`
-2. **Function-based** (`_register_tool_builders()`): `web_search`, `scrape_url`, `get_stock_price`, `get_weather`, `save_text_file`
+2. **Function-based** (`_register_tool_builders()`): all 21 tools listed in the table above
 
-`agent_runner.REGISTRY` is **no longer used** by API routes — all function-based tool discovery goes through `_register_tool_builders()`.
+`agent_runner.REGISTRY` is used by the `run_agent()` function (legacy LLM-loop runner) but **not** by API routes — all API-level function-based tool discovery goes through `_register_tool_builders()`.
 
 **Web Search Configuration**:
 ```bash
@@ -1653,24 +1775,27 @@ Tools are sourced from two layers (deduped by name):
 SERPAPI_KEY=your_serpapi_key  # If not set, uses DuckDuckGo (free)
 ```
 
-**Dependencies**: `duckduckgo-search`, `beautifulsoup4`, `requests` (all in requirements.txt)
+**Dependencies**: `duckduckgo-search`, `beautifulsoup4`, `requests`, `yfinance`, `matplotlib` (optional for charts) (all in requirements.txt)
 
-**Example — Multi-tool research workflow**:
+**Example — Multi-tool workflows**:
 ```bash
-# AutoGen research with all tools available
+# Smart assistant (auto-selects tools)
 curl -X POST "/api/agents/query" \
   -H "Content-Type: application/json" \
-  -d '{
-    "question": "Research Tesla stock and weather at their Austin HQ",
-    "orchestrator_type": "autogen"
-  }'
-# Flow: Researcher → get_stock(TSLA) + search_internet + get_city_weather(Austin)
-#       Analyst   → fetch_url(article) + save_file(report.txt)
+  -d '{"question": "What is Tesla stock price and weather in Austin?", "orchestrator_type": "autogen", "workflow": "smart_assistant"}'
+# Flow: ToolSelector → [get_stock_price(TSLA), get_weather(Austin)] → Summarizer
 
-# agent_runner with web search
-curl -X POST "/api/rag/local/query" \
-  -d '{"question": "Latest AI news", "use_llm": true, "use_tools": true}'
-# Flow: web_search("Latest AI news") → scrape_url(top result) → final answer
+# Smart travel planner
+curl -X POST "/api/agents/query" \
+  -H "Content-Type: application/json" \
+  -d '{"question": "Plan a 3-day trip to Goa from Delhi with budget 25000 INR", "orchestrator_type": "autogen", "workflow": "smart_travel_planner"}'
+# Flow: TravelToolSelector → [search_flights, search_hotels, estimate_trip_budget, search_places, generate_itinerary] → TravelPlanner
+
+# Research with report saving
+curl -X POST "/api/agents/query" \
+  -H "Content-Type: application/json" \
+  -d '{"question": "Research the impact of AI on healthcare", "orchestrator_type": "autogen", "workflow": "research"}'
+# Flow: Planner → Researcher(web_search) → Verifier → Analyst → Evaluator → ReportWriter(save_research_report)
 ```
 
 ## 11. Paragraph-Aware Chunking System (NEW - Tier 1 Optimization)
@@ -2539,6 +2664,27 @@ python scripts/download_hf_model.py --all
 - `LOCAL_RESPONSE_TEXT` - Local model responses
 - `EMBEDDING_ENCODE_SUCCESS` - Performance metrics
 
+### AutoGen Debug Logging
+
+All AutoGen modules emit `logger.debug(...)` at key checkpoints. Enable with:
+```python
+import logging
+logging.getLogger("app.modules.agents").setLevel(logging.DEBUG)
+```
+
+| Module | What is logged |
+|---|---|
+| `autogen_orchestrator.py` | Workflow dispatch (name, tools, max_steps), completion (steps, tools_used, answer_len) |
+| `tool_registry.py` | Registry build start, registered tool count + names (logged once, lazy) |
+| `tool_utils.py` | `resolve_tools` input/output, each tool START/cache-HIT/DONE/FAILED, parallel batch start/done |
+| `json_utils.py` | Which parse path succeeded (fast/markdown/generic/auto-repair), no-match |
+| `plan_normalizer.py` | Raw call count, each tool accepted/skipped with reason, normalized count, fallback triggers, intent+confidence |
+| `step_utils.py` | Task start (first 120 chars), each message (agent, step, tool_calls or content_len), final summary |
+| `workflows/debate.py` | Start (query_len, tools, max_steps), done (steps, tools_used, answer_len) |
+| `workflows/research.py` | Start, done |
+| `workflows/smart_assistant.py` | Start, selector result (intent/confidence/routing), executor result count, done |
+| `workflows/smart_travel_planner.py` | Start, selector result (intent/confidence/destination/routing), executor result count, done |
+
 ---
 
 ## 19. Development Guidelines
@@ -2903,7 +3049,7 @@ python tests/test_rbac_comprehensive.py
 
 ---
 
-**Last Updated**: 2025-01-12 (AutoGen API-controlled workflows/tools, unified tool discovery via _register_tool_builders, /autogen/workflows endpoint, multi-arg tool test support, REGISTRY removed from API routes)
+**Last Updated**: 2025-01-13 (AutoGen refactored into focused sub-modules: autogen_orchestrator.py thin dispatcher + tool_registry.py + tool_utils.py + json_utils.py + plan_normalizer.py + step_utils.py + workflows/{debate,research,smart_assistant,smart_travel_planner}.py; shared _normalize_plan_base eliminates duplication; build_executor_steps/merge_steps shared across workflows; comprehensive debug logging added to all AutoGen modules; save_research_report replaces save_text_file in research workflow; travel tools restricted to TRAVEL_TOOL_NAMES set in plan_normalizer.py)
 
 ---
 

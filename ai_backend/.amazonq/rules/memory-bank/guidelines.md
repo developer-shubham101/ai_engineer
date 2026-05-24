@@ -3,72 +3,148 @@
 ## Code Quality Standards
 
 ### Import Organization
-- **Future Imports First**: Use `from __future__ import annotations` for forward compatibility
-- **Standard Library**: Import standard library modules before third-party
-- **Third-Party Libraries**: Group FastAPI, Pydantic, and other external dependencies
-- **Local Imports**: Import application modules last with relative imports
-- **Conditional Imports**: Place imports inside functions when needed for optional dependencies
+- `from __future__ import annotations` at the top of every module for forward references
+- Standard library → third-party → local imports, each group separated by a blank line
+- Local imports use absolute paths (`from app.modules.config.constants import ...`)
+- Conditional/lazy imports inside functions for optional or heavy dependencies:
+  ```python
+  def get_reranker(self):
+      if "reranker" not in self._instances:
+          from .vector_db.reranker import CrossEncoderReranker
+          self._instances["reranker"] = CrossEncoderReranker()
+  ```
+- `__all__` lists defined in every `__init__.py` to control public API surface
 
 ### Type Annotations
-- **Comprehensive Typing**: All function parameters and return types must be annotated
-- **Generic Types**: Use `Dict[str, Any]`, `List[Dict[str, Any]]`, `Optional[str]` consistently
-- **Interface Types**: Prefer interface types over concrete implementations in signatures
-- **Future Annotations**: Enable `from __future__ import annotations` for forward references
+- All function parameters and return types annotated
+- Use `Dict[str, Any]`, `List[Dict[str, Any]]`, `Optional[str]` from `typing`
+- Interface types in signatures, concrete types in implementations
+- Type hints on local variables when non-obvious: `document_manager: DocumentManager = ...`
 
-### Error Handling Patterns
-- **HTTPException Usage**: Raise `HTTPException` with appropriate status codes and detail messages
-- **Exception Chaining**: Use `raise HTTPException` after logging exceptions with `logger.exception()`
-- **Graceful Degradation**: Handle missing services/models with fallback behavior
-- **Validation Errors**: Convert validation errors to HTTP 400 with descriptive messages
+### Naming Conventions
+- Classes: `PascalCase` (e.g., `RAGOrchestrator`, `SQLiteUserManager`)
+- Functions/methods: `snake_case`
+- Constants: `UPPER_SNAKE_CASE` (e.g., `DEFAULT_TOP_K`, `VALID_SENSITIVITY_LEVELS`)
+- Private container keys: lowercase strings (`"user_manager"`, `"vector_store"`)
+- Route files: `api_routes_<domain>.py`
+- Interface files: `interfaces.py` per module
+- Enum values: string literals matching their semantic meaning (`"SuperAdmin"`, `"public_internal"`)
+
+### Docstrings
+- Module-level docstrings: one-line description in triple quotes
+- Function docstrings: description + Args + Returns sections for public APIs
+- Inline comments for non-obvious logic; avoid redundant comments
+
+---
 
 ## Architectural Patterns
 
-### Dependency Injection
-- **Container Pattern**: Use `get_container()` to access modular services
-- **Interface Segregation**: Depend on interfaces (`ILLMProvider`, `IRBACManager`) not implementations
-- **Service Initialization**: Call `container.initialize()` before accessing services
-- **Lazy Loading**: Initialize expensive resources only when needed
+### Dependency Injection Container
+All services accessed through the global `Container` via `get_container()`. Never instantiate services directly in route handlers.
 
-### Modular Service Architecture
 ```python
-# Standard pattern for accessing services
+# Correct pattern
 container = get_container()
 container.initialize()
-service: IServiceInterface = container.get_service()
+service = container.get_rag_orchestrator()
+
+# Wrong — do not do this in routes
+orchestrator = RAGOrchestrator(...)
 ```
 
-### Provider Factory Pattern
-- **Dynamic Provider Selection**: Use factory pattern for LLM providers based on runtime parameters
-- **Extensible Design**: New providers implement common interface without changing existing code
-- **Configuration-Driven**: Provider selection based on configuration or request parameters
-- **Fallback Mechanisms**: Graceful handling when preferred providers unavailable
+`container.initialize()` is idempotent — safe to call multiple times (guarded by `_initialized` flag).
 
-### Authentication & Authorization
-- **Dependency Injection**: Use `Depends(get_current_user)` for authenticated endpoints
-- **Role-Based Access**: Apply `Depends(require_roles(ROLE_LIST))` for authorization
-- **Optional Authentication**: Use `get_current_user_optional` for endpoints supporting both modes
-- **RBAC Integration**: Check permissions through `IRBACManager` interface
+### Interface Segregation
+Every module has an `interfaces.py` defining abstract base classes. Depend on interfaces, not implementations:
+- `ILLMProvider` — all LLM providers implement this
+- `IVectorStore` — ChromaVectorStore and FaissVectorStore implement this
+- `IAgentOrchestrator`, `ICrewOrchestrator`, `IConversationManager`, etc.
+
+### Factory Pattern
+Use factory classes for provider/orchestrator creation:
+```python
+# LLM providers
+provider = LLMProviderFactory.create(provider_name)
+
+# Agents
+orchestrator = AgentOrchestratorFactory.create_orchestrator(vector_store=vs)
+
+# CrewAI
+crew = CrewOrchestratorFactory.create_orchestrator()
+
+# Multimodal
+stt = create_stt_provider(provider_name)
+```
+
+### Lazy Initialization
+Expensive services (reranker, BM25, agents, metadata generator) are initialized on first access, not at startup:
+```python
+def get_reranker(self):
+    if "reranker" not in self._instances:
+        from .vector_db.reranker import CrossEncoderReranker
+        self._instances["reranker"] = CrossEncoderReranker()
+    return self._instances.get("reranker")
+```
+
+### Module `__init__.py` Pattern
+Each module's `__init__.py` exports its public interface and implementation:
+```python
+"""Module description."""
+from .interfaces import IInterface
+from .implementation import ConcreteImpl
+from .factory import create_provider
+
+__all__ = ["IInterface", "ConcreteImpl", "create_provider"]
+```
+
+---
 
 ## API Design Standards
 
-### FastAPI Route Structure
-- **Router Organization**: Group related endpoints in separate router files (`api_routes_*.py`)
-- **Prefix Consistency**: Use constants for API prefixes (`RAG_PREFIX`, `API_PREFIX`)
-- **Tag Organization**: Apply consistent tags for OpenAPI documentation grouping
-- **Response Models**: Define Pydantic models for all response types
+### Router Setup
+```python
+from app.modules.config.constants import RAG_PREFIX
+router = APIRouter(prefix=RAG_PREFIX, tags=["RAG"])
+```
+Always use constants for prefixes, never hardcode strings.
+
+### Authentication Dependencies
+```python
+# Required auth
+requester: Dict[str, Any] = Depends(get_current_user)
+
+# Optional auth (Guest fallback)
+requester: Optional[Dict[str, Any]] = Depends(get_current_user_optional)
+
+# Role-gated endpoint (as dependency, not parameter)
+@router.post("/admin", dependencies=[Depends(require_roles(SUPER_ADMIN_ROLES))])
+```
 
 ### Request/Response Models
-- **Pydantic Models**: All request/response bodies use Pydantic models with validation
-- **Default Values**: Provide sensible defaults using constants (`DEFAULT_TOP_K`, `DEFAULT_MAX_TOKENS`)
-- **Optional Fields**: Use `Optional[Type]` for non-required fields
-- **Field Validation**: Use `Field()` for additional validation and documentation
+- All request bodies: Pydantic `BaseModel` with `Field()` defaults from constants
+- All responses: typed Pydantic `BaseModel` with `response_model=` on the decorator
+- Use `Field(default_factory=list)` for list fields, not mutable defaults
 
-### Error Response Patterns
 ```python
-# Standard error handling pattern
+class QueryRequest(BaseModel):
+    question: str
+    top_k: int = DEFAULT_TOP_K
+    max_tokens: int = DEFAULT_MAX_TOKENS
+    temperature: float = DEFAULT_TEMPERATURE
+    conversation_id: Optional[str] = None
+
+class QueryResponse(BaseModel):
+    answer: Optional[str] = None
+    retrieved: List[RetrievedDoc] = Field(default_factory=list)
+```
+
+### Error Handling Pattern
+```python
 try:
     result = await service.operation()
     return SuccessResponse(data=result)
+except HTTPException:
+    raise  # Re-raise HTTP exceptions unchanged
 except ValueError as e:
     raise HTTPException(status_code=404, detail=str(e))
 except Exception as e:
@@ -76,110 +152,158 @@ except Exception as e:
     raise HTTPException(status_code=500, detail=str(e))
 ```
 
-## Security Implementation
+---
 
-### Role-Based Access Control (RBAC)
-- **Hierarchical Roles**: Use numeric levels (0-4) for role hierarchy comparison
-- **Document-Level Security**: Filter documents based on sensitivity and user permissions
-- **Department Restrictions**: Enforce department-based access for confidential documents
-- **Audit Logging**: Log all access attempts for security compliance
+## Security & RBAC
+
+### Role Constants (use these, never hardcode strings)
+```python
+from app.modules.config.constants import (
+    SUPER_ADMIN_ROLES,      # ["SuperAdmin"]
+    MANAGER_PLUS_ROLES,     # ["SuperAdmin", "Manager"]
+    HR_PLUS_ROLES,          # ["SuperAdmin", "Manager", "HR"]
+    EMPLOYEE_PLUS_ROLES,    # ["SuperAdmin", "Manager", "HR", "Employee"]
+    ROLE_LEVELS,            # {"SuperAdmin": 4, "Manager": 3, ...}
+    HR_LEVEL_THRESHOLD,     # 2
+)
+```
 
 ### Metadata Validation
-- **Sensitivity Levels**: Validate against `VALID_SENSITIVITY_LEVELS` constants
-- **Department Validation**: Check against `VALID_DEPARTMENTS` list
-- **User Permission Checks**: Verify user can create documents with specified sensitivity
-- **Override Mechanisms**: Support `allowed_roles` for flexible access control
+Always validate sensitivity and department against constants before persisting:
+```python
+from app.modules.config.constants import VALID_SENSITIVITY_LEVELS, VALID_DEPARTMENTS
+
+if sens and sens not in VALID_SENSITIVITY_LEVELS:
+    raise HTTPException(status_code=400, detail=f"Invalid sensitivity '{sens}'...")
+```
 
 ### Security Logging
+Use structured logging helpers — never use raw `logger.info` for security events:
 ```python
-# Standard security logging patterns
 from app.logging_config import log_security_event, log_user_action
 
-log_security_event(logger, "ACCESS_DENIED", user_id, 
-                  role=user_role, resource=resource)
+log_security_event(logger, "ACCESS_DENIED", user_id,
+                   role=user_role, resource=resource_id)
+
 log_user_action(logger, "DOCUMENT_CREATED", user_id,
-               document_id=doc_id, sensitivity=sensitivity)
+                document_id=doc_id, sensitivity=sensitivity,
+                chunk_count=count, version=version)
 ```
 
-## Data Management Patterns
-
-### Document Versioning
-- **Non-Destructive Updates**: Create new versions instead of modifying existing documents
-- **Version History**: Maintain complete audit trail of document changes
-- **Metadata Preservation**: Carry forward metadata with version-specific overrides
-- **Status Management**: Track document lifecycle with status fields
-
-### Database Interactions
-- **Service Layer**: Access databases through service interfaces, not direct connections
-- **Transaction Management**: Use appropriate transaction boundaries for multi-step operations
-- **Error Recovery**: Handle database errors gracefully with meaningful user messages
-- **Connection Pooling**: Rely on service layer for connection management
-
-## Performance Optimization
-
-### Token Management
-- **Token Estimation**: Use `estimate_tokens_from_text()` for prompt planning
-- **Context Window Limits**: Check against model context limits before generation
-- **Smart Truncation**: Implement intelligent context truncation for long documents
-- **Budget Allocation**: Balance tokens between system prompts, context, and generation
-
-### Caching Strategies
-- **Model Caching**: Cache loaded models to avoid repeated initialization
-- **Embedding Caching**: Store computed embeddings for reuse
-- **Instance Reuse**: Maintain service instances across requests where appropriate
-- **Lazy Loading**: Initialize expensive resources only when needed
-
-### Logging & Monitoring
+### Department Ownership Check Pattern
 ```python
-# Performance logging pattern
-from app.logging_config import log_performance_metric, log_llm_interaction
-
-start_time = time.time()
-result = await operation()
-duration = (time.time() - start_time) * 1000
-
-log_performance_metric(logger, "OPERATION_NAME", duration,
-                      additional_metrics=metrics)
+user_level = ROLE_LEVELS.get(user_role, 0)
+if user_level < HR_LEVEL_THRESHOLD:
+    if current_dept != user_dept:
+        log_security_event(logger, "RBAC_UPDATE_DENIED", ...)
+        raise HTTPException(status_code=403, detail=...)
 ```
 
-## Testing Standards
+---
+
+## Configuration & Constants
+
+### Settings Access
+```python
+from app.modules.config.settings import settings
+
+db_path = settings.DATABASE_DIR / settings.CONVERSATIONS_DB_NAME
+models_dir = settings.MODELS_DIR
+```
+
+### Constants Access
+```python
+from app.modules.config.constants import (
+    DEFAULT_TOP_K, DEFAULT_MAX_TOKENS, DEFAULT_TEMPERATURE,
+    DEFAULT_SENSITIVITY, DEFAULT_DEPARTMENT,
+    VALID_PROVIDERS, VALID_SENSITIVITY_LEVELS, VALID_DEPARTMENTS
+)
+```
+
+### Enums
+Use enums for type-safe values; use `.value` when passing to external APIs:
+```python
+from app.modules.config.constants import UserRole, SensitivityLevel, LLMProvider
+
+role = UserRole.SUPER_ADMIN.value  # "SuperAdmin"
+sens = SensitivityLevel.PUBLIC_INTERNAL.value  # "public_internal"
+```
+
+---
+
+## Logging
+
+### Logger Setup (per module)
+```python
+import logging
+logger = logging.getLogger(__name__)
+```
+
+### Log Levels
+- `logger.info(...)` — normal operations, startup events
+- `logger.warning(...)` — recoverable issues (fallback used, parse failed)
+- `logger.exception("Message: %s", e)` — unexpected errors (includes traceback)
+- `logger.error(...)` — errors without traceback needed
+
+### Structured Logging Pattern
+Use `%s` formatting (not f-strings) in logger calls for lazy evaluation:
+```python
+logger.info("RAG Query: conversation_id=%s, provider=%s", req.conversation_id, model_provider)
+logger.exception("RAG query failed: %s", e)
+```
+
+---
+
+## Testing Patterns
+
+### Container Override for Tests
+```python
+from app.modules.integration import get_container, reset_container
+
+def setup():
+    reset_container()
+    container = get_container()
+    container.override_instance("vector_store", MockVectorStore())
+    container.initialize()
+```
 
 ### Test Organization
-- **Module-Based Testing**: Organize tests by module in `tests/` directory
-- **Integration Tests**: Separate integration tests in `test_module/` directory
-- **Fixture Usage**: Use pytest fixtures for common test setup
-- **Async Testing**: Use `pytest-asyncio` for testing async functions
+- Integration tests in `test_module/` with `conftest.py` fixtures
+- One test file per module: `test_rbac_comprehensive.py`, `test_session_manager.py`, etc.
+- Use `pytest-asyncio` for async endpoint tests
+- Script-level smoke tests in `scripts/test_*.py`
 
-### Mock Patterns
-- **Service Mocking**: Mock service interfaces rather than implementations
-- **External API Mocking**: Mock external API calls for reliable testing
-- **Database Mocking**: Use in-memory databases or mocks for unit tests
-- **Configuration Mocking**: Override configuration for test scenarios
+---
 
-## Configuration Management
+## Document & Data Patterns
 
-### Environment Variables
-- **Typed Configuration**: Use Pydantic models for configuration validation
-- **Default Values**: Provide sensible defaults for all configuration options
-- **Environment Separation**: Support different configurations for dev/test/prod
-- **Secret Management**: Handle API keys and secrets securely
+### Document Metadata Defaults
+Always set defaults before persisting:
+```python
+metadata.setdefault("department", DEFAULT_DEPARTMENT)
+metadata.setdefault("sensitivity", DEFAULT_SENSITIVITY)
+metadata["ingested_by"] = requester.get("user_id")
+```
 
-### Constants Organization
-- **Centralized Constants**: Define constants in `app/modules/config/constants.py`
-- **Grouped Constants**: Organize related constants together (roles, sensitivity levels)
-- **Type Safety**: Use enums or typed constants where appropriate
-- **Documentation**: Document the purpose and valid values for constants
+### Non-Destructive Versioning
+Never modify existing documents. Always create a new version:
+```python
+result = await document_manager.update_document_version(
+    document_id=doc_id,
+    text=new_text,
+    metadata=updated_metadata,
+    version_notes=notes,
+    requester_id=user_id,
+    status=status
+)
+```
 
-## Documentation Standards
-
-### Code Documentation
-- **Docstring Format**: Use triple-quoted strings with clear descriptions
-- **Parameter Documentation**: Document all parameters and return values
-- **Example Usage**: Include usage examples for complex functions
-- **Type Information**: Complement type hints with docstring descriptions
-
-### API Documentation
-- **OpenAPI Integration**: Leverage FastAPI's automatic OpenAPI generation
-- **Response Examples**: Provide example responses in route documentation
-- **Error Documentation**: Document possible error responses and status codes
-- **Tag Organization**: Use consistent tags for logical API grouping
+### File Upload Handling
+```python
+raw = await file.read()
+if not raw:
+    raise HTTPException(status_code=400, detail=HTTP_MESSAGES["FILE_EMPTY"])
+if len(raw) > MAX_FILE_SIZE_BYTES:
+    raise HTTPException(status_code=413, detail=HTTP_MESSAGES["FILE_TOO_LARGE"])
+text = raw.decode("utf-8", errors="ignore")
+```

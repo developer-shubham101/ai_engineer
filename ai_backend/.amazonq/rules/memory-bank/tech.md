@@ -1,180 +1,171 @@
-# Technology Stack & Dependencies
+# Technology Stack
 
-## Programming Languages
-- **Python 3.8+** - Primary language for all components
-- **JavaScript/JSON** - Configuration files and API schemas
-- **Markdown** - Documentation and sample data
-- **SQL** - Database queries and schema definitions
+## Language & Runtime
+- **Python 3.8+** (uses `from __future__ import annotations` for forward refs)
+- **Windows** primary dev environment (`.bat` scripts, Windows paths in settings)
 
-## Core Framework
-- **FastAPI 0.104+** - Modern web framework with automatic OpenAPI documentation
-- **Uvicorn** - ASGI server for FastAPI applications
-- **Pydantic** - Data validation and settings management
-- **SQLAlchemy** - Database ORM and connection management
+## Web Framework
+- **FastAPI** — async HTTP framework, automatic OpenAPI/Swagger at `/docs`
+- **Uvicorn** (with `[standard]` extras) — ASGI server
+- **Pydantic** — request/response validation and settings models
+- **python-multipart** — file upload support
 
-## LLM & AI Libraries
+## AI / LLM Layer
+| Library | Purpose |
+|---|---|
+| `llama-cpp-python` | Local GGUF model inference (Mistral, Phi-2, Llama, Gemma) |
+| `openai` | OpenAI GPT API client |
+| `langchain`, `langchain-core`, `langchain-community` | Prompt chains, template management |
+| `langchain-google-genai` | Google Gemini integration |
+| `langchain-text-splitters` | Document chunking |
+| `crewai` | Multi-agent crew workflows |
+| `autogen-core`, `autogen-agentchat`, `autogen-ext[openai]` | AutoGen agent framework |
+| `huggingface_hub` | HF Inference API access |
+| `transformers` | Local transformer models |
+| `torch` | PyTorch backend for local models |
 
-### Local Model Support
-- **llama-cpp-python** - Local LLM inference with GGUF format support
-- **sentence-transformers** - Embedding model management
-- **transformers** - Hugging Face model integration
-- **torch** - PyTorch for model operations
-
-### Cloud Provider SDKs
-- **openai** - OpenAI GPT API integration
-- **google-generativeai** - Google Gemini API integration
-- **requests** - HTTP client for API calls
-
-## Vector Databases
-- **chromadb** - Primary vector database for embeddings
-- **faiss-cpu** - Alternative vector similarity search
-- **numpy** - Numerical operations for embeddings
+## Vector Store & Retrieval
+| Library | Purpose |
+|---|---|
+| `chromadb` | ChromaDB vector store (persistent) |
+| `faiss-cpu` | FAISS vector store (default, env-switchable) |
+| `sentence-transformers` | Embedding generation (BGE, MiniLM, MPNet, E5) |
+| `rank-bm25` | BM25 keyword retrieval |
+| `pyspellchecker` | Query spell correction |
+| `tiktoken` | Token counting for OpenAI models |
 
 ## Authentication & Security
-- **python-jose[cryptography]** - JWT token handling
-- **passlib[bcrypt]** - Password hashing and verification
-- **python-multipart** - Form data handling
-- **cryptography** - Cryptographic operations
+- **PyJWT** — JWT token creation and verification (HS256)
+- **passlib[bcrypt]** — Password hashing
+- **SQLite** — User, session, conversation, and version databases
 
-## Multimodal Processing
-- **Pillow (PIL)** - Image processing and manipulation
-- **opencv-python** - Computer vision operations
-- **vosk** - Speech-to-text processing
-- **pydub** - Audio file manipulation
-- **pytesseract** - OCR text extraction
+## Multimodal
+| Library | Purpose |
+|---|---|
+| `vosk` | Offline speech-to-text |
+| `openai-whisper` | Cloud/local STT |
+| `pyttsx3` | Text-to-speech |
+| `librosa`, `soundfile` | Audio processing |
+| `pytesseract` | OCR (requires Tesseract binary) |
+| `Pillow` | Image processing |
+| `paddlepaddle`, `paddleocr` | Advanced OCR |
+| `opencv-python` | Computer vision |
+| `ultralytics` | YOLO object detection |
 
-## Data Processing
-- **pandas** - Data manipulation and analysis
-- **scikit-learn** - Machine learning utilities
-- **joblib** - Model serialization and parallel processing
-- **python-docx** - Word document processing
-- **PyPDF2** - PDF document parsing
+## Data & Utilities
+- **python-dotenv** — `.env` file loading
+- **PyYAML** — CrewAI config parsing (`crew_config/*.yaml`)
+- **PyPDF2** — PDF text extraction
+- **beautifulsoup4** — HTML parsing
+- **markdown** — Markdown rendering
+- **rich** — Terminal output formatting
+- **yfinance** — Financial data for agent tools
+- **duckduckgo-search** — Web search for agent tools
 
-## Development & Testing
-- **pytest** - Testing framework
-- **pytest-asyncio** - Async testing support
-- **httpx** - Async HTTP client for testing
-- **black** - Code formatting
-- **flake8** - Code linting
+## Testing
+- **pytest** — Test runner
+- **pytest-asyncio** — Async test support
+- Test suite in `test_module/` with `conftest.py` fixtures
 
-## Configuration & Environment
-- **python-dotenv** - Environment variable management
-- **pyyaml** - YAML configuration parsing
-- **toml** - TOML configuration support
+## Databases (SQLite files in `database/`)
+| File | Purpose |
+|---|---|
+| `users.db` | User accounts and credentials |
+| `sessions.db` | JWT session tracking |
+| `conversations.db` | Conversation history |
+| `document_versions.db` | Document version history |
 
-## Build & Deployment
+## Vector Store Selection
+Controlled by `VECTOR_STORE_TYPE` environment variable:
+- `faiss` (default) → `FaissVectorStore`
+- anything else → `ChromaVectorStore` (persists to `chroma_storage/`)
 
-### Development Commands
+## Embedding Models (configurable via `EMBEDDING_MODEL_KEY`)
+| Key | Model | Dims | Notes |
+|---|---|---|---|
+| `all-MiniLM-L6-v2` | all-MiniLM-L6-v2 | 384 | Fastest |
+| `bge-small-en-v1.5` | BAAI/bge-small-en-v1.5 | 384 | Default, fast+accurate |
+| `bge-base-en-v1.5` | BAAI/bge-base-en-v1.5 | 768 | Best CPU accuracy |
+| `e5-base-v2` | intfloat/e5-base-v2 | 768 | Multi-domain |
+| `all-mpnet-base-v2` | sentence-transformers/all-mpnet-base-v2 | 768 | Production classic |
+
+## Environment Variables (`.env.example`)
 ```bash
-# Install dependencies
-pip install -r requirements.txt
+# LLM Providers
+OPENAI_API_KEY=
+GOOGLE_API_KEY=
+HUGGINGFACE_API_TOKEN=
 
-# Install multimodal features
-pip install -r requirements_multimodal.txt
+# Custom LLM endpoints
+COLABLLM_BASE_URL=
+COLABLLM_API_KEY=
+CUSTOMLLM_BASE_URL=
+LLAMASERVER_BASE_URL=http://192.168.1.10:8080/v1
+LLAMASERVER_MODEL_NAME=mistral-7b-instruct-v0.2
 
-# Install agent capabilities
-pip install -r requirements_agents.txt
-
-# Start development server
-python -m app.main
-
-# Run tests
-python -m pytest tests/
-
-# Run specific test module
-python -m pytest test_module/
-```
-
-### Docker Support
-```bash
-# Build container
-docker build -t ai-backend .
-
-# Run with docker-compose
-docker-compose up -d
-```
-
-### Model Management
-```bash
-# Download embedding models
-python scripts/download_embeddings_models.py
-
-# Download HuggingFace models
-python scripts/download_hf_model.py
-
-# Convert models to GGUF
-python scripts/convert_to_gguf.py
-```
-
-## Environment Configuration
-
-### Required Environment Variables
-```bash
-# Server Configuration
+# Server
 HOST=0.0.0.0
 PORT=8000
 DEBUG=false
 
-# Model Settings
-DEFAULT_MODEL_NAME=mistral-7b-instruct-v0.2
-EMBEDDING_MODEL_NAME=bge-small-en-v1.5
+# Models
+DEFAULT_MODEL_NAME=mistral-7b-instruct-v0.2.Q3_K_M.gguf
+EMBEDDING_MODEL_KEY=bge-small-en-v1.5
+EMBEDDING_MODEL_NAME=BAAI/bge-small-en-v1.5
 
-# Optional: Cloud Provider API Keys
-OPENAI_API_KEY=your_openai_key
-GOOGLE_API_KEY=your_google_key
-HUGGINGFACE_API_TOKEN=your_hf_token
+# Vector store
+VECTOR_STORE_TYPE=faiss
+
+# Auth
+JWT_SECRET_KEY=your-secret-key-change-in-production
+JWT_EXPIRATION_DAYS=1
 ```
 
-### Model File Structure
-```
-models/
-├── mistral-7b-instruct-v0.2.Q3_K_M.gguf
-├── phi-2-q4_k_m.gguf
-├── llama-3.2-1b-instruct-q4_k_m.gguf
-├── gemma-2b-it-q4_k_m.gguf
-└── qwen2-1.5b-instruct-q4_k_m.gguf
+## Development Commands
+```bash
+# Install dependencies
+pip install -r requirements.txt
 
-embeddings_models/
-└── all-MiniLM-L6-v2/
-    ├── config.json
-    ├── model.safetensors
-    └── tokenizer files...
-```
+# Start server
+python -m app.main
+# or
+python run_app.py
 
-## Database Systems
-- **SQLite** - Local database for users, sessions, conversations
-- **ChromaDB** - Vector database with SQLite backend
-- **FAISS** - In-memory vector index with pickle serialization
+# Run tests
+python run_tests.py
+pytest test_module/
 
-## API & Documentation
-- **OpenAPI 3.0** - Automatic API documentation generation
-- **Swagger UI** - Interactive API documentation at `/docs`
-- **ReDoc** - Alternative API documentation at `/redoc`
+# Seed sample data
+python scripts/seed_examples.py
 
-## Performance & Monitoring
-- **Python Logging** - Structured logging with multiple levels
-- **File-based Logging** - Separate logs for debug, application, security
-- **Token Usage Tracking** - Monitor LLM API costs and efficiency
-- **Response Time Metrics** - Performance monitoring across providers
+# Download embedding models
+python scripts/download_embeddings_models.py
 
-## Platform Support
-- **Windows** - Primary development platform with batch scripts
-- **Linux/macOS** - Cross-platform compatibility
-- **Docker** - Containerized deployment support
+# Download HF model
+python scripts/download_hf_model.py
 
-## Version Requirements
-```
-Python >= 3.8
-FastAPI >= 0.104
-ChromaDB >= 0.4.0
-llama-cpp-python >= 0.2.0
-sentence-transformers >= 2.2.0
-openai >= 1.0.0
+# Train sentiment model
+python scripts/train_sentiment.py
+
+# Docker
+docker-compose up
 ```
 
-## Optional Dependencies
-- **PDF Processing**: PyPDF2, pdfplumber
-- **Audio Processing**: vosk, pydub, soundfile
-- **Vision Processing**: opencv-python, pytesseract
-- **Agent Framework**: crewai, langchain
-- **Advanced ML**: scikit-learn, joblib
+## Token Limits (from `constants.py`)
+```python
+MAX_PROMPT_TOKENS = 4096
+MAX_CONTEXT_TOKENS = 2048
+MAX_SYSTEM_TOKENS = 80
+MAX_HISTORY_TURNS = 5
+DEFAULT_TOP_K = 3
+DEFAULT_MAX_TOKENS = 256
+DEFAULT_TEMPERATURE = 0.1
+```
+
+## API Prefixes
+```python
+API_PREFIX = "/api"
+RAG_PREFIX = "/api/rag"
+AUTH_PREFIX = "/api/auth"
+MODELS_PREFIX = "/api/models"
+```
