@@ -50,6 +50,23 @@ export default function RAGChat({ onLogout, initialMode = 'rag', initialConvId =
     }
   }
 
+  async function createNewAgentConversation() {
+    if (!token) return
+    try {
+      const res = await fetch(`${BASE_API_URL}/api/conversations`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ title: 'New Agent Session', chat_type: 'agent' })
+      })
+      if (!res.ok) throw new Error('Failed to create agent conversation')
+      const newConv = await res.json()
+      setAgentConversations(prev => [newConv, ...prev])
+      setActiveAgentConversationId(newConv.id)
+    } catch (err) {
+      console.error('Failed to create agent conversation', err)
+    }
+  }
+
   // Conversation state
 
   // Conversation state
@@ -757,7 +774,7 @@ export default function RAGChat({ onLogout, initialMode = 'rag', initialConvId =
         conversations={agentMode ? agentConversations : crewMode ? crewConversations : conversations}
         activeConversationId={agentMode ? activeAgentConversationId : crewMode ? activeCrewConversationId : activeConversationId}
         onSelectConversation={agentMode ? (id) => setActiveAgentConversationId(id) : crewMode ? (id) => setActiveCrewConversationId(id) : switchConversation}
-        onCreateConversation={agentMode ? () => {} : crewMode ? () => {} : () => createNewConversation()}
+        onCreateConversation={agentMode ? createNewAgentConversation : crewMode ? () => {} : () => createNewConversation()}
         onRenameConversation={renameConversation}
         onDeleteConversation={deleteConversation}
         isOpen={sidebarOpen}
