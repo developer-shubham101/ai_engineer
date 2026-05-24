@@ -8,11 +8,12 @@ import logging
 from typing import Dict, Any, List, Tuple
 
 # Static imports for tools
-from .function_tools.tool_stock import get_stock_price
+from .function_tools.tool_stock import get_stock_price, get_stock_history, get_crypto_price
 from .function_tools.tool_weather import get_weather
 from .function_tools.tool_file import save_text_file
 from .function_tools.tool_web_search import web_search
 from .function_tools.tool_web_scraper import scrape_url
+from .function_tools.tool_chart import generate_stock_chart, generate_chart
 
 logger = logging.getLogger(__name__)
 
@@ -22,6 +23,26 @@ REGISTRY: Dict[str, Dict[str, Any]] = {
         "fn": get_stock_price,
         "args": ["symbol"],
         "description": "Get current stock price for a symbol"
+    },
+    "get_stock_history": {
+        "fn": get_stock_history,
+        "args": ["symbol", "period"],
+        "description": "Get historical stock price history for a symbol"
+    },
+    "generate_stock_chart": {
+        "fn": generate_stock_chart,
+        "args": ["symbol", "period"],
+        "description": "Generate a stock chart image for a symbol over time"
+    },
+    "get_crypto_price": {
+        "fn": get_crypto_price,
+        "args": ["symbol"],
+        "description": "Get current cryptocurrency price for a symbol"
+    },
+    "generate_chart": {
+        "fn": generate_chart,
+        "args": ["title", "data", "chart_type"],
+        "description": "Generate a generic chart from structured data"
     },
     "get_weather": {
         "fn": get_weather,

@@ -1,7 +1,11 @@
 """AutoGen-based agent orchestrator for multi-agent conversations using AutoGen v0.4."""
 
+import asyncio
+import json
 import logging
-from typing import Dict, Any, Optional, List, Callable
+import re
+import time
+from typing import Dict, Any, Optional, List, Callable, Set
 
 from autogen_agentchat.agents import AssistantAgent
 from autogen_agentchat.conditions import MaxMessageTermination
@@ -26,31 +30,42 @@ def _register_tool_builders() -> Dict[str, Callable]:
 
     from ...function_tools.tool_web_search import web_search
     from ...function_tools.tool_web_scraper import scrape_url
-    from ...function_tools.tool_stock import get_stock_price
+    from ...function_tools.tool_stock import get_stock_price, get_stock_history, get_crypto_price
     from ...function_tools.tool_weather import get_weather
+    from ...function_tools.tool_chart import generate_stock_chart, generate_chart
     from ...function_tools.tool_file import save_research_report
 
-    def web_search_tool(query: str) -> str:
+    def web_search_tool(query: str) -> Dict[str, Any]:
         """Search the internet for real-time information on any topic."""
-        result = web_search(query, max_results=5)
-        return result["formatted"] if result.get("status") == "success" else f"Search failed: {result.get('error')}"
+        return web_search(query, max_results=5)
 
-    def scrape_url_tool(url: str) -> str:
+    def scrape_url_tool(url: str) -> Dict[str, Any]:
         """Fetch and extract full text content from a URL."""
-        result = scrape_url(url)
-        return result["content"] if result.get("status") == "success" else f"Fetch failed: {result.get('error')}"
+        return scrape_url(url)
 
-    def get_stock_price_tool(symbol: str) -> str:
+    def get_stock_price_tool(symbol: str) -> Dict[str, Any]:
         """Get the current stock price for a ticker symbol (e.g. AAPL, TSLA)."""
-        result = get_stock_price(symbol)
-        return f"{result['symbol']}: ${result['price']}" if result.get("status") == "success" else f"Stock lookup failed: {result.get('error')}"
+        return get_stock_price(symbol)
 
-    def get_weather_tool(city: str) -> str:
+    def get_stock_history_tool(symbol: str, period: str = "5y") -> Dict[str, Any]:
+        """Get historical stock prices for a ticker symbol."""
+        return get_stock_history(symbol, period)
+
+    def generate_stock_chart_tool(symbol: str, period: str = "5y") -> Dict[str, Any]:
+        """Generate a stock performance chart for a symbol over a period."""
+        return generate_stock_chart(symbol, period)
+
+    def get_crypto_price_tool(symbol: str) -> Dict[str, Any]:
+        """Get the current crypto price for a symbol (e.g. BTC-USD)."""
+        return get_crypto_price(symbol)
+
+    def generate_chart_tool(title: str, data: Any, chart_type: str = "line") -> Dict[str, Any]:
+        """Generate a generic chart from structured data."""
+        return generate_chart(title, data, chart_type)
+
+    def get_weather_tool(city: str) -> Dict[str, Any]:
         """Get current weather conditions for a city."""
-        result = get_weather(city)
-        if result.get("status") in ("success", "demo_data"):
-            return f"{result['city']}: {result['temperature']}, {result['description']}, humidity {result['humidity']}"
-        return f"Weather lookup failed: {result.get('error')}"
+        return get_weather(city)
 
     def save_research_report_tool(
         title: str,
@@ -83,6 +98,10 @@ def _register_tool_builders() -> Dict[str, Callable]:
         "web_search": web_search_tool,
         "scrape_url": scrape_url_tool,
         "get_stock_price": get_stock_price_tool,
+        "get_stock_history": get_stock_history_tool,
+        "generate_stock_chart": generate_stock_chart_tool,
+        "get_crypto_price": get_crypto_price_tool,
+        "generate_chart": generate_chart_tool,
         "get_weather": get_weather_tool,
         "save_research_report": save_research_report_tool,
     })
@@ -98,16 +117,28 @@ class AutoGenOrchestrator(IAgentOrchestrator):
     """
 
     # Names match agent_runner.REGISTRY for unified /tools discovery
-    AVAILABLE_TOOLS = ["web_search", "scrape_url", "get_stock_price", "get_weather", "save_research_report"]
+    AVAILABLE_TOOLS = [
+        "web_search",
+        "scrape_url",
+        "get_stock_price",
+        "get_stock_history",
+        "generate_stock_chart",
+        "get_crypto_price",
+        "generate_chart",
+        "get_weather",
+        "save_research_report",
+    ]
 
     # Map workflow name → handler method name
     WORKFLOW_REGISTRY = {
         "debate": "_execute_debate_workflow",
         "research": "_execute_research_workflow",
+        "smart_assistant": "_execute_smart_assistant_workflow",
     }
 
     def __init__(self, model_client):
         self.model_client = model_client
+        self._tool_cache: Dict[str, Any] = {}
 
     # ------------------------------------------------------------------
     # IAgentOrchestrator interface
@@ -158,6 +189,193 @@ class AutoGenOrchestrator(IAgentOrchestrator):
             else:
                 logger.warning("AutoGen: unknown tool '%s' requested, skipping", name)
         return tools
+
+    def _resolve_named_tools(self, names: List[str]) -> List[Callable]:
+        registry = _register_tool_builders()
+        return [registry[name] for name in names if name in registry]
+
+    def _tool_cache_key(self, tool_name: str, args: Dict[str, Any]) -> str:
+        return f"{tool_name}:{json.dumps(args, sort_keys=True, default=str)}"
+
+    def _get_cached_tool_result(self, key: str) -> Optional[Dict[str, Any]]:
+        return self._tool_cache.get(key)
+
+    def _cache_tool_result(self, key: str, result: Dict[str, Any]) -> None:
+        self._tool_cache[key] = result
+
+    def _classify_intent(self, query: str) -> tuple[str, float]:
+        normalized = query.lower()
+        if any(term in normalized for term in ["news", "latest", "headline", "breaking"]):
+            return "NEWS_QUERY", 0.95
+        if any(term in normalized for term in ["bitcoin", "ethereum", "crypto", "btc", "eth", "doge"]):
+            return "CRYPTO_QUERY", 0.92
+        if any(term in normalized for term in ["weather", "temperature", "forecast", "rain", "sunny", "cloudy"]):
+            return "WEATHER_QUERY", 0.92
+        if any(term in normalized for term in ["stock", "ticker", "share", "dow", "nasdaq", "sp500", "compare"]):
+            if any(term in normalized for term in ["chart", "graph", "trend", "history", "5 year", "5-year", "year", "month"]):
+                return "STOCK_CHART_QUERY", 0.94
+            return "STOCK_QUERY", 0.90
+        if any(term in normalized for term in ["chart", "graph", "trend", "history"]):
+            return "STOCK_CHART_QUERY", 0.85
+        return "GENERAL_QUERY", 0.70
+
+    def _extract_symbol(self, query: str) -> str:
+        normalized = query.upper()
+        symbols = [token for token in re.findall(r"\b[A-Z]{1,5}\b", normalized) if token not in {"THE", "AND", "FOR", "WITH", "WHAT", "SHOW", "LATEST", "PRICE", "STOCK", "NEWS", "CHART", "GRAPH", "TREND", "HISTORY"}]
+        if symbols:
+            return symbols[0]
+        if "google" in normalized:
+            return "GOOGL"
+        if "apple" in normalized:
+            return "AAPL"
+        if "microsoft" in normalized:
+            return "MSFT"
+        return normalized.strip()
+
+    def _extract_crypto_symbol(self, query: str) -> str:
+        normalized = query.lower()
+        if "bitcoin" in normalized or "btc" in normalized:
+            return "BTC-USD"
+        if "ethereum" in normalized or "eth" in normalized:
+            return "ETH-USD"
+        symbol = self._extract_symbol(query)
+        if symbol and "-" not in symbol:
+            return f"{symbol}-USD"
+        return symbol
+
+    def _extract_city(self, query: str) -> str:
+        if " in " in query.lower():
+            parts = [p.strip() for p in query.lower().split(" in ") if p.strip()]
+            if len(parts) > 1:
+                city_fragment = parts[-1].split("?")[0].strip()
+                return city_fragment.title()
+        return query.strip().title()
+
+    def _extract_period(self, query: str) -> str:
+        normalized = query.lower()
+        if "5 year" in normalized or "5-year" in normalized:
+            return "5y"
+        if "1 year" in normalized or "1-year" in normalized:
+            return "1y"
+        if "6 month" in normalized or "6-month" in normalized:
+            return "6mo"
+        if "3 month" in normalized or "3-month" in normalized:
+            return "3mo"
+        if "30 day" in normalized or "30-day" in normalized:
+            return "30d"
+        return "1y"
+
+    def _select_tools_for_query(self, query: str) -> List[str]:
+        intent, _confidence = self._classify_intent(query)
+        normalized = query.lower()
+        chart_requested = any(term in normalized for term in ["chart", "graph", "trend", "history"])
+
+        if intent == "WEATHER_QUERY":
+            selected = ["get_weather"]
+            if chart_requested:
+                selected.append("generate_chart")
+            return selected
+
+        if intent == "STOCK_CHART_QUERY":
+            return ["get_stock_history", "generate_stock_chart"]
+
+        if intent == "STOCK_QUERY":
+            selected = ["get_stock_price"]
+            if chart_requested:
+                selected = ["get_stock_history", "generate_stock_chart"]
+            return selected
+
+        if intent == "CRYPTO_QUERY":
+            selected = ["get_crypto_price"]
+            if chart_requested:
+                selected.append("generate_chart")
+            return selected
+
+        if intent == "NEWS_QUERY":
+            return ["web_search", "scrape_url"]
+
+        return ["web_search"]
+
+    async def _execute_tool(self, tool_name: str, func: Callable, args: Dict[str, Any]) -> Dict[str, Any]:
+        cache_key = self._tool_cache_key(tool_name, args)
+        cached = self._get_cached_tool_result(cache_key)
+        if cached is not None:
+            return {"tool": tool_name, "args": args, "result": cached, "duration_ms": 0.0, "cached": True}
+
+        start = time.perf_counter()
+        try:
+            result = await asyncio.to_thread(func, **args)
+        except Exception as exc:
+            result = {"status": "error", "error": str(exc)}
+        duration_ms = round((time.perf_counter() - start) * 1000, 2)
+        if isinstance(result, dict):
+            self._cache_tool_result(cache_key, result)
+        return {"tool": tool_name, "args": args, "result": result, "duration_ms": duration_ms, "cached": False}
+
+    async def _execute_selected_tools(self, query: str, tool_names: List[str]) -> List[Dict[str, Any]]:
+        registry = _register_tool_builders()
+        if not tool_names:
+            return []
+
+        tool_plan = []
+        if "web_search" in tool_names and "scrape_url" in tool_names:
+            # Search first, then scrape the top result if available.
+            web_task = await self._execute_tool("web_search", registry["web_search"], {"query": query})
+            tool_plan.append(web_task)
+            top_url = None
+            if web_task["result"].get("status") == "success":
+                first_result = web_task["result"].get("results", [])
+                if first_result:
+                    top_url = first_result[0].get("url")
+            if top_url:
+                scrape_task = await self._execute_tool("scrape_url", registry["scrape_url"], {"url": top_url})
+                tool_plan.append(scrape_task)
+            return tool_plan
+
+        if "get_stock_history" in tool_names and "generate_stock_chart" in tool_names:
+            symbol = self._extract_symbol(query)
+            period = self._extract_period(query)
+            history_task = await self._execute_tool("get_stock_history", registry["get_stock_history"], {"symbol": symbol, "period": period})
+            tool_plan.append(history_task)
+            chart_task = await self._execute_tool("generate_stock_chart", registry["generate_stock_chart"], {"symbol": symbol, "period": period})
+            tool_plan.append(chart_task)
+            return tool_plan
+
+        tasks = []
+        for tool_name in tool_names:
+            if tool_name == "get_stock_price":
+                args = {"symbol": self._extract_symbol(query)}
+            elif tool_name == "get_crypto_price":
+                args = {"symbol": self._extract_crypto_symbol(query)}
+            elif tool_name == "get_weather":
+                args = {"city": self._extract_city(query)}
+            elif tool_name == "generate_chart":
+                args = {"title": query, "data": [{"x": "sample", "y": 1}, {"x": "sample2", "y": 2}], "chart_type": "line"}
+            else:
+                args = {"query": query}
+            tasks.append(self._execute_tool(tool_name, registry[tool_name], args))
+
+        results = await asyncio.gather(*tasks)
+        return list(results)
+
+    def _build_summary_prompt(self, query: str, intent: str, tool_results: List[Dict[str, Any]]) -> str:
+        steps = []
+        for result in tool_results:
+            summary = {
+                "tool": result["tool"],
+                "args": result["args"],
+                "duration_ms": result["duration_ms"],
+                "cached": result["cached"],
+                "result": result["result"],
+            }
+            steps.append(summary)
+        return (
+            "You are a smart assistant. Summarize the user request and tool results in a concise, structured answer. "
+            f"User query: {query}\n"
+            f"Detected intent: {intent}\n"
+            f"Tool results: {json.dumps(steps, indent=2, default=str)}\n"
+            "Only use the tool results to answer. Return a final recommendation and short summary."
+        )
 
     def _get_research_tools(self, tools: List[Callable]) -> List[Callable]:
         """Return only data-gathering tools (excludes save_text_file)."""
@@ -292,4 +510,63 @@ class AutoGenOrchestrator(IAgentOrchestrator):
             steps=steps,
             tools_used=list(tools_used),
             final_step=True
+        )
+
+    async def _execute_smart_assistant_workflow(self, query: str, tools: List[Callable], max_steps: int) -> AgentResponse:
+        """Smart assistant workflow that routes tools based on intent and summarizes results."""
+        intent, confidence = self._classify_intent(query)
+        selected_tool_names = self._select_tools_for_query(query)
+        if tools:
+            available_names = [name for name, func in _register_tool_builders().items() if func in tools]
+            selected_tool_names = [name for name in selected_tool_names if name in available_names]
+
+        if not selected_tool_names:
+            selected_tool_names = ["web_search"]
+
+        tool_results = await self._execute_selected_tools(query, selected_tool_names)
+        tool_steps = []
+        for index, tool_result in enumerate(tool_results, start=1):
+            tool_steps.append({
+                "step": index,
+                "tool": tool_result["tool"],
+                "args": tool_result["args"],
+                "output": tool_result["result"],
+                "duration_ms": tool_result["duration_ms"],
+                "cached": tool_result["cached"],
+            })
+
+        assistant = AssistantAgent(
+            name="SmartAssistant",
+            system_message=(
+                "You are a smart assistant summarizer. Use only the structured tool results provided below. "
+                "Do not call any additional tools. Provide a concise answer, note the detected intent, and mention the tools used."
+            ),
+            model_client=self.model_client,
+        )
+
+        team = RoundRobinGroupChat(
+            participants=[assistant],
+            termination_condition=MaxMessageTermination(max_messages=max_steps)
+        )
+
+        final_result, summary_steps, summary_tools_used = await self._run_team(
+            team,
+            self._build_summary_prompt(query, intent, tool_results)
+        )
+
+        all_steps = tool_steps + summary_steps
+        tools_used = {step["tool"] for step in tool_steps}
+        tools_used.update(summary_tools_used)
+
+        return AgentResponse(
+            answer=final_result,
+            steps=all_steps,
+            tools_used=list(tools_used),
+            final_step=True,
+            debug_info={
+                "intent": intent,
+                "confidence": confidence,
+                "selected_tools": selected_tool_names,
+                "tool_count": len(tool_results),
+            }
         )
