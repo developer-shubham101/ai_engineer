@@ -9,7 +9,7 @@ from pydantic import BaseModel
 
 from app.dependencies import get_current_user_optional
 from app.modules.agents.interfaces import AgentRequest
-from app.modules.agents.orchestrators.autogen.autogen_orchestrator import _register_tool_builders
+from app.modules.agents.orchestrators.autogen.tool_registry import get_tool_registry
 from app.modules.integration import get_container
 from app.logging_config import log_user_action, log_performance_metric, log_security_event
 
@@ -86,8 +86,8 @@ def _get_all_tool_info() -> List[ToolInfo]:
     except Exception as e:
         logger.warning("AGENT_TOOLS: could not load orchestrator tools: %s", e)
 
-    # 2. Function-based tools from AutoGen tool builders
-    for name, fn in _register_tool_builders().items():
+    # 2. Function-based tools from AutoGen tool registry
+    for name, fn in get_tool_registry().items():
         if name not in seen:
             tools.append(ToolInfo(name=name, description=fn.__doc__ or name))
             seen.add(name)
@@ -273,8 +273,9 @@ async def query_agent(
 async def list_autogen_workflows():
     """List available AutoGen workflows and tools."""
     from app.modules.agents.orchestrators.autogen.autogen_orchestrator import AutoGenOrchestrator
+    # WORKFLOW_REGISTRY is populated in __init__, use the keys defined at class level
     return {
-        "workflows": list(AutoGenOrchestrator.WORKFLOW_REGISTRY.keys()),
+        "workflows": AutoGenOrchestrator.AVAILABLE_WORKFLOWS,
         "tools": AutoGenOrchestrator.AVAILABLE_TOOLS
     }
 
@@ -328,7 +329,7 @@ async def test_tool(
             return {"tool": tool_name, "input": body.input_data, "result": result, "status": "success", "source": "orchestrator"}
 
         # 2. Function-based tools — resolve kwargs, support multi-arg via JSON
-        fn = _register_tool_builders().get(tool_name)
+        fn = get_tool_registry().get(tool_name)
         if fn:
             params = list(inspect.signature(fn).parameters.keys())
             if len(params) == 1:

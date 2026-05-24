@@ -37,12 +37,15 @@ class AutoGenOrchestrator(IAgentOrchestrator):
         "generate_trip_summary", "get_currency_exchange", "get_geo_distance",
     ]
 
-    WORKFLOW_REGISTRY: Dict[str, Callable] = {}  # populated in __init__
+    # Workflow names available at class level (handlers wired in __init__)
+    AVAILABLE_WORKFLOWS: List[str] = [
+        "debate", "research", "smart_assistant", "smart_travel_planner",
+    ]
 
     def __init__(self, model_client: Any) -> None:
         self.model_client = model_client
         self._tool_cache: Dict[str, Any] = {}
-        self.WORKFLOW_REGISTRY = {
+        self.WORKFLOW_REGISTRY: Dict[str, Callable] = {
             "debate": self._run_debate,
             "research": self._run_research,
             "smart_assistant": self._run_smart_assistant,
@@ -90,7 +93,7 @@ class AutoGenOrchestrator(IAgentOrchestrator):
         return self.AVAILABLE_TOOLS
 
     def get_available_workflows(self) -> List[str]:
-        return list(self.WORKFLOW_REGISTRY)
+        return self.AVAILABLE_WORKFLOWS
 
     # ------------------------------------------------------------------
     # Workflow dispatchers (thin wrappers that inject shared state)
