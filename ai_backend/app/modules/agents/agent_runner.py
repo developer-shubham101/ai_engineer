@@ -14,6 +14,11 @@ from .function_tools.tool_file import save_text_file
 from .function_tools.tool_web_search import web_search
 from .function_tools.tool_web_scraper import scrape_url
 from .function_tools.tool_chart import generate_stock_chart, generate_chart
+from .function_tools.tool_travel import (
+    search_flights, search_hotels, estimate_trip_budget, search_places,
+    search_restaurants, generate_itinerary, get_local_transport_info,
+    get_distance_between_places, generate_trip_summary,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -63,7 +68,53 @@ REGISTRY: Dict[str, Dict[str, Any]] = {
         "fn": scrape_url,
         "args": ["url"],
         "description": "Fetch and extract full text content from a URL. Use after web_search to get detailed information from a specific result"
-    }
+    },
+    # --- Travel tools ---
+    "search_flights": {
+        "fn": search_flights,
+        "args": ["origin", "destination"],
+        "description": "Search for flights between two cities"
+    },
+    "search_hotels": {
+        "fn": search_hotels,
+        "args": ["destination"],
+        "description": "Search for hotels at a destination"
+    },
+    "estimate_trip_budget": {
+        "fn": estimate_trip_budget,
+        "args": ["destination"],
+        "description": "Estimate total trip budget for a destination"
+    },
+    "search_places": {
+        "fn": search_places,
+        "args": ["destination"],
+        "description": "Search for tourist attractions and places of interest"
+    },
+    "search_restaurants": {
+        "fn": search_restaurants,
+        "args": ["destination"],
+        "description": "Search for restaurants at a destination"
+    },
+    "generate_itinerary": {
+        "fn": generate_itinerary,
+        "args": ["destination"],
+        "description": "Generate a day-wise travel itinerary for a destination"
+    },
+    "get_local_transport_info": {
+        "fn": get_local_transport_info,
+        "args": ["destination"],
+        "description": "Get local transport options at a destination"
+    },
+    "get_distance_between_places": {
+        "fn": get_distance_between_places,
+        "args": ["origin", "destination"],
+        "description": "Get approximate distance and travel time between two places"
+    },
+    "generate_trip_summary": {
+        "fn": generate_trip_summary,
+        "args": ["destination"],
+        "description": "Generate a concise trip summary with highlights and travel tips"
+    },
 }
 
 

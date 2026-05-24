@@ -78,7 +78,12 @@ async def get_crew_status():
                 name="analysis",
                 description="Structured analysis with Examiner and Evaluator",
                 agents=["Examiner", "Evaluator"]
-            )
+            ),
+            WorkflowInfo(
+                name="smart_travel_planner",
+                description="AI-powered travel assistant: intent classification, dynamic tool selection, structured travel plans",
+                agents=["TravelPlanner", "WeatherTool", "FlightTool", "HotelTool", "ItineraryTool"]
+            ),
         ]
         
         return CrewStatusResponse(
@@ -212,7 +217,12 @@ async def list_workflows():
                 name="analysis",
                 description="Structured analysis and evaluation",
                 agents=["Examiner", "Evaluator"]
-            )
+            ),
+            WorkflowInfo(
+                name="smart_travel_planner",
+                description="AI-powered travel assistant: intent classification, dynamic tool selection, structured travel plans",
+                agents=["TravelPlanner", "WeatherTool", "FlightTool", "HotelTool", "ItineraryTool"]
+            ),
         ]
     except Exception as e:
         logger.error(f"Failed to list workflows: {e}")

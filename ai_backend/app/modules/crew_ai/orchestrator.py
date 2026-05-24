@@ -11,6 +11,7 @@ from crewai import Agent, Task, Crew, Process
 from crewai.llm import LLM
 
 from .interfaces import ICrewOrchestrator, CrewRequest, CrewResponse
+from .travel_workflow import run_smart_travel_planner
 from ..config.settings import settings
 
 logger = logging.getLogger(__name__)
@@ -108,6 +109,8 @@ class CrewOrchestrator(ICrewOrchestrator):
                 result, agents_used = self._execute_debate_crew(request.topic)
             elif request.workflow_type == "research":
                 result, agents_used = self._execute_research_crew(request.topic)
+            elif request.workflow_type == "smart_travel_planner":
+                return await self._execute_travel_planner(request)
             else:
                 raise ValueError(f"Unknown workflow type: {request.workflow_type}")
 
@@ -192,6 +195,34 @@ class CrewOrchestrator(ICrewOrchestrator):
             logger.error(f"Research crew execution failed: {e}")
             return f"Research execution failed: {str(e)}", []
 
+    async def _execute_travel_planner(self, request: CrewRequest) -> CrewResponse:
+        """Execute smart_travel_planner workflow."""
+        start_time = time.time()
+        try:
+            plan, agents_used = await run_smart_travel_planner(request.topic)
+            import json
+            result = json.dumps(plan, ensure_ascii=False, indent=2)
+            execution_time = int((time.time() - start_time) * 1000)
+            return CrewResponse(
+                result=result,
+                workflow_type="smart_travel_planner",
+                agents_used=agents_used,
+                iterations=len(agents_used),
+                execution_time_ms=execution_time,
+                debug_info={"intent": plan.get("intent"), "tools_used": plan.get("_meta", {}).get("tools_used", [])}
+            )
+        except Exception as e:
+            logger.error("Travel planner workflow failed: %s", e)
+            execution_time = int((time.time() - start_time) * 1000)
+            return CrewResponse(
+                result=f"Travel planner failed: {str(e)}",
+                workflow_type="smart_travel_planner",
+                agents_used=[],
+                iterations=0,
+                execution_time_ms=execution_time,
+                debug_info={"error": str(e)}
+            )
+
     def get_available_workflows(self) -> List[str]:
         """Get available workflow types."""
-        return ["debate", "research"]
+        return ["debate", "research", "smart_travel_planner"]

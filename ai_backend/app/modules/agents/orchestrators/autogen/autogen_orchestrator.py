@@ -34,6 +34,12 @@ def _register_tool_builders() -> Dict[str, Callable]:
     from ...function_tools.tool_weather import get_weather
     from ...function_tools.tool_chart import generate_stock_chart, generate_chart
     from ...function_tools.tool_file import save_research_report
+    from ...function_tools.tool_travel import (
+        search_flights, search_hotels, estimate_trip_budget, search_places,
+        search_restaurants, generate_itinerary, get_local_transport_info,
+        get_distance_between_places, generate_trip_summary,
+        get_currency_exchange, get_geo_distance,
+    )
 
     def web_search_tool(query: str) -> Dict[str, Any]:
         """Search the internet for real-time information on any topic."""
@@ -94,6 +100,50 @@ def _register_tool_builders() -> Dict[str, Callable]:
             )
         return f"Save failed: {result.get('error')}"
 
+    def search_flights_tool(origin: str, destination: str, date: str = "", budget: str = "") -> Dict[str, Any]:
+        """Search for flights between two cities."""
+        return search_flights(origin, destination, date, budget)
+
+    def search_hotels_tool(destination: str, budget: str = "", days: str = "") -> Dict[str, Any]:
+        """Search for hotels at a destination."""
+        return search_hotels(destination, budget, days)
+
+    def estimate_trip_budget_tool(destination: str, days: str = "3", travelers: str = "1") -> Dict[str, Any]:
+        """Estimate total trip budget including flights, hotels, food, and activities."""
+        return estimate_trip_budget(destination, days, travelers)
+
+    def search_places_tool(destination: str, category: str = "tourist") -> Dict[str, Any]:
+        """Search for tourist attractions and places of interest at a destination."""
+        return search_places(destination, category)
+
+    def search_restaurants_tool(destination: str, cuisine: str = "local") -> Dict[str, Any]:
+        """Search for restaurants and dining options at a destination."""
+        return search_restaurants(destination, cuisine)
+
+    def generate_itinerary_tool(destination: str, days: str = "3", budget: str = "") -> Dict[str, Any]:
+        """Generate a day-wise travel itinerary for a destination."""
+        return generate_itinerary(destination, days, budget)
+
+    def get_local_transport_info_tool(destination: str) -> Dict[str, Any]:
+        """Get local transport options (auto, taxi, bus, rental) at a destination."""
+        return get_local_transport_info(destination)
+
+    def get_distance_between_places_tool(origin: str, destination: str) -> Dict[str, Any]:
+        """Get approximate distance and travel time between two places."""
+        return get_distance_between_places(origin, destination)
+
+    def generate_trip_summary_tool(destination: str, days: str = "3", budget: str = "") -> Dict[str, Any]:
+        """Generate a concise trip summary with highlights and travel tips."""
+        return generate_trip_summary(destination, days, budget)
+
+    def get_currency_exchange_tool(from_currency: str, to_currency: str, amount: float = 1.0) -> Dict[str, Any]:
+        """Convert amount between currencies using real exchange rates."""
+        return get_currency_exchange(from_currency, to_currency, amount)
+
+    def get_geo_distance_tool(origin: str, destination: str) -> Dict[str, Any]:
+        """Get real straight-line distance between two places via OpenStreetMap."""
+        return get_geo_distance(origin, destination)
+
     _TOOL_BUILDERS.update({
         "web_search": web_search_tool,
         "scrape_url": scrape_url_tool,
@@ -104,6 +154,18 @@ def _register_tool_builders() -> Dict[str, Callable]:
         "generate_chart": generate_chart_tool,
         "get_weather": get_weather_tool,
         "save_research_report": save_research_report_tool,
+        # Travel tools
+        "search_flights": search_flights_tool,
+        "search_hotels": search_hotels_tool,
+        "estimate_trip_budget": estimate_trip_budget_tool,
+        "search_places": search_places_tool,
+        "search_restaurants": search_restaurants_tool,
+        "generate_itinerary": generate_itinerary_tool,
+        "get_local_transport_info": get_local_transport_info_tool,
+        "get_distance_between_places": get_distance_between_places_tool,
+        "generate_trip_summary": generate_trip_summary_tool,
+        "get_currency_exchange": get_currency_exchange_tool,
+        "get_geo_distance": get_geo_distance_tool,
     })
     return _TOOL_BUILDERS
 
@@ -127,6 +189,18 @@ class AutoGenOrchestrator(IAgentOrchestrator):
         "generate_chart",
         "get_weather",
         "save_research_report",
+        # Travel tools
+        "search_flights",
+        "search_hotels",
+        "estimate_trip_budget",
+        "search_places",
+        "search_restaurants",
+        "generate_itinerary",
+        "get_local_transport_info",
+        "get_distance_between_places",
+        "generate_trip_summary",
+        "get_currency_exchange",
+        "get_geo_distance",
     ]
 
     # Map workflow name → handler method name
@@ -134,6 +208,7 @@ class AutoGenOrchestrator(IAgentOrchestrator):
         "debate": "_execute_debate_workflow",
         "research": "_execute_research_workflow",
         "smart_assistant": "_execute_smart_assistant_workflow",
+        "smart_travel_planner": "_execute_smart_travel_planner_workflow",
     }
 
     def __init__(self, model_client):
@@ -569,4 +644,210 @@ class AutoGenOrchestrator(IAgentOrchestrator):
                 "selected_tools": selected_tool_names,
                 "tool_count": len(tool_results),
             }
+        )
+
+    # ------------------------------------------------------------------
+    # Smart Travel Planner workflow
+    # ------------------------------------------------------------------
+
+    # Supported travel intents and their tool mappings
+    _TRAVEL_INTENT_KEYWORDS: List[tuple] = [
+        ("FLIGHT_SEARCH",        ["flight", "fly", "airline", "airfare", "plane ticket"]),
+        ("HOTEL_SEARCH",         ["hotel", "stay", "accommodation", "hostel", "resort", "lodge"]),
+        ("WEATHER_TRAVEL",       ["weather", "climate", "temperature", "rain", "monsoon", "season"]),
+        ("RESTAURANT_SEARCH",    ["restaurant", "food", "eat", "dining", "cuisine", "cafe"]),
+        ("TRANSPORT_QUERY",      ["transport", "bus", "train", "cab", "taxi", "auto", "how to reach"]),
+        ("LOCAL_ATTRACTIONS",    ["places", "attractions", "sightseeing", "tourist", "things to do", "explore"]),
+        ("BUDGET_TRAVEL",        ["budget", "cheap", "affordable", "under", "cost", "expense", "\u20b9", "inr", "rupee"]),
+        ("ITINERARY_PLANNING",   ["itinerary", "plan", "day", "schedule", "trip plan", "days"]),
+        ("GENERAL_TRAVEL_QUERY", []),
+    ]
+
+    _TRAVEL_INTENT_TOOLS: Dict[str, List[str]] = {
+        "FLIGHT_SEARCH":       ["search_flights"],
+        "HOTEL_SEARCH":        ["search_hotels"],
+        "WEATHER_TRAVEL":      ["get_weather"],
+        "RESTAURANT_SEARCH":   ["search_restaurants"],
+        "TRANSPORT_QUERY":     ["get_local_transport_info"],
+        "LOCAL_ATTRACTIONS":   ["search_places", "web_search"],
+        "BUDGET_TRAVEL":       ["estimate_trip_budget", "search_hotels", "get_weather"],
+        "ITINERARY_PLANNING":  ["generate_itinerary", "search_places", "get_weather", "estimate_trip_budget"],
+        "GENERAL_TRAVEL_QUERY": ["web_search", "generate_trip_summary"],
+    }
+
+    def _classify_travel_intent(self, query: str) -> str:
+        """Classify travel intent via keyword matching."""
+        q = query.lower()
+        for intent, keywords in self._TRAVEL_INTENT_KEYWORDS:
+            if not keywords:
+                return intent
+            if any(kw in q for kw in keywords):
+                return intent
+        return "GENERAL_TRAVEL_QUERY"
+
+    def _extract_travel_entities(self, query: str) -> Dict[str, Any]:
+        """Extract destination, days, budget, source, travelers from query."""
+        q = query.lower()
+        known = [
+            "goa", "jaipur", "kerala", "mumbai", "delhi", "bangalore", "hyderabad",
+            "manali", "shimla", "udaipur", "agra", "varanasi", "kolkata", "chennai",
+            "paris", "london", "dubai", "singapore", "bangkok", "bali", "new york",
+        ]
+        destination = next((d.title() for d in known if d in q), None)
+
+        days_m = re.search(r"(\d+)\s*(?:day|days|night|nights)", q)
+        days = int(days_m.group(1)) if days_m else 3
+
+        budget_m = re.search(r"(?:under|below|within|budget|\u20b9|rs\.?|inr)\s*(\d[\d,]*)", q)
+        budget = int(budget_m.group(1).replace(",", "")) if budget_m else None
+
+        from_m = re.search(r"from\s+([a-z]+(?:\s+[a-z]+)?)", q)
+        source = from_m.group(1).title() if from_m else "Delhi"
+
+        travelers_m = re.search(r"(\d+)\s*(?:person|people|traveler|travellers|pax)", q)
+        travelers = int(travelers_m.group(1)) if travelers_m else 1
+
+        return {
+            "destination": destination or "the destination",
+            "days": days,
+            "budget": budget,
+            "source": source,
+            "travelers": travelers,
+        }
+
+    def _select_travel_tools(self, query: str) -> tuple[str, List[str]]:
+        """Return (intent, tool_names) for the query."""
+        intent = self._classify_travel_intent(query)
+        tools = self._TRAVEL_INTENT_TOOLS.get(intent, ["web_search"])
+        logger.debug("TRAVEL_PLANNER: intent=%s | tools=%s", intent, tools)
+        return intent, tools
+
+    async def _execute_travel_tools_parallel(
+        self, tool_names: List[str], entities: Dict[str, Any]
+    ) -> List[Dict[str, Any]]:
+        """Execute travel tools in parallel using asyncio.gather."""
+        registry = _register_tool_builders()
+        dest = entities["destination"]
+        days = str(entities["days"])
+        budget = str(entities.get("budget") or "")
+        source = entities["source"]
+        travelers = str(entities["travelers"])
+
+        # Build (tool_name, func, args) triples
+        tool_calls = []
+        for name in tool_names:
+            if name not in registry:
+                continue
+            if name == "search_flights":
+                args = {"origin": source, "destination": dest, "budget": budget}
+            elif name == "search_hotels":
+                args = {"destination": dest, "budget": budget, "days": days}
+            elif name == "estimate_trip_budget":
+                args = {"destination": dest, "days": days, "travelers": travelers}
+            elif name == "search_places":
+                args = {"destination": dest}
+            elif name == "search_restaurants":
+                args = {"destination": dest}
+            elif name == "generate_itinerary":
+                args = {"destination": dest, "days": days, "budget": budget}
+            elif name == "get_local_transport_info":
+                args = {"destination": dest}
+            elif name == "get_distance_between_places":
+                args = {"origin": source, "destination": dest}
+            elif name == "generate_trip_summary":
+                args = {"destination": dest, "days": days, "budget": budget}
+            elif name == "get_weather":
+                args = {"city": dest}
+            elif name == "web_search":
+                args = {"query": f"travel guide {dest}"}
+            else:
+                args = {"destination": dest}
+            tool_calls.append((name, registry[name], args))
+
+        tasks = [self._execute_tool(name, fn, args) for name, fn, args in tool_calls]
+        return list(await asyncio.gather(*tasks))
+
+    async def _execute_smart_travel_planner_workflow(
+        self, query: str, tools: List[Callable], max_steps: int
+    ) -> AgentResponse:
+        """Smart travel planner: classify intent → extract entities → run tools in
+        parallel → hand structured results to an AssistantAgent for a final plan.
+        """
+        # Step 1 + 2: intent & entities
+        intent, selected_tool_names = self._select_travel_tools(query)
+        entities = self._extract_travel_entities(query)
+
+        logger.info(
+            "TRAVEL_PLANNER: intent=%s | dest=%s | days=%s | budget=%s | tools=%s",
+            intent, entities["destination"], entities["days"], entities.get("budget"), selected_tool_names,
+        )
+
+        # Step 3 + 4: parallel tool execution
+        tool_results = await self._execute_travel_tools_parallel(selected_tool_names, entities)
+
+        # Build step records for the response
+        tool_steps = [
+            {
+                "step": i + 1,
+                "tool": r["tool"],
+                "args": r["args"],
+                "output": r["result"],
+                "duration_ms": r["duration_ms"],
+                "cached": r["cached"],
+            }
+            for i, r in enumerate(tool_results)
+        ]
+
+        # Step 5: LLM aggregation — structured travel plan
+        planner_prompt = (
+            f"You are an expert travel planner. The user asked: '{query}'\n\n"
+            f"Detected intent: {intent}\n"
+            f"Destination: {entities['destination']} | Days: {entities['days']} "
+            f"| Budget: {'\u20b9' + str(entities['budget']) if entities.get('budget') else 'flexible'} "
+            f"| Travelers: {entities['travelers']}\n\n"
+            "Tool results (use ONLY these — do not hallucinate):\n"
+            f"{json.dumps([r['result'] for r in tool_results], indent=2, default=str)}\n\n"
+            "Generate a structured travel plan with:\n"
+            "- Destination overview\n"
+            "- Weather summary (if available)\n"
+            "- Recommended hotels\n"
+            "- Day-wise itinerary\n"
+            "- Estimated costs\n"
+            "- Local transport options\n"
+            "- Top attractions / restaurants\n"
+            "- 3-5 practical travel tips\n"
+            "Be concise and practical."
+        )
+
+        planner_agent = AssistantAgent(
+            name="TravelPlanner",
+            system_message=(
+                "You are a structured travel planning assistant. "
+                "Use only the provided tool results to build a clear, day-wise travel plan. "
+                "Do not call any additional tools."
+            ),
+            model_client=self.model_client,
+        )
+
+        team = RoundRobinGroupChat(
+            participants=[planner_agent],
+            termination_condition=MaxMessageTermination(max_messages=max_steps),
+        )
+
+        final_result, summary_steps, _ = await self._run_team(team, planner_prompt)
+        all_steps = tool_steps + summary_steps
+        tools_used = [r["tool"] for r in tool_results]
+
+        return AgentResponse(
+            answer=final_result,
+            steps=all_steps,
+            tools_used=tools_used,
+            final_step=True,
+            debug_info={
+                "intent": intent,
+                "destination": entities["destination"],
+                "days": entities["days"],
+                "budget": entities.get("budget"),
+                "selected_tools": selected_tool_names,
+            },
         )
