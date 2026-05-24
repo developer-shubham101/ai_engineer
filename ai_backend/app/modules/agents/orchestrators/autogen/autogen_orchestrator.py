@@ -320,43 +320,70 @@ class AutoGenOrchestrator(IAgentOrchestrator):
         return catalog
 
     def _extract_json_object(
-        self,
-        text: str
+            self,
+            text: str
     ) -> Optional[Dict[str, Any]]:
 
         if not text:
             return None
 
-        text = text.strip()
+        text = str(text).strip()
 
-        # remove markdown fences
-        text = re.sub(
-            r"^```(?:json)?",
-            "",
+        # -------------------------------------------------
+        # FAST PATH
+        # If response itself is already pure JSON
+        # -------------------------------------------------
+
+        try:
+            parsed = json.loads(text)
+            return parsed
+
+        except Exception:
+            pass
+
+        # -------------------------------------------------
+        # Extract from markdown ```json blocks
+        # -------------------------------------------------
+
+        json_block_match = re.search(
+            r"```(?:json)?\s*(\{.*?\})\s*```",
             text,
-            flags=re.MULTILINE,
+            re.DOTALL,
         )
 
-        text = text.replace("```", "").strip()
+        if json_block_match:
+            candidate = json_block_match.group(1).strip()
 
-        # remove accidental trailing chars
+            try:
+                parsed = json.loads(candidate)
+
+                if isinstance(parsed, dict):
+                    return parsed
+
+            except Exception as e:
+                logger.warning(
+                    "Markdown JSON parse failed: %s",
+                    e,
+                )
+
+        # -------------------------------------------------
+        # Generic object extraction fallback
+        # -------------------------------------------------
+
         match = re.search(
             r"\{.*\}",
             text,
-            re.DOTALL
+            re.DOTALL,
         )
 
         if not match:
             return None
 
-        candidate = match.group(0)
+        candidate = match.group(0).strip()
 
-        # remove trailing ]
-        candidate = re.sub(
-            r"\]+$",
-            "",
-            candidate
-        )
+        # -------------------------------------------------
+        # First normal parse attempt
+        # -------------------------------------------------
 
         try:
             parsed = json.loads(candidate)
@@ -365,10 +392,46 @@ class AutoGenOrchestrator(IAgentOrchestrator):
                 return parsed
 
         except Exception as e:
+
             logger.warning(
                 "JSON parse failed: %s",
-                e
+                e,
             )
+
+        # -------------------------------------------------
+        # Auto-repair malformed JSON
+        # Handles:
+        # - extra closing braces
+        # - trailing garbage
+        # - accidental tokens at end
+        # -------------------------------------------------
+
+        repaired = candidate
+
+        while repaired:
+
+            try:
+                parsed = json.loads(repaired)
+
+                if isinstance(parsed, dict):
+                    logger.warning(
+                        "JSON auto-repair succeeded"
+                    )
+
+                    return parsed
+
+            except Exception:
+                pass
+
+            repaired = repaired[:-1].strip()
+
+        # -------------------------------------------------
+        # Failed completely
+        # -------------------------------------------------
+
+        logger.warning(
+            "Unable to extract valid JSON from selector output"
+        )
 
         return None
 
@@ -494,6 +557,9 @@ class AutoGenOrchestrator(IAgentOrchestrator):
         try:
             selector_result, selector_steps, _ = await self._run_team(selector_team, selector_task)
             parsed = self._extract_json_object(selector_result)
+
+            logger.warning("Parsed: %s", parsed, exc_info=True)
+
             if not parsed:
                 raise ValueError(f"Selector did not return JSON: {selector_result!r}")
             route_plan = self._normalize_tool_plan(parsed, query, available_tool_names)
