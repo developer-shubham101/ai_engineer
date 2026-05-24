@@ -544,28 +544,91 @@ class AutoGenOrchestrator(IAgentOrchestrator):
     # Shared stream runner
     # ------------------------------------------------------------------
 
-    async def _run_team(self, team: RoundRobinGroupChat, task: str) -> tuple[str, List[Dict[str, Any]], set]:
-        steps, tools_used, final_result = [], set(), ""
+    async def _run_team(
+        self,
+        team: RoundRobinGroupChat,
+        task: str
+    ) -> tuple[str, List[Dict[str, Any]], set]:
+
+        steps = []
+        tools_used = set()
+
+        final_result = ""
+        last_non_empty_message = ""
+
         step_index = 0
+
         async for message in team.run_stream(task=task):
-            if hasattr(message, "content"):
-                step_index += 1
-                content_str = str(message.content)
-                step: Dict[str, Any] = {
-                    "step": step_index,
-                    "agent": getattr(message, "source", "unknown"),
-                    "content": content_str,
-                    "type": "tool_call" if (hasattr(message, "tool_calls") and message.tool_calls) else "reasoning",
-                }
-                if hasattr(message, "tool_calls") and message.tool_calls:
-                    step["tools_called"] = [
-                        tc.name if hasattr(tc, "name") else str(tc)
-                        for tc in message.tool_calls
-                    ]
-                    for tc in message.tool_calls:
-                        tools_used.add(tc.name if hasattr(tc, "name") else str(tc))
-                steps.append(step)
-                final_result = content_str
+
+            # -------------------------------------------------
+            # Skip messages without content
+            # -------------------------------------------------
+
+            if not hasattr(message, "content"):
+                continue
+
+            content = message.content
+
+            if content is None:
+                continue
+
+            content_str = str(content).strip()
+
+            # -------------------------------------------------
+            # Skip empty chunks
+            # -------------------------------------------------
+
+            if not content_str:
+                continue
+
+            step_index += 1
+
+            step: Dict[str, Any] = {
+                "step": step_index,
+                "agent": getattr(message, "source", "unknown"),
+                "content": content_str,
+                "type": (
+                    "tool_call"
+                    if hasattr(message, "tool_calls")
+                    and message.tool_calls
+                    else "reasoning"
+                ),
+            }
+
+            # -------------------------------------------------
+            # Track tool calls
+            # -------------------------------------------------
+
+            if hasattr(message, "tool_calls") and message.tool_calls:
+
+                step["tools_called"] = []
+
+                for tc in message.tool_calls:
+
+                    tool_name = (
+                        tc.name
+                        if hasattr(tc, "name")
+                        else str(tc)
+                    )
+
+                    step["tools_called"].append(tool_name)
+
+                    tools_used.add(tool_name)
+
+            steps.append(step)
+
+            # -------------------------------------------------
+            # Save last valid response
+            # -------------------------------------------------
+
+            last_non_empty_message = content_str
+
+        # -----------------------------------------------------
+        # Final fallback safety
+        # -----------------------------------------------------
+
+        final_result = last_non_empty_message
+
         return final_result, steps, tools_used
 
     # ------------------------------------------------------------------
