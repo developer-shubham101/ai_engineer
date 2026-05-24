@@ -1,6 +1,7 @@
 """AutoGen-based agent orchestrator for multi-agent conversations using AutoGen v0.4."""
 
 import asyncio
+import inspect
 import json
 import logging
 import re
@@ -265,9 +266,26 @@ class AutoGenOrchestrator(IAgentOrchestrator):
                 logger.warning("AutoGen: unknown tool '%s' requested, skipping", name)
         return tools
 
-    def _resolve_named_tools(self, names: List[str]) -> List[Callable]:
+    def _resolve_agent_tools(self, names: List[str]) -> List[Callable]:
         registry = _register_tool_builders()
-        return [registry[name] for name in names if name in registry]
+        agent_tools = []
+        for name in names:
+            func = registry.get(name)
+            if not func:
+                continue
+
+            def make_tool(tool_name: str, tool_func: Callable) -> Callable:
+                def agent_tool(**kwargs):
+                    return tool_func(**kwargs)
+
+                agent_tool.__name__ = tool_name
+                agent_tool.__doc__ = inspect.getdoc(tool_func) or ""
+                agent_tool.__signature__ = inspect.signature(tool_func)
+                agent_tool.__annotations__ = getattr(tool_func, "__annotations__", {})
+                return agent_tool
+
+            agent_tools.append(make_tool(name, func))
+        return agent_tools
 
     def _tool_cache_key(self, tool_name: str, args: Dict[str, Any]) -> str:
         return f"{tool_name}:{json.dumps(args, sort_keys=True, default=str)}"
@@ -278,98 +296,179 @@ class AutoGenOrchestrator(IAgentOrchestrator):
     def _cache_tool_result(self, key: str, result: Dict[str, Any]) -> None:
         self._tool_cache[key] = result
 
-    def _classify_intent(self, query: str) -> tuple[str, float]:
-        normalized = query.lower()
-        if any(term in normalized for term in ["news", "latest", "headline", "breaking"]):
-            return "NEWS_QUERY", 0.95
-        if any(term in normalized for term in ["bitcoin", "ethereum", "crypto", "btc", "eth", "doge"]):
-            return "CRYPTO_QUERY", 0.92
-        if any(term in normalized for term in ["weather", "temperature", "forecast", "rain", "sunny", "cloudy"]):
-            return "WEATHER_QUERY", 0.92
-        if any(term in normalized for term in ["stock", "ticker", "share", "dow", "nasdaq", "sp500", "compare"]):
-            if any(term in normalized for term in ["chart", "graph", "trend", "history", "5 year", "5-year", "year", "month"]):
-                return "STOCK_CHART_QUERY", 0.94
-            return "STOCK_QUERY", 0.90
-        if any(term in normalized for term in ["chart", "graph", "trend", "history"]):
-            return "STOCK_CHART_QUERY", 0.85
-        return "GENERAL_QUERY", 0.70
+    def _build_tool_catalog(self, available_tool_names: List[str]) -> List[Dict[str, Any]]:
+        registry = _register_tool_builders()
+        catalog = []
+        for name in available_tool_names:
+            func = registry.get(name)
+            if not func:
+                continue
+            signature = inspect.signature(func)
+            parameters = []
+            for param_name, param in signature.parameters.items():
+                required = param.default is inspect.Parameter.empty
+                parameters.append({
+                    "name": param_name,
+                    "required": required,
+                    "default": None if required else param.default,
+                })
+            catalog.append({
+                "name": name,
+                "description": inspect.getdoc(func) or "",
+                "parameters": parameters,
+            })
+        return catalog
 
-    def _extract_symbol(self, query: str) -> str:
-        normalized = query.upper()
-        symbols = [token for token in re.findall(r"\b[A-Z]{1,5}\b", normalized) if token not in {"THE", "AND", "FOR", "WITH", "WHAT", "SHOW", "LATEST", "PRICE", "STOCK", "NEWS", "CHART", "GRAPH", "TREND", "HISTORY"}]
-        if symbols:
-            return symbols[0]
-        if "google" in normalized:
-            return "GOOGL"
-        if "apple" in normalized:
-            return "AAPL"
-        if "microsoft" in normalized:
-            return "MSFT"
-        return normalized.strip()
+    def _extract_json_object(self, text: str) -> Optional[Dict[str, Any]]:
+        try:
+            parsed = json.loads(text)
+            return parsed if isinstance(parsed, dict) else None
+        except json.JSONDecodeError:
+            pass
 
-    def _extract_crypto_symbol(self, query: str) -> str:
-        normalized = query.lower()
-        if "bitcoin" in normalized or "btc" in normalized:
-            return "BTC-USD"
-        if "ethereum" in normalized or "eth" in normalized:
-            return "ETH-USD"
-        symbol = self._extract_symbol(query)
-        if symbol and "-" not in symbol:
-            return f"{symbol}-USD"
-        return symbol
+        fenced = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", text, re.DOTALL)
+        if fenced:
+            try:
+                parsed = json.loads(fenced.group(1))
+                return parsed if isinstance(parsed, dict) else None
+            except json.JSONDecodeError:
+                pass
 
-    def _extract_city(self, query: str) -> str:
-        if " in " in query.lower():
-            parts = [p.strip() for p in query.lower().split(" in ") if p.strip()]
-            if len(parts) > 1:
-                city_fragment = parts[-1].split("?")[0].strip()
-                return city_fragment.title()
-        return query.strip().title()
+        start = text.find("{")
+        end = text.rfind("}")
+        if start != -1 and end != -1 and end > start:
+            try:
+                parsed = json.loads(text[start:end + 1])
+                return parsed if isinstance(parsed, dict) else None
+            except json.JSONDecodeError:
+                return None
+        return None
 
-    def _extract_period(self, query: str) -> str:
-        normalized = query.lower()
-        if "5 year" in normalized or "5-year" in normalized:
-            return "5y"
-        if "1 year" in normalized or "1-year" in normalized:
-            return "1y"
-        if "6 month" in normalized or "6-month" in normalized:
-            return "6mo"
-        if "3 month" in normalized or "3-month" in normalized:
-            return "3mo"
-        if "30 day" in normalized or "30-day" in normalized:
-            return "30d"
-        return "1y"
+    def _fallback_tool_plan(self, query: str, available_tool_names: List[str]) -> Dict[str, Any]:
+        tool_calls = []
+        if "web_search" in available_tool_names:
+            tool_calls.append({"name": "web_search", "args": {"query": query}})
+        return {
+            "intent": "GENERAL_QUERY",
+            "confidence": 0.0,
+            "tool_calls": tool_calls,
+            "routing_source": "fallback",
+        }
 
-    def _select_tools_for_query(self, query: str) -> List[str]:
-        intent, _confidence = self._classify_intent(query)
-        normalized = query.lower()
-        chart_requested = any(term in normalized for term in ["chart", "graph", "trend", "history"])
+    def _normalize_tool_plan(
+        self,
+        raw_plan: Dict[str, Any],
+        query: str,
+        available_tool_names: List[str],
+    ) -> Dict[str, Any]:
+        registry = _register_tool_builders()
+        intent = str(raw_plan.get("intent") or "GENERAL_QUERY").upper()
+        try:
+            confidence = float(raw_plan.get("confidence", 0.75))
+        except (TypeError, ValueError):
+            confidence = 0.75
+        confidence = max(0.0, min(confidence, 1.0))
 
-        if intent == "WEATHER_QUERY":
-            selected = ["get_weather"]
-            if chart_requested:
-                selected.append("generate_chart")
-            return selected
+        raw_tool_calls = raw_plan.get("tool_calls") or raw_plan.get("tools") or []
+        normalized_calls = []
+        for item in raw_tool_calls:
+            if isinstance(item, str):
+                name, args = item, {}
+            elif isinstance(item, dict):
+                name = item.get("name") or item.get("tool")
+                args = item.get("args") or item.get("arguments") or {}
+            else:
+                continue
 
-        if intent == "STOCK_CHART_QUERY":
-            return ["get_stock_history", "generate_stock_chart"]
+            if name not in available_tool_names or name not in registry:
+                continue
+            if not isinstance(args, dict):
+                args = {}
 
-        if intent == "STOCK_QUERY":
-            selected = ["get_stock_price"]
-            if chart_requested:
-                selected = ["get_stock_history", "generate_stock_chart"]
-            return selected
+            signature = inspect.signature(registry[name])
+            allowed_args = {key: value for key, value in args.items() if key in signature.parameters}
 
-        if intent == "CRYPTO_QUERY":
-            selected = ["get_crypto_price"]
-            if chart_requested:
-                selected.append("generate_chart")
-            return selected
+            if name == "web_search":
+                allowed_args.setdefault("query", query)
+            elif name == "scrape_url" and not allowed_args.get("url"):
+                url_match = re.search(r"https?://[^\s)>\]]+", query)
+                if not url_match:
+                    continue
+                allowed_args["url"] = url_match.group(0).rstrip(".,")
 
-        if intent == "NEWS_QUERY":
-            return ["web_search", "scrape_url"]
+            missing_required = [
+                param_name
+                for param_name, param in signature.parameters.items()
+                if param.default is inspect.Parameter.empty and param_name not in allowed_args
+            ]
+            if missing_required:
+                logger.warning(
+                    "AutoGen router skipped tool '%s'; missing args=%s",
+                    name, missing_required,
+                )
+                continue
+            normalized_calls.append({"name": name, "args": allowed_args})
 
-        return ["web_search"]
+        if not normalized_calls:
+            return self._fallback_tool_plan(query, available_tool_names)
+
+        return {
+            "intent": intent,
+            "confidence": confidence,
+            "tool_calls": normalized_calls,
+            "routing_source": "llm",
+        }
+
+    async def _select_smart_assistant_tools(
+        self,
+        query: str,
+        available_tool_names: List[str],
+    ) -> tuple[Dict[str, Any], List[Dict[str, Any]]]:
+        """Agent 1 — Tool Selector: decides which tools to call and with what args.
+        Max 2 steps. Returns (route_plan, selector_steps).
+        """
+        if not available_tool_names:
+            return (
+                {"intent": "GENERAL_QUERY", "confidence": 0.0, "tool_calls": [], "routing_source": "none"},
+                [],
+            )
+
+        catalog = self._build_tool_catalog(available_tool_names)
+        selector = AssistantAgent(
+            name="ToolSelector",
+            system_message=(
+                "You are a tool selector. Analyse the user query and decide which tools are needed "
+                "with exact arguments. Return ONLY valid JSON — no prose, no markdown fences.\n"
+                'JSON shape: {"intent":"SHORT_INTENT","confidence":0.9,'
+                '"tool_calls":[{"name":"tool_name","args":{"arg":"value"}}]}\n'
+                "Rules:\n"
+                "- Use only tools from the catalog.\n"
+                "- Prefer specific tools over web_search when a direct tool fits.\n"
+                "- Use scrape_url only when a URL is in the query.\n"
+                "- Never select save/report tools."
+            ),
+            model_client=self.model_client,
+        )
+        selector_team = RoundRobinGroupChat(
+            participants=[selector],
+            termination_condition=MaxMessageTermination(max_messages=2),
+        )
+        selector_task = (
+            f"Tool catalog:\n{json.dumps(catalog, indent=2, default=str)}\n\n"
+            f"User query: {query}\n\n"
+            "Return only the JSON tool plan."
+        )
+
+        try:
+            selector_result, selector_steps, _ = await self._run_team(selector_team, selector_task)
+            parsed = self._extract_json_object(selector_result)
+            if not parsed:
+                raise ValueError(f"Selector did not return JSON: {selector_result!r}")
+            route_plan = self._normalize_tool_plan(parsed, query, available_tool_names)
+            return route_plan, selector_steps
+        except Exception as exc:
+            logger.warning("AutoGen selector failed; falling back: %s", exc, exc_info=True)
+            return self._fallback_tool_plan(query, available_tool_names), []
 
     async def _execute_tool(self, tool_name: str, func: Callable, args: Dict[str, Any]) -> Dict[str, Any]:
         cache_key = self._tool_cache_key(tool_name, args)
@@ -387,70 +486,51 @@ class AutoGenOrchestrator(IAgentOrchestrator):
             self._cache_tool_result(cache_key, result)
         return {"tool": tool_name, "args": args, "result": result, "duration_ms": duration_ms, "cached": False}
 
-    async def _execute_selected_tools(self, query: str, tool_names: List[str]) -> List[Dict[str, Any]]:
+    async def _execute_tool_calls(self, tool_calls: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         registry = _register_tool_builders()
-        if not tool_names:
-            return []
-
-        tool_plan = []
-        if "web_search" in tool_names and "scrape_url" in tool_names:
-            # Search first, then scrape the top result if available.
-            web_task = await self._execute_tool("web_search", registry["web_search"], {"query": query})
-            tool_plan.append(web_task)
-            top_url = None
-            if web_task["result"].get("status") == "success":
-                first_result = web_task["result"].get("results", [])
-                if first_result:
-                    top_url = first_result[0].get("url")
-            if top_url:
-                scrape_task = await self._execute_tool("scrape_url", registry["scrape_url"], {"url": top_url})
-                tool_plan.append(scrape_task)
-            return tool_plan
-
-        if "get_stock_history" in tool_names and "generate_stock_chart" in tool_names:
-            symbol = self._extract_symbol(query)
-            period = self._extract_period(query)
-            history_task = await self._execute_tool("get_stock_history", registry["get_stock_history"], {"symbol": symbol, "period": period})
-            tool_plan.append(history_task)
-            chart_task = await self._execute_tool("generate_stock_chart", registry["generate_stock_chart"], {"symbol": symbol, "period": period})
-            tool_plan.append(chart_task)
-            return tool_plan
-
         tasks = []
-        for tool_name in tool_names:
-            if tool_name == "get_stock_price":
-                args = {"symbol": self._extract_symbol(query)}
-            elif tool_name == "get_crypto_price":
-                args = {"symbol": self._extract_crypto_symbol(query)}
-            elif tool_name == "get_weather":
-                args = {"city": self._extract_city(query)}
-            elif tool_name == "generate_chart":
-                args = {"title": query, "data": [{"x": "sample", "y": 1}, {"x": "sample2", "y": 2}], "chart_type": "line"}
-            else:
-                args = {"query": query}
-            tasks.append(self._execute_tool(tool_name, registry[tool_name], args))
-
+        for tool_call in tool_calls:
+            tool_name = tool_call["name"]
+            func = registry.get(tool_name)
+            if not func:
+                continue
+            tasks.append(self._execute_tool(tool_name, func, tool_call.get("args", {})))
+        if not tasks:
+            return []
         results = await asyncio.gather(*tasks)
         return list(results)
 
-    def _build_summary_prompt(self, query: str, intent: str, tool_results: List[Dict[str, Any]]) -> str:
-        steps = []
-        for result in tool_results:
-            summary = {
-                "tool": result["tool"],
-                "args": result["args"],
-                "duration_ms": result["duration_ms"],
-                "cached": result["cached"],
-                "result": result["result"],
-            }
-            steps.append(summary)
-        return (
-            "You are a smart assistant. Summarize the user request and tool results in a concise, structured answer. "
-            f"User query: {query}\n"
-            f"Detected intent: {intent}\n"
-            f"Tool results: {json.dumps(steps, indent=2, default=str)}\n"
-            "Only use the tool results to answer. Return a final recommendation and short summary."
+    async def _execute_smart_assistant_tools_with_agent(
+        self,
+        query: str,
+        tool_calls: List[Dict[str, Any]],
+        selected_tool_names: List[str],
+    ) -> tuple[str, List[Dict[str, Any]], set]:
+        """Agent 2 — Tool Executor: runs the selected tools and returns raw results."""
+        selected_tools = self._resolve_agent_tools(selected_tool_names)
+        if not selected_tools:
+            return "[]", [], set()
+
+        executor = AssistantAgent(
+            name="ToolExecutor",
+            system_message=(
+                "You are a tool executor. Call each tool exactly as specified with the given arguments. "
+                "Do not add or skip tools. After all calls complete, return a compact JSON array: "
+                '[{"tool":"name","args":{},"result":{}}].'
+            ),
+            model_client=self.model_client,
+            tools=selected_tools,
         )
+        executor_team = RoundRobinGroupChat(
+            participants=[executor],
+            termination_condition=MaxMessageTermination(max_messages=max(3, len(tool_calls) + 2)),
+        )
+        executor_task = (
+            f"User query: {query}\n\n"
+            f"Execute these tool calls:\n{json.dumps(tool_calls, indent=2, default=str)}\n\n"
+            "Return JSON results only."
+        )
+        return await self._run_team(executor_team, executor_task)
 
     def _get_research_tools(self, tools: List[Callable]) -> List[Callable]:
         """Return only data-gathering tools (excludes save_text_file)."""
@@ -588,62 +668,92 @@ class AutoGenOrchestrator(IAgentOrchestrator):
         )
 
     async def _execute_smart_assistant_workflow(self, query: str, tools: List[Callable], max_steps: int) -> AgentResponse:
-        """Smart assistant workflow that routes tools based on intent and summarizes results."""
-        intent, confidence = self._classify_intent(query)
-        selected_tool_names = self._select_tools_for_query(query)
-        if tools:
-            available_names = [name for name, func in _register_tool_builders().items() if func in tools]
-            selected_tool_names = [name for name in selected_tool_names if name in available_names]
+        """
+        3-agent smart assistant pipeline:
+          Agent 1 (ToolSelector)  — decides which tools to call (max 2 steps)
+          Agent 2 (ToolExecutor)  — executes the selected tools
+          Agent 3 (Summarizer)    — summarizes results (max = user-defined max_steps)
+        """
+        registry = _register_tool_builders()
+        available_tool_names = [
+            name for name, func in registry.items()
+            if (not tools or func in tools) and name != "save_research_report"
+        ]
 
-        if not selected_tool_names:
+        # ── Agent 1: Tool Selector ────────────────────────────────────────────
+        route_plan, selector_steps = await self._select_smart_assistant_tools(query, available_tool_names)
+        intent = route_plan["intent"]
+        confidence = route_plan["confidence"]
+        tool_calls = route_plan["tool_calls"]
+        selected_tool_names = [tc["name"] for tc in tool_calls]
+
+        if not tool_calls and "web_search" in available_tool_names:
+            tool_calls = [{"name": "web_search", "args": {"query": query}}]
             selected_tool_names = ["web_search"]
 
-        tool_results = await self._execute_selected_tools(query, selected_tool_names)
-        tool_steps = []
-        for index, tool_result in enumerate(tool_results, start=1):
-            tool_steps.append({
-                "step": index,
-                "tool": tool_result["tool"],
-                "args": tool_result["args"],
-                "output": tool_result["result"],
-                "duration_ms": tool_result["duration_ms"],
-                "cached": tool_result["cached"],
-            })
+        if not selector_steps:
+            selector_steps = [{
+                "step": 1,
+                "agent": "ToolSelector",
+                "content": json.dumps(
+                    {"intent": intent, "confidence": confidence,
+                     "routing_source": route_plan.get("routing_source"),
+                     "tool_calls": tool_calls},
+                    default=str,
+                ),
+                "type": "tool_routing",
+            }]
 
-        assistant = AssistantAgent(
-            name="SmartAssistant",
+        # ── Agent 2: Tool Executor ────────────────────────────────────────────
+        executor_result, executor_steps, executor_tools_used = (
+            await self._execute_smart_assistant_tools_with_agent(query, tool_calls, selected_tool_names)
+        )
+
+        # ── Agent 3: Summarizer ───────────────────────────────────────────────
+        summarizer = AssistantAgent(
+            name="Summarizer",
             system_message=(
-                "You are a smart assistant summarizer. Use only the structured tool results provided below. "
-                "Do not call any additional tools. Provide a concise answer, note the detected intent, and mention the tools used."
+                "You are the final assistant. Tool results are already provided — do not call any tools. "
+                "Summarize the results clearly and concisely. "
+                "When the answer contains multiple independent facts (e.g. weather + stock price), "
+                "return a JSON object; otherwise return plain text."
             ),
             model_client=self.model_client,
         )
-
-        team = RoundRobinGroupChat(
-            participants=[assistant],
-            termination_condition=MaxMessageTermination(max_messages=max_steps)
+        summarizer_team = RoundRobinGroupChat(
+            participants=[summarizer],
+            termination_condition=MaxMessageTermination(max_messages=max_steps),
         )
-
-        final_result, summary_steps, summary_tools_used = await self._run_team(
-            team,
-            self._build_summary_prompt(query, intent, tool_results)
+        summarizer_task = (
+            f"User query: {query}\n"
+            f"Detected intent: {intent}\n"
+            f"Tools used: {json.dumps(selected_tool_names)}\n"
+            f"Tool results:\n{executor_result}"
         )
+        final_result, summary_steps, summary_tools_used = await self._run_team(summarizer_team, summarizer_task)
 
-        all_steps = tool_steps + summary_steps
-        tools_used = {step["tool"] for step in tool_steps}
+        # ── Merge steps with sequential numbering ─────────────────────────────
+        pre_summary = selector_steps + executor_steps
+        for i, step in enumerate(pre_summary, start=1):
+            step["step"] = i
+        for step in summary_steps:
+            step["step"] = step.get("step", 0) + len(pre_summary)
+
+        tools_used = set(executor_tools_used) or set(selected_tool_names)
         tools_used.update(summary_tools_used)
 
         return AgentResponse(
             answer=final_result,
-            steps=all_steps,
+            steps=pre_summary + summary_steps,
             tools_used=list(tools_used),
             final_step=True,
             debug_info={
                 "intent": intent,
                 "confidence": confidence,
                 "selected_tools": selected_tool_names,
-                "tool_count": len(tool_results),
-            }
+                "routing_source": route_plan.get("routing_source"),
+                "tool_calls": tool_calls,
+            },
         )
 
     # ------------------------------------------------------------------
@@ -669,10 +779,26 @@ class AutoGenOrchestrator(IAgentOrchestrator):
         "WEATHER_TRAVEL":      ["get_weather", "search_places"],
         "RESTAURANT_SEARCH":   ["search_restaurants"],
         "TRANSPORT_QUERY":     ["get_local_transport_info", "get_geo_distance"],
-        "LOCAL_ATTRACTIONS":   ["search_places", "get_weather", "web_search"],
+        "LOCAL_ATTRACTIONS":   ["search_places", "get_weather"],
         "BUDGET_TRAVEL":       ["estimate_trip_budget", "search_hotels", "search_flights", "get_weather", "get_currency_exchange"],
         "ITINERARY_PLANNING":  ["generate_itinerary", "search_places", "get_weather", "estimate_trip_budget", "get_geo_distance"],
         "GENERAL_TRAVEL_QUERY": ["generate_trip_summary", "get_weather", "search_places", "estimate_trip_budget"],
+    }
+
+    _TRAVEL_TOOL_NAMES: Set[str] = {
+        "search_flights",
+        "search_hotels",
+        "estimate_trip_budget",
+        "search_places",
+        "search_restaurants",
+        "generate_itinerary",
+        "get_local_transport_info",
+        "get_distance_between_places",
+        "generate_trip_summary",
+        "get_currency_exchange",
+        "get_geo_distance",
+        "get_weather",
+        # TODO: Add web_search/scrape_url back later as an optional travel enrichment layer.
     }
 
     def _classify_travel_intent(self, query: str) -> str:
@@ -805,9 +931,204 @@ class AutoGenOrchestrator(IAgentOrchestrator):
     def _select_travel_tools(self, query: str) -> tuple[str, List[str]]:
         """Return (intent, tool_names) for the query."""
         intent = self._classify_travel_intent(query)
-        tools = self._TRAVEL_INTENT_TOOLS.get(intent, ["web_search"])
+        tools = self._TRAVEL_INTENT_TOOLS.get(intent, ["generate_trip_summary", "get_weather", "search_places"])
+        tools = [name for name in tools if name in self._TRAVEL_TOOL_NAMES]
         logger.debug("TRAVEL_PLANNER: intent=%s | tools=%s", intent, tools)
         return intent, tools
+
+    def _normalize_travel_entities(self, raw_entities: Any, query: str) -> Dict[str, Any]:
+        entities = self._extract_travel_entities(query)
+        if not isinstance(raw_entities, dict):
+            return entities
+
+        for key in ["destination", "source", "budget_currency"]:
+            value = raw_entities.get(key)
+            if isinstance(value, str) and value.strip():
+                entities[key] = value.strip().title() if key != "budget_currency" else value.strip().upper()
+
+        for key in ["days", "budget", "travelers"]:
+            value = raw_entities.get(key)
+            if value in (None, ""):
+                continue
+            try:
+                entities[key] = int(str(value).replace(",", ""))
+            except (TypeError, ValueError):
+                continue
+
+        preferences = raw_entities.get("preferences")
+        if isinstance(preferences, list):
+            entities["preferences"] = [str(pref).strip() for pref in preferences if str(pref).strip()]
+        elif isinstance(preferences, str) and preferences.strip():
+            entities["preferences"] = [pref.strip() for pref in preferences.split(",") if pref.strip()]
+
+        return entities
+
+    def _travel_args_for_tool(self, tool_name: str, entities: Dict[str, Any], query: str) -> Dict[str, Any]:
+        dest = entities["destination"]
+        days = str(entities["days"])
+        budget = entities.get("budget")
+        budget_str = str(budget) if budget else ""
+        source = entities.get("source") or "Delhi"
+        travelers = str(entities["travelers"])
+        preferences = entities.get("preferences", [])
+
+        if tool_name == "search_flights":
+            return {"origin": source, "destination": dest, "budget": budget_str}
+        if tool_name == "search_hotels":
+            return {"destination": dest, "budget": budget_str, "days": days}
+        if tool_name == "estimate_trip_budget":
+            return {"destination": dest, "days": days, "travelers": travelers}
+        if tool_name == "search_places":
+            category = "beach" if "beach" in preferences else "tourist"
+            return {"destination": dest, "category": category}
+        if tool_name == "search_restaurants":
+            return {"destination": dest}
+        if tool_name == "generate_itinerary":
+            return {"destination": dest, "days": days, "budget": budget_str}
+        if tool_name == "get_local_transport_info":
+            return {"destination": dest}
+        if tool_name in {"get_distance_between_places", "get_geo_distance"}:
+            return {"origin": source, "destination": dest}
+        if tool_name == "generate_trip_summary":
+            return {"destination": dest, "days": days, "budget": budget_str}
+        if tool_name == "get_weather":
+            return {"city": dest}
+        if tool_name == "get_currency_exchange":
+            return {
+                "from_currency": entities.get("budget_currency", "INR"),
+                "to_currency": "INR",
+                "amount": float(budget or 1),
+            }
+        return {"query": query}
+
+    def _fallback_travel_plan(self, query: str, available_tool_names: List[str]) -> Dict[str, Any]:
+        intent, selected_tool_names = self._select_travel_tools(query)
+        selected_tool_names = [name for name in selected_tool_names if name in available_tool_names]
+        if not selected_tool_names and "generate_trip_summary" in available_tool_names:
+            selected_tool_names = ["generate_trip_summary"]
+
+        entities = self._extract_travel_entities(query)
+        tool_calls = [
+            {"name": name, "args": self._travel_args_for_tool(name, entities, query)}
+            for name in selected_tool_names
+        ]
+
+        return {
+            "intent": intent,
+            "confidence": 0.70,
+            "entities": entities,
+            "tool_calls": tool_calls,
+            "routing_source": "fallback",
+        }
+
+    def _normalize_travel_tool_plan(
+        self,
+        raw_plan: Dict[str, Any],
+        query: str,
+        available_tool_names: List[str],
+    ) -> Dict[str, Any]:
+        registry = _register_tool_builders()
+        entities = self._normalize_travel_entities(raw_plan.get("entities"), query)
+        intent = str(raw_plan.get("intent") or "GENERAL_TRAVEL_QUERY").upper()
+        try:
+            confidence = float(raw_plan.get("confidence", 0.75))
+        except (TypeError, ValueError):
+            confidence = 0.75
+        confidence = max(0.0, min(confidence, 1.0))
+
+        raw_tool_calls = raw_plan.get("tool_calls") or raw_plan.get("tools") or []
+        normalized_calls = []
+        for item in raw_tool_calls:
+            if isinstance(item, str):
+                name, args = item, {}
+            elif isinstance(item, dict):
+                name = item.get("name") or item.get("tool")
+                args = item.get("args") or item.get("arguments") or {}
+            else:
+                continue
+
+            if name not in available_tool_names or name not in self._TRAVEL_TOOL_NAMES or name not in registry:
+                continue
+            if not isinstance(args, dict):
+                args = {}
+
+            signature = inspect.signature(registry[name])
+            default_args = self._travel_args_for_tool(name, entities, query)
+            allowed_args = {key: value for key, value in args.items() if key in signature.parameters}
+            for key, value in default_args.items():
+                allowed_args.setdefault(key, value)
+
+            missing_required = [
+                param_name
+                for param_name, param in signature.parameters.items()
+                if param.default is inspect.Parameter.empty and param_name not in allowed_args
+            ]
+            if missing_required:
+                logger.warning(
+                    "AutoGen travel router skipped tool '%s'; missing args=%s",
+                    name, missing_required,
+                )
+                continue
+            normalized_calls.append({"name": name, "args": allowed_args})
+
+        if not normalized_calls:
+            return self._fallback_travel_plan(query, available_tool_names)
+
+        return {
+            "intent": intent,
+            "confidence": confidence,
+            "entities": entities,
+            "tool_calls": normalized_calls,
+            "routing_source": "llm",
+        }
+
+    async def _plan_smart_travel_tools(self, query: str, available_tool_names: List[str]) -> Dict[str, Any]:
+        if not available_tool_names:
+            return {
+                "intent": "GENERAL_TRAVEL_QUERY",
+                "confidence": 0.0,
+                "entities": self._extract_travel_entities(query),
+                "tool_calls": [],
+                "routing_source": "none",
+            }
+
+        catalog = self._build_tool_catalog(available_tool_names)
+        prompt = (
+            "You are a tool router for a smart travel planner. Extract travel entities, identify intent, "
+            "and choose the smallest useful set of travel tools with exact arguments.\n\n"
+            "Return only valid JSON with this shape:\n"
+            "{"
+            "\"intent\":\"SHORT_TRAVEL_INTENT\","
+            "\"confidence\":0.0,"
+            "\"entities\":{\"destination\":\"Goa\",\"source\":\"Delhi\",\"days\":3,\"budget\":20000,"
+            "\"budget_currency\":\"INR\",\"travelers\":1,\"preferences\":[\"beach\"]},"
+            "\"tool_calls\":[{\"name\":\"tool_name\",\"args\":{\"arg\":\"value\"}}]"
+            "}\n\n"
+            "Rules:\n"
+            "- Use only tools from the provided catalog.\n"
+            "- Do not use web_search or scrape_url. Web enrichment will be added later.\n"
+            "- Prefer travel-specific tools such as search_places, search_hotels, generate_itinerary, "
+            "estimate_trip_budget, get_weather, and transport/distance tools.\n"
+            "- If the user gives a non-INR budget, include get_currency_exchange.\n"
+            "- If origin is not specified, use a reasonable source only when needed by a selected tool.\n\n"
+            f"Tool catalog:\n{json.dumps(catalog, indent=2, default=str)}\n\n"
+            f"User query: {query}"
+        )
+
+        try:
+            from autogen_core.models import UserMessage
+
+            response = await self.model_client.create([
+                UserMessage(content=prompt, source="user")
+            ])
+            content = response.content if hasattr(response, "content") else str(response)
+            parsed = self._extract_json_object(str(content))
+            if not parsed:
+                raise ValueError(f"Travel router did not return JSON: {content!r}")
+            return self._normalize_travel_tool_plan(parsed, query, available_tool_names)
+        except Exception as exc:
+            logger.warning("AutoGen travel LLM router failed; falling back to keyword routing: %s", exc, exc_info=True)
+            return self._fallback_travel_plan(query, available_tool_names)
 
     async def _execute_travel_tools_parallel(
         self, tool_names: List[str], entities: Dict[str, Any]
@@ -867,13 +1188,12 @@ class AutoGenOrchestrator(IAgentOrchestrator):
                 args = {"destination": dest, "days": days, "budget": budget_str}
             elif name == "get_weather":
                 args = {"city": dest}
-            elif name == "web_search":
-                search_query = f"travel guide {dest}"
-                if "beach" in preferences:
-                    search_query = f"best beaches in {dest}"
-                elif "cold_weather" in preferences:
-                    search_query = f"cold weather destinations in {dest}"
-                args = {"query": search_query}
+            elif name == "get_currency_exchange":
+                args = {
+                    "from_currency": budget_currency,
+                    "to_currency": "INR",
+                    "amount": float(budget or 1),
+                }
             else:
                 args = {"destination": dest}
             tool_calls.append((name, registry[name], args))
@@ -893,17 +1213,40 @@ class AutoGenOrchestrator(IAgentOrchestrator):
         """Smart travel planner: classify intent → extract entities → run tools in
         parallel → hand structured results to an AssistantAgent for a final plan.
         """
-        # Step 1 + 2: intent & entities
-        intent, selected_tool_names = self._select_travel_tools(query)
-        entities = self._extract_travel_entities(query)
+        registry = _register_tool_builders()
+        if tools:
+            available_tool_names = [
+                name for name, func in registry.items()
+                if func in tools and name in self._TRAVEL_TOOL_NAMES
+            ]
+        else:
+            available_tool_names = [
+                name for name in self._TRAVEL_TOOL_NAMES
+                if name in registry
+            ]
+
+        route_plan = await self._plan_smart_travel_tools(query, available_tool_names)
+        intent = route_plan["intent"]
+        confidence = route_plan["confidence"]
+        entities = route_plan["entities"]
+        tool_calls = route_plan["tool_calls"]
+        selected_tool_names = [tool_call["name"] for tool_call in tool_calls]
+
+        if not tool_calls and "generate_trip_summary" in available_tool_names:
+            tool_calls = [{
+                "name": "generate_trip_summary",
+                "args": self._travel_args_for_tool("generate_trip_summary", entities, query),
+            }]
+            selected_tool_names = ["generate_trip_summary"]
 
         logger.info(
             "TRAVEL_PLANNER: intent=%s | dest=%s | days=%s | budget=%s | tools=%s",
             intent, entities["destination"], entities["days"], entities.get("budget"), selected_tool_names,
         )
 
-        # Step 3 + 4: parallel tool execution
-        tool_results = await self._execute_travel_tools_parallel(selected_tool_names, entities)
+        # Web scraping/search is intentionally excluded for now; add it back later as
+        # an optional enrichment step after the travel-specific tools are stable.
+        tool_results = await self._execute_tool_calls(tool_calls)
 
         # Build step records for the response
         tool_steps = [
@@ -919,6 +1262,17 @@ class AutoGenOrchestrator(IAgentOrchestrator):
         ]
 
         # Step 5: LLM aggregation — structured travel plan
+        budget_inr = None
+        for result in tool_results:
+            if result["tool"] != "get_currency_exchange":
+                continue
+            conversion = result["result"]
+            if isinstance(conversion, dict) and conversion.get("status") == "success":
+                converted_amount = conversion.get("converted_amount")
+                if converted_amount:
+                    budget_inr = int(converted_amount)
+                    break
+
         budget_display = ""
         if entities.get("budget"):
             if entities.get("budget_currency") == "INR":
@@ -979,6 +1333,7 @@ class AutoGenOrchestrator(IAgentOrchestrator):
             final_step=True,
             debug_info={
                 "intent": intent,
+                "confidence": confidence,
                 "origin": entities.get("source"),
                 "destination": entities["destination"],
                 "days": entities["days"],
@@ -987,5 +1342,7 @@ class AutoGenOrchestrator(IAgentOrchestrator):
                 "travelers": entities["travelers"],
                 "preferences": entities.get("preferences", []),
                 "selected_tools": selected_tool_names,
+                "routing_source": route_plan.get("routing_source"),
+                "tool_calls": tool_calls,
             },
         )
