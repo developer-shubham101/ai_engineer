@@ -1,8 +1,10 @@
+"""HTTP/SSE MCP client — connects to an external MCP server and exposes list_tools / call_tool / call_tools_parallel."""
 from __future__ import annotations
 
 import asyncio
 import json
 import logging
+import time
 from typing import Any, Dict, List
 
 from mcp import ClientSession
@@ -14,71 +16,91 @@ MCP_SERVER_URL = "http://localhost:8000/sse"
 
 
 class MCPClient:
-    """
-    HTTP/SSE MCP Client
+    """Thin async client over the MCP HTTP/SSE transport.
 
-    Connects to external MCP server running on port 8000.
+    All three public methods open a fresh SSE connection per call so the
+    client stays stateless and safe to share across concurrent requests.
     """
 
-    def __init__(self, server_url: str = MCP_SERVER_URL):
+    def __init__(self, server_url: str = MCP_SERVER_URL) -> None:
         self.server_url = server_url
+        logger.debug("[MCPClient] initialized server_url=%s", self.server_url)
+
+    # ------------------------------------------------------------------
+    # list_tools
+    # ------------------------------------------------------------------
 
     async def list_tools(self) -> List[Dict[str, Any]]:
+        """Fetch the tool catalog from the MCP server.
 
-        async with sse_client(self.server_url) as (read, write):
+        Returns a list of dicts compatible with build_tool_catalog() shape:
+            [{"name": str, "description": str, "parameters": [...]}]
+        """
+        logger.debug("[MCPClient.list_tools] connecting to %s", self.server_url)
+        try:
+            async with sse_client(self.server_url) as (read, write):
+                async with ClientSession(read, write) as session:
+                    await session.initialize()
+                    logger.debug("[MCPClient.list_tools] session initialized")
 
-            async with ClientSession(read, write) as session:
+                    response = await session.list_tools()
+                    logger.debug("[MCPClient.list_tools] raw tool count=%d", len(response.tools))
 
-                await session.initialize()
+                    catalog: List[Dict[str, Any]] = []
+                    for t in response.tools:
+                        params: List[Dict[str, Any]] = []
+                        if t.inputSchema and "properties" in t.inputSchema:
+                            required = t.inputSchema.get("required", [])
+                            for param_name, schema in t.inputSchema["properties"].items():
+                                params.append({
+                                    "name": param_name,
+                                    "required": param_name in required,
+                                    "default": schema.get("default"),
+                                    "description": schema.get("description", ""),
+                                })
+                        catalog.append({
+                            "name": t.name,
+                            "description": t.description or "",
+                            "parameters": params,
+                        })
+                        logger.debug(
+                            "[MCPClient.list_tools] tool=%s params=%d",
+                            t.name, len(params),
+                        )
 
-                response = await session.list_tools()
+                    logger.info("[MCPClient.list_tools] loaded %d tools from %s", len(catalog), self.server_url)
+                    return catalog
 
-                catalog = []
+        except Exception as exc:
+            logger.exception("[MCPClient.list_tools] failed to fetch tools from %s: %s", self.server_url, exc)
+            raise
 
-                for t in response.tools:
+    # ------------------------------------------------------------------
+    # call_tool
+    # ------------------------------------------------------------------
 
-                    params = []
+    async def call_tool(self, name: str, args: Dict[str, Any]) -> Any:
+        """Call a single tool on the MCP server and return its parsed result.
 
-                    if t.inputSchema and "properties" in t.inputSchema:
+        Returns a dict on success, a plain string if the response is not
+        valid JSON, or an empty dict if the server returned no content.
+        """
+        logger.debug("[MCPClient.call_tool] START tool=%s args=%s", name, args)
+        start = time.perf_counter()
 
-                        required = t.inputSchema.get("required", [])
+        try:
+            async with sse_client(self.server_url) as (read, write):
+                async with ClientSession(read, write) as session:
+                    await session.initialize()
+                    response = await session.call_tool(name, args)
 
-                        for param_name, schema in t.inputSchema["properties"].items():
-
-                            params.append({
-                                "name": param_name,
-                                "required": param_name in required,
-                                "default": schema.get("default"),
-                                "description": schema.get("description", ""),
-                            })
-
-                    catalog.append({
-                        "name": t.name,
-                        "description": t.description or "",
-                        "parameters": params,
-                    })
-
-                logger.info("[MCP] Loaded %d tools", len(catalog))
-
-                return catalog
-
-    async def call_tool(
-        self,
-        name: str,
-        args: Dict[str, Any],
-    ) -> Any:
-
-        logger.info("[MCP] Calling tool=%s args=%s", name, args)
-
-        async with sse_client(self.server_url) as (read, write):
-
-            async with ClientSession(read, write) as session:
-
-                await session.initialize()
-
-                response = await session.call_tool(name, args)
-
-                if response.content:
+                    if not response.content:
+                        duration_ms = round((time.perf_counter() - start) * 1000, 2)
+                        logger.warning(
+                            "[MCPClient.call_tool] tool=%s returned empty content duration_ms=%s",
+                            name, duration_ms,
+                        )
+                        return {}
 
                     raw = (
                         response.content[0].text
@@ -87,53 +109,76 @@ class MCPClient:
                     )
 
                     try:
-                        return json.loads(raw)
+                        result = json.loads(raw)
+                    except json.JSONDecodeError:
+                        logger.debug(
+                            "[MCPClient.call_tool] tool=%s response is not JSON, returning raw string",
+                            name,
+                        )
+                        result = raw
 
-                    except Exception:
-                        return raw
+                    duration_ms = round((time.perf_counter() - start) * 1000, 2)
+                    logger.info(
+                        "[MCPClient.call_tool] DONE tool=%s duration_ms=%s result_type=%s",
+                        name, duration_ms, type(result).__name__,
+                    )
+                    return result
 
-                return {}
+        except Exception as exc:
+            duration_ms = round((time.perf_counter() - start) * 1000, 2)
+            logger.exception(
+                "[MCPClient.call_tool] FAILED tool=%s duration_ms=%s error=%s",
+                name, duration_ms, exc,
+            )
+            raise
+
+    # ------------------------------------------------------------------
+    # call_tools_parallel
+    # ------------------------------------------------------------------
 
     async def call_tools_parallel(
         self,
         tool_calls: List[Dict[str, Any]],
     ) -> List[Dict[str, Any]]:
+        """Execute multiple tool calls concurrently.
 
-        import time
+        Returns a list of result envelopes with the same shape as
+        execute_tool_calls() in utils/tool_utils.py:
+            {"tool": str, "args": dict, "result": Any, "duration_ms": float, "cached": False}
+        """
+        logger.debug("[MCPClient.call_tools_parallel] START count=%d tools=%s",
+                     len(tool_calls), [tc["name"] for tc in tool_calls])
 
-        async def _one(tc: Dict[str, Any]):
-
+        async def _one(tc: Dict[str, Any]) -> Dict[str, Any]:
+            name = tc["name"]
+            args = tc.get("args", {})
             start = time.perf_counter()
-
             try:
-
-                result = await self.call_tool(
-                    tc["name"],
-                    tc.get("args", {}),
-                )
-
+                result = await self.call_tool(name, args)
+                status = "success"
             except Exception as exc:
+                logger.error(
+                    "[MCPClient.call_tools_parallel] tool=%s FAILED error=%s", name, exc,
+                )
+                result = {"status": "error", "error": str(exc)}
+                status = "error"
 
-                logger.exception("Tool failed")
-
-                result = {
-                    "status": "error",
-                    "error": str(exc),
-                }
-
-            duration_ms = round(
-                (time.perf_counter() - start) * 1000,
-                2,
+            duration_ms = round((time.perf_counter() - start) * 1000, 2)
+            logger.debug(
+                "[MCPClient.call_tools_parallel] tool=%s status=%s duration_ms=%s",
+                name, status, duration_ms,
             )
-
             return {
-                "tool": tc["name"],
-                "args": tc.get("args", {}),
+                "tool": name,
+                "args": args,
                 "result": result,
                 "duration_ms": duration_ms,
                 "cached": False,
             }
 
-        return await asyncio.gather(
-            *[_one(tc) for tc in tool_calls]
+        results = list(await asyncio.gather(*[_one(tc) for tc in tool_calls]))
+        logger.info(
+            "[MCPClient.call_tools_parallel] DONE count=%d results=%s",
+            len(results), [r["tool"] for r in results],
         )
+        return results
