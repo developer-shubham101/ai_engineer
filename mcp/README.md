@@ -46,7 +46,7 @@ python server.py --inspect
 # or on a custom port:
 python server.py --inspect --port 9000
 ```
-Then open the [MCP Inspector](https://github.com/modelcontextprotocol/inspector) and connect to `http://127.0.0.1:4543/sse`.
+Then open the [MCP Inspector](https://github.com/modelcontextprotocol/inspector) and connect to `http://127.0.0.1:9000/sse`.
 
 ---
 

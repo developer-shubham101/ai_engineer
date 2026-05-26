@@ -27,7 +27,7 @@ from function_tools.tool_travel import (
     get_geo_distance,
 )
 
-mcp = FastMCP("ai-tools-server")
+mcp = FastMCP("ai-tools-server", port=4154)
 
 # Weather
 mcp.tool()(get_weather)
@@ -63,4 +63,6 @@ mcp.tool()(get_currency_exchange)
 mcp.tool()(get_geo_distance)
 
 if __name__ == "__main__":
-    mcp.run()
+    mcp.run(
+        transport="sse"
+    )

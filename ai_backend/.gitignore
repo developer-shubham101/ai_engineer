@@ -22,3 +22,4 @@ faiss_index.pkl
 logs/
 
 models/*
+tmp/*

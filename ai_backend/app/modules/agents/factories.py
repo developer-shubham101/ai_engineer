@@ -112,8 +112,6 @@ class AgentOrchestratorFactory:
 
             return CustomOrchestrator(llm_fn=llm_fn)
 
-        raise ValueError(f"Unknown orchestrator type: {orchestrator_type}")
-
         if orchestrator_type.lower() == "mcp":
             if not MCP_AVAILABLE:
                 raise ValueError("MCPOrchestrator not available (autogen not installed)")

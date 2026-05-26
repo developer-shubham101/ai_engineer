@@ -5,7 +5,7 @@ import json
 import logging
 from typing import Any, Callable, Dict, List, Tuple
 
-from .....interfaces import AgentResponse
+from interfaces import AgentResponse
 from ...utils import (
     build_tool_catalog, build_executor_steps, execute_tool_calls,
     extract_json_object, fallback_tool_plan, get_tool_registry,

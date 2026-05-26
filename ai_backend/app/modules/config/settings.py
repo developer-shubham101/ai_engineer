@@ -109,11 +109,11 @@ class Settings:
         self.CUSTOMLLM_API_KEY = os.getenv("CUSTOMLLM_API_KEY", os.getenv("COLABLLM_API_KEY"))
         
         # LlamaServer settings
-        self.LLAMASERVER_BASE_URL = os.getenv("LLAMASERVER_BASE_URL", "http://192.168.1.10:8080/v1")
+        self.LLAMASERVER_BASE_URL = os.getenv("LLAMASERVER_BASE_URL", "http://192.168.1.12:8080/v1")
         self.LLAMASERVER_MODEL_NAME = os.getenv("LLAMASERVER_MODEL_NAME", "mistral-7b-instruct-v0.2")
         
         # CrewAI settings
-        self.CREW_BASE_URL = os.getenv("CREW_BASE_URL", "http://192.168.1.10:8080")
+        self.CREW_BASE_URL = os.getenv("CREW_BASE_URL", "http://192.168.1.12:8080")
 
 
 # Global settings instance

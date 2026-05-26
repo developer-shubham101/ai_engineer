@@ -85,7 +85,7 @@ class MCPOrchestrator(IAgentOrchestrator):
             return AgentResponse(answer=f"Workflow failed: {exc}", steps=[], tools_used=[], final_step=True)
 
     # ------------------------------------------------------------------
-    # Internal helpers
+    # Internal helpers  
     # ------------------------------------------------------------------
 
     async def _get_catalog(self) -> List[Dict[str, Any]]:
