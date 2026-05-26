@@ -32,6 +32,24 @@ This spawns the server and opens a REPL:
 > quit
 ```
 
+## MCP Inspector
+
+**Option 1 — `mcp dev` (recommended, zero config):**
+```bash
+mcp dev server.py
+```
+This launches the server and opens the MCP Inspector UI automatically in your browser.
+
+**Option 2 — SSE mode (manual):**
+```bash
+python server.py --inspect
+# or on a custom port:
+python server.py --inspect --port 9000
+```
+Then open the [MCP Inspector](https://github.com/modelcontextprotocol/inspector) and connect to `http://127.0.0.1:4543/sse`.
+
+---
+
 ## Connect from Claude Desktop
 
 Add to `claude_desktop_config.json`:
