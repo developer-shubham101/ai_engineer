@@ -148,26 +148,36 @@ User Request → FastAPI Router → Container → Modular Services → Response
 - `emotion_providers.py` - Emotion detection from audio
 
 **🤖 Agents Module** (`app/modules/agents/`)
-- `interfaces.py` - Agent and tool interfaces following SOLID principles
-- `factories.py` - Factory pattern for tools and orchestrators
+- `interfaces.py` - Agent and tool interfaces (`IAgentOrchestrator`, `AgentRequest`, `AgentResponse`, `ITool`)
+- `factories.py` - `AgentOrchestratorFactory` — creates `autogen`, `custom`, or `mcp` orchestrator
 - `agent_runner.py` - Legacy LLM-loop runner (REGISTRY used by `run_agent()` only)
-- `tools.py` - ITool implementations for custom orchestrator
+- `tools.py` - ITool implementations (legacy, used by agent_runner only)
 - `utils.py` - Utility classes for mock data and formatting
 - `function_tools/` - Standalone callable tool implementations
   - `tool_web_search.py`, `tool_web_scraper.py`, `tool_stock.py`, `tool_weather.py`
   - `tool_chart.py`, `tool_file.py`, `tool_travel.py`
-- `orchestrators/custom/` - Custom single-agent orchestrator (keyword routing)
-- `orchestrators/autogen/` - AutoGen multi-agent orchestrator (split into modules)
-  - `autogen_orchestrator.py` - Thin dispatcher; delegates to workflow modules
+- `orchestrators/utils/` - **Shared utilities used by all three orchestrators**
   - `tool_registry.py` - Lazy `get_tool_registry()` mapping 21 tool names → callables
   - `tool_utils.py` - `resolve_tools`, `build_tool_catalog`, `execute_tool`, `execute_tool_calls`, cache helpers
   - `json_utils.py` - `extract_json_object` (fast-path → markdown block → generic → auto-repair)
-  - `plan_normalizer.py` - `normalize_tool_plan`, `normalize_travel_tool_plan`, shared `_normalize_plan_base`, fallback plans
+  - `plan_normalizer.py` - `normalize_tool_plan`, `normalize_travel_tool_plan`, `TRAVEL_TOOL_NAMES`, fallback plans
   - `step_utils.py` - `run_team`, `build_executor_steps`, `merge_steps`
-  - `workflows/debate.py` - 3-agent debate workflow
+  - `__init__.py` - Re-exports all of the above
+- `orchestrators/autogen/` - AutoGen multi-agent orchestrator (uses AutoGen v0.4 agents)
+  - `autogen_orchestrator.py` - Thin dispatcher; delegates to workflow modules
+  - `workflows/debate.py` - 3-agent debate (Advocate, Critic, Moderator)
   - `workflows/research.py` - 6-agent research pipeline
   - `workflows/smart_assistant.py` - ToolSelector → ToolExecutor → Summarizer
   - `workflows/smart_travel_planner.py` - TravelToolSelector → ToolExecutor → TravelPlanner
+- `orchestrators/custom/` - Pure-Python multi-agent orchestrator (no AutoGen dependency)
+  - `custom_orchestrator.py` - Thin dispatcher; same 4 workflows as AutoGen
+  - `workflows/debate.py` - 3-agent debate via sequential `llm_fn` calls
+  - `workflows/research.py` - 6-agent pipeline via sequential `llm_fn` calls
+  - `workflows/smart_assistant.py` - ToolSelector(llm_fn) → ToolExecutor → Summarizer(llm_fn)
+  - `workflows/smart_travel_planner.py` - TravelToolSelector(llm_fn) → ToolExecutor → TravelPlanner(llm_fn)
+- `orchestrators/mcp/` - MCP-backed orchestrator (AutoGen agents + MCP tool transport)
+  - `mcp_client.py` - `MCPClient` — `list_tools()`, `call_tool()`, `call_tools_parallel()`
+  - `mcp_orchestrator.py` - `smart_assistant` only; ToolSelector/Summarizer identical to AutoGen
 
 **⚙️ Config Module** (`app/modules/config/`)
 - `settings.py` - Environment and application settings
@@ -602,21 +612,35 @@ ai_backend/
 │   │   │   │   ├── tool_file.py
 │   │   │   │   └── tool_travel.py
 │   │   │   └── orchestrators/
-│   │   │       ├── custom/        # Keyword-routing single-agent orchestrator
-│   │   │       └── autogen/       # AutoGen multi-agent orchestrator
+│   │   │       ├── __init__.py
+│   │   │       ├── utils/                   # Shared utilities (all orchestrators)
+│   │   │       │   ├── __init__.py
+│   │   │       │   ├── tool_registry.py     # Lazy tool-name → callable map (21 tools)
+│   │   │       │   ├── tool_utils.py        # resolve_tools, build_tool_catalog, execute_tool_calls, cache
+│   │   │       │   ├── json_utils.py        # extract_json_object (4-stage fallback)
+│   │   │       │   ├── plan_normalizer.py   # normalize_tool_plan, normalize_travel_tool_plan, TRAVEL_TOOL_NAMES
+│   │   │       │   └── step_utils.py        # run_team, build_executor_steps, merge_steps
+│   │   │       ├── autogen/                 # AutoGen v0.4 orchestrator
+│   │   │       │   ├── __init__.py
+│   │   │       │   ├── autogen_orchestrator.py  # Thin dispatcher → WORKFLOW_REGISTRY
+│   │   │       │   └── workflows/
+│   │   │       │       ├── __init__.py
+│   │   │       │       ├── debate.py
+│   │   │       │       ├── research.py
+│   │   │       │       ├── smart_assistant.py
+│   │   │       │       └── smart_travel_planner.py
+│   │   │       ├── custom/                  # Pure-Python orchestrator (no AutoGen)
+│   │   │       │   ├── custom_orchestrator.py  # Thin dispatcher → WORKFLOW_REGISTRY
+│   │   │       │   └── workflows/
+│   │   │       │       ├── __init__.py
+│   │   │       │       ├── debate.py
+│   │   │       │       ├── research.py
+│   │   │       │       ├── smart_assistant.py
+│   │   │       │       └── smart_travel_planner.py
+│   │   │       └── mcp/                     # MCP-backed orchestrator
 │   │   │           ├── __init__.py
-│   │   │           ├── autogen_orchestrator.py  # Thin dispatcher
-│   │   │           ├── tool_registry.py         # Lazy tool-name → callable map
-│   │   │           ├── tool_utils.py            # Resolve, catalog, execute, cache
-│   │   │           ├── json_utils.py            # LLM output JSON extraction
-│   │   │           ├── plan_normalizer.py       # Tool plan validation & fallbacks
-│   │   │           ├── step_utils.py            # run_team, build_executor_steps, merge_steps
-│   │   │           └── workflows/
-│   │   │               ├── __init__.py
-│   │   │               ├── debate.py
-│   │   │               ├── research.py
-│   │   │               ├── smart_assistant.py
-│   │   │               └── smart_travel_planner.py
+│   │   │           ├── mcp_client.py        # MCPClient (list_tools, call_tool, call_tools_parallel)
+│   │   │           └── mcp_orchestrator.py  # smart_assistant only
 │   │   ├── core/            # Core business logic
 │   │   │   ├── document_manager.py # Document operations
 │   │   │   ├── version_manager.py  # Document versioning
@@ -757,48 +781,59 @@ Response: {
 **POST /api/agents/query** - Execute agent workflow
 ```json
 Request: {
-  "question": "What is the status of my tickets?",
-  "workflow": "debate",           // AutoGen only: debate, research (ignored for custom)
-  "tools": ["web_search", "get_stock_price"],  // empty = all available
+  "question": "What is Tesla stock price and weather in New York?",
+  "workflow": "smart_assistant",   // debate | research | smart_assistant | smart_travel_planner
+  "orchestrator_type": "autogen",  // autogen | custom | mcp
+  "tools": [],                     // empty = all available
   "max_steps": 5,
   "temperature": 0.1,
-  "orchestrator_type": "custom",  // custom | autogen
-  "conversation_id": "conv_xxx",
+  "provider": "local",
+  "conversation_id": null,
   "debug": false
 }
 Response: {
-  "answer": "Based on my analysis...",
-  "steps": [{"source": "autogen", "content": "Advocate: ..."}],
-  "tools_used": ["web_search"],
+  "answer": "Tesla (TSLA) is currently trading at $247.50...",
+  "steps": [
+    {"step": 1, "agent": "ToolSelector", "type": "tool_routing", "content": "{...}"},
+    {"step": 2, "agent": "ToolExecutor", "type": "tool_execution", "tool": "get_stock_price", "args": {"symbol": "TSLA"}, "duration_ms": 312.4, "cached": false},
+    {"step": 3, "agent": "Summarizer",   "type": "reasoning", "content": "Tesla is trading at..."}
+  ],
+  "tools_used": ["get_stock_price", "get_weather"],
   "available_tools": ["web_search", "scrape_url", ...],
+  "available_workflows": ["debate", "research", "smart_assistant", "smart_travel_planner"],
+  "orchestrator_type": "autogen",
   "conversation_id": "conv_xxx",
-  "debug_info": null
+  "debug_info": {"intent": "STOCK_AND_WEATHER", "confidence": 0.95, "routing_source": "llm", ...}
 }
 ```
+- `orchestrator_type`: `autogen` (default) | `custom` | `mcp`
+- `workflow` applies to all three orchestrators; `mcp` supports `smart_assistant` only
 - `conversation_id` is auto-created if not provided; always returned in response
 - Saves both turns (user + assistant) to `agent_messages` table after every call
-- `workflow` controls which AutoGen workflow runs; ignored by custom orchestrator
 - `tools` filters which function-based tools are injected (empty = all)
+- `debug_info` populated for `smart_assistant` / `smart_travel_planner` workflows
 
-**GET /api/agents/status** - Get agent system status and all available tools
-
-**GET /api/agents/autogen/workflows** - List available AutoGen workflows and tools
+**GET /api/agents/status** - Get agent system status, available orchestrators and tools
 ```json
 Response: {
-  "workflows": ["debate", "research", "smart_assistant", "smart_travel_planner"],
-  "tools": ["web_search", "scrape_url", "get_stock_price", "get_stock_history", "generate_stock_chart",
-            "get_crypto_price", "generate_chart", "get_weather", "save_research_report",
-            "search_flights", "search_hotels", "estimate_trip_budget", "search_places",
-            "search_restaurants", "generate_itinerary", "get_local_transport_info",
-            "get_distance_between_places", "generate_trip_summary", "get_currency_exchange", "get_geo_distance"]
+  "orchestrator_types": {"custom": true, "autogen": true, "mcp": false},
+  "tools": [{"name": "web_search", "description": "..."}],
+  "status": "active"
 }
 ```
 
-**GET /api/agents/tools** - List all tools (ITool orchestrator tools + AutoGen function tools, deduped)
+**GET /api/agents/workflows?orchestrator_type=autogen** - List workflows and tools for a given orchestrator
+```json
+Response: {
+  "orchestrator_type": "autogen",
+  "workflows": ["debate", "research", "smart_assistant", "smart_travel_planner"],
+  "tools": ["web_search", "scrape_url", ...]
+}
+```
+
+**GET /api/agents/tools** - List all tools from the shared registry
 ```json
 Response: [
-  {"name": "search_documents",          "description": "Search company documents..."},
-  {"name": "get_user_tickets",           "description": "Get user support tickets..."},
   {"name": "web_search",                 "description": "Search the internet for real-time info..."},
   {"name": "scrape_url",                 "description": "Fetch full content from a URL..."},
   {"name": "get_stock_price",            "description": "Get current stock price..."},
@@ -844,9 +879,8 @@ Response: {
   "source": "function"
 }
 ```
-- Two-stage lookup: ITool orchestrator tools first (`source: orchestrator`), then AutoGen function tools (`source: function`)
+- Resolves from shared `get_tool_registry()` — single source of truth
 - Multi-arg tools require JSON string as `input_data`; returns HTTP 422 with expected keys if plain string given
-- `source` field indicates which path was used: `orchestrator` or `function`
 
 **GET /api/agents/conversations/{conversation_id}/messages** - Get agent conversation history
 ```json
@@ -1692,22 +1726,38 @@ OPENWEATHER_API_KEY=your_key   # Optional: enables real weather data (falls back
 SERPAPI_KEY=your_key           # Optional: upgrades web_search from DuckDuckGo to SerpAPI
 ```
 
-**AutoGen Orchestrator — API-Controlled Workflows & Tools**:
+**Three Orchestrators — Unified Architecture**:
 
-`AutoGenOrchestrator` is a thin dispatcher. All logic lives in focused sub-modules:
-- `request.workflow` → dispatched via `WORKFLOW_REGISTRY` to a workflow module
-- `request.tools` → filtered via `resolve_tools()` in `tool_utils.py`
-- `_tool_cache` (dict) → passed into workflows for deterministic tool result caching
+All three orchestrators share the same `WORKFLOW_REGISTRY` pattern and delegate to `orchestrators/utils/` for all tool resolution, execution, JSON parsing, plan normalization, and step building. The only difference is how LLM calls are made:
 
-**`WORKFLOW_REGISTRY`** (extensible dispatch map):
-| Workflow | Module | Agents |
-|---|---|---|
-| `debate` | `workflows/debate.py` | Advocate, Critic, Moderator |
-| `research` | `workflows/research.py` | Planner, Researcher, Verifier, Analyst, Evaluator, ReportWriter |
-| `smart_assistant` | `workflows/smart_assistant.py` | ToolSelector, ToolExecutor (deterministic), Summarizer |
-| `smart_travel_planner` | `workflows/smart_travel_planner.py` | TravelToolSelector, ToolExecutor (deterministic), TravelPlanner |
+| Orchestrator | LLM mechanism | Tool execution | Workflows |
+|---|---|---|---|
+| `autogen` | `AssistantAgent` + `RoundRobinGroupChat` (AutoGen v0.4) | `execute_tool_calls()` via `asyncio.to_thread` | debate, research, smart_assistant, smart_travel_planner |
+| `custom` | Plain `async llm_fn(system, user) → str` (LlamaServerProvider) | `execute_tool_calls()` via `asyncio.to_thread` | debate, research, smart_assistant, smart_travel_planner |
+| `mcp` | `AssistantAgent` + `RoundRobinGroupChat` (AutoGen v0.4) | `MCPClient.call_tools_parallel()` via MCP stdio | smart_assistant only |
 
-**Adding a new workflow**: create `workflows/my_workflow.py`, add entry to `WORKFLOW_REGISTRY` in `autogen_orchestrator.py`, add dispatcher method `_run_my_workflow`.
+**`WORKFLOW_REGISTRY`** (same for autogen and custom):
+| Workflow | Agents |
+|---|---|
+| `debate` | Advocate, Critic, Moderator |
+| `research` | Planner, Researcher, Verifier, Analyst, Evaluator, ReportWriter |
+| `smart_assistant` | ToolSelector → ToolExecutor (deterministic) → Summarizer |
+| `smart_travel_planner` | TravelToolSelector → ToolExecutor (deterministic) → TravelPlanner |
+
+**Shared `orchestrators/utils/`** — single source of truth, no duplication:
+- `get_tool_registry()` — lazy map of 21 tool names → callables
+- `resolve_tools(names)` — filter registry by requested names
+- `build_tool_catalog(names)` — JSON-serialisable catalog for LLM selector prompts
+- `execute_tool_calls(tool_calls, cache)` — parallel async execution with caching
+- `extract_json_object(text)` — 4-stage JSON extraction (fast → markdown → generic → auto-repair)
+- `normalize_tool_plan(raw, query, names)` — validate + clean LLM tool plan
+- `normalize_travel_tool_plan(raw, query, names)` — travel-specific plan normalization
+- `TRAVEL_TOOL_NAMES` — set of travel-only tool names (excludes web_search/scrape_url)
+- `run_team(team, task)` — shared AutoGen stream runner (used by autogen + mcp)
+- `build_executor_steps(results)` — convert tool result envelopes to step dicts
+- `merge_steps(pre, post)` — renumber and concatenate step lists
+
+**Adding a new workflow**: create `workflows/my_workflow.py` in both `autogen/workflows/` and `custom/workflows/`, add entry to `WORKFLOW_REGISTRY` in both orchestrators, add dispatcher method `_run_my_workflow`.
 
 **Tool registry** (`tool_registry.py` → `get_tool_registry()`) — names match `agent_runner.REGISTRY`:
 
@@ -1755,19 +1805,9 @@ SERPAPI_KEY=your_key           # Optional: upgrades web_search from DuckDuckGo t
 - `build_executor_steps()` and `merge_steps()` (`step_utils.py`) are shared by smart_assistant and smart_travel_planner
 - `_normalize_plan_base()` (`plan_normalizer.py`) is the shared core for both `normalize_tool_plan` and `normalize_travel_tool_plan`
 
-**Custom Orchestrator — Keyword Routing**:
-- `web` / `internet` / `latest` / `current` / `news` → routes to `web_search` then auto-scrapes first URL
-- `ticket` → `get_user_tickets` → `get_ticket_comments`
-- `search` / `document` → `search_documents`
-- `analyze` / `data` → `analyze_data` or `research_data`
+**Tool Discovery — `/api/agents/tools`**:
 
-**Tool Discovery — Unified `/tools` endpoint**:
-
-Tools are sourced from two layers (deduped by name):
-1. **ITool-based** (custom orchestrator `.tools` dict): `search_documents`, `get_user_tickets`, `get_ticket_comments`, `analyze_data`, `summarize_status`, `research_data`, `web_search`, `scrape_url`
-2. **Function-based** (`_register_tool_builders()`): all 21 tools listed in the table above
-
-`agent_runner.REGISTRY` is used by the `run_agent()` function (legacy LLM-loop runner) but **not** by API routes — all API-level function-based tool discovery goes through `_register_tool_builders()`.
+All tools sourced from `orchestrators/utils/get_tool_registry()` — single source of truth. The old ITool-based `.tools` dict on `CustomOrchestrator` is removed; `tools.py` and `agent_runner.REGISTRY` are legacy only.
 
 **Web Search Configuration**:
 ```bash
@@ -3049,7 +3089,15 @@ python tests/test_rbac_comprehensive.py
 
 ---
 
-**Last Updated**: 2025-01-13 (AutoGen refactored into focused sub-modules: autogen_orchestrator.py thin dispatcher + tool_registry.py + tool_utils.py + json_utils.py + plan_normalizer.py + step_utils.py + workflows/{debate,research,smart_assistant,smart_travel_planner}.py; shared _normalize_plan_base eliminates duplication; build_executor_steps/merge_steps shared across workflows; comprehensive debug logging added to all AutoGen modules; save_research_report replaces save_text_file in research workflow; travel tools restricted to TRAVEL_TOOL_NAMES set in plan_normalizer.py)
+**Last Updated**: 2025-01-14
+
+**Recent changes (autogen/custom/mcp refactor)**:
+- `orchestrators/utils/` created as shared package — `tool_registry`, `tool_utils`, `json_utils`, `plan_normalizer`, `step_utils` moved here; all three orchestrators import from this single location, zero duplication
+- `orchestrators/autogen/` — removed local utility copies; workflows now import from `...utils`
+- `orchestrators/custom/` — fully rewritten: `CustomOrchestrator` now mirrors `AutoGenOrchestrator` with same 4 workflows (`debate`, `research`, `smart_assistant`, `smart_travel_planner`) and same `WORKFLOW_REGISTRY` pattern; uses `llm_fn(system, user) → str` instead of AutoGen agents; `_echo_llm` fallback for testing
+- `orchestrators/mcp/` — added to `orchestrators/__init__.py` exports; `MCPOrchestrator` + `MCPClient` now available via `AgentOrchestratorFactory`
+- `factories.py` — added `mcp` orchestrator type; `custom` now receives `llm_fn` wired from `LlamaServerProvider`; `get_available_types()` returns `{custom, autogen, mcp}`
+- `api_routes_agents.py` — updated: `orchestrator_type` default `autogen`; `workflow` default `smart_assistant`; `/workflows` endpoint replaces `/autogen/workflows` (supports all 3 via `?orchestrator_type=`); `/status` returns `orchestrator_types` map; tool lookup uses shared registry only; `AgentQueryResponse` adds `available_workflows` and `orchestrator_type` fields
 
 ---
 
