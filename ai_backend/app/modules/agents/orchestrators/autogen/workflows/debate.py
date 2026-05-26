@@ -9,7 +9,7 @@ from autogen_agentchat.conditions import MaxMessageTermination
 from autogen_agentchat.teams import RoundRobinGroupChat
 
 from ....interfaces import AgentResponse
-from ..step_utils import run_team
+from ...utils import run_team
 
 logger = logging.getLogger(__name__)
 

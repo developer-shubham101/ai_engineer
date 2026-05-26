@@ -10,11 +10,9 @@ from autogen_agentchat.conditions import MaxMessageTermination
 from autogen_agentchat.teams import RoundRobinGroupChat
 
 from ....interfaces import AgentResponse
-from ..json_utils import extract_json_object
-from ..plan_normalizer import TRAVEL_TOOL_NAMES, fallback_travel_plan, normalize_travel_tool_plan
-from ..step_utils import build_executor_steps, merge_steps, run_team
-from ..tool_registry import get_tool_registry
-from ..tool_utils import build_tool_catalog, execute_tool_calls
+from ...utils import extract_json_object, TRAVEL_TOOL_NAMES, fallback_travel_plan, normalize_travel_tool_plan
+from ...utils import build_executor_steps, merge_steps, run_team
+from ...utils import get_tool_registry, build_tool_catalog, execute_tool_calls
 
 logger = logging.getLogger(__name__)
 

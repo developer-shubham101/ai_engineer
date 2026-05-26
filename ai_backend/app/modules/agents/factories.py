@@ -4,7 +4,7 @@ import logging
 from typing import List, Optional
 
 from .interfaces import ITool, IAgentOrchestrator
-from .orchestrators import CustomOrchestrator, AutoGenOrchestrator, AUTOGEN_AVAILABLE
+from .orchestrators import CustomOrchestrator, AutoGenOrchestrator, AUTOGEN_AVAILABLE, MCPOrchestrator, MCP_AVAILABLE
 from .tools import (
     SearchDocumentsTool, GetUserTicketsTool, GetTicketCommentsTool,
     AnalyzeDataTool, SummarizeStatusTool, ResearchDataTool,
@@ -99,15 +99,27 @@ class AgentOrchestratorFactory:
                 return AutoGenOrchestrator(model_client=provider.client)
 
         if orchestrator_type.lower() == "custom":
-            if tools is None:
-                tools = ToolFactory.create_default_tools(vector_store)
+            from ..llm.providers.llamaserver import LlamaServerProvider
+            from ..llm.interfaces import ILLMProvider
+            import asyncio
 
-            orchestrator = CustomOrchestrator()
+            provider: ILLMProvider = LlamaServerProvider(colabllm_config or {})
 
-            for tool in tools:
-                orchestrator.register_tool(tool)
+            async def llm_fn(system: str, user: str) -> str:
+                return await asyncio.to_thread(
+                    provider.generate, f"{system}\n\n{user}"
+                )
 
-            return orchestrator
+            return CustomOrchestrator(llm_fn=llm_fn)
+
+        raise ValueError(f"Unknown orchestrator type: {orchestrator_type}")
+
+        if orchestrator_type.lower() == "mcp":
+            if not MCP_AVAILABLE:
+                raise ValueError("MCPOrchestrator not available (autogen not installed)")
+            from ..llm.providers.llamaserver import LlamaServerProvider
+            provider = LlamaServerProvider(colabllm_config or {})
+            return MCPOrchestrator(model_client=provider.client)
 
         raise ValueError(f"Unknown orchestrator type: {orchestrator_type}")
 
@@ -116,5 +128,6 @@ class AgentOrchestratorFactory:
         """Get available orchestrator types."""
         return {
             "custom": True,
-            "autogen": AUTOGEN_AVAILABLE
+            "autogen": AUTOGEN_AVAILABLE,
+            "mcp": MCP_AVAILABLE,
         }

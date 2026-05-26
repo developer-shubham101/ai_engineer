@@ -5,8 +5,8 @@ import logging
 from typing import Any, Callable, Dict, List, Optional
 
 from ...interfaces import IAgentOrchestrator, AgentRequest, AgentResponse
-from .tool_registry import get_tool_registry
-from .tool_utils import resolve_tools
+from ..utils import get_tool_registry
+from ..utils import resolve_tools
 from .workflows import (
     execute_debate_workflow,
     execute_research_workflow,

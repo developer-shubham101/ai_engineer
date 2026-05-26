@@ -13,24 +13,12 @@ export default function AgentChat({ onLogout, onExit, selectedConversationId }) 
   const [maxSteps, setMaxSteps] = useState(5)
   const [temperature, setTemperature] = useState(0.1)
   const [debug, setDebug] = useState(false)
-  const [autogenMeta, setAutogenMeta] = useState({ workflows: [], tools: [] })
+  const [agentStatus, setAgentStatus] = useState({ orchestrator_types: {}, tools: [] })
+  const [workflows, setWorkflows] = useState([])
+  const [availableTools, setAvailableTools] = useState([])
   const [selectedWorkflow, setSelectedWorkflow] = useState('')
   const [selectedTools, setSelectedTools] = useState([])
   const messagesRef = useRef(null)
-
-  useEffect(() => {
-    if (orchestratorType !== 'autogen') return
-    fetch(`${BASE_API_URL}/api/agents/autogen/workflows`, {
-      headers: getHeaders(),
-    })
-      .then((r) => r.json())
-      .then((data) => {
-        setAutogenMeta(data);
-        setSelectedWorkflow(data.workflows?.[0] || "");
-        setSelectedTools([]);
-      })
-      .catch(console.error);
-  }, [orchestratorType])
 
   const getHeaders = () => {
     const token = getStoredToken()
@@ -38,6 +26,29 @@ export default function AgentChat({ onLogout, onExit, selectedConversationId }) 
     if (token) headers['Authorization'] = `Bearer ${token}`
     return headers
   }
+
+  // Fetch status on mount
+  useEffect(() => {
+    fetch(`${BASE_API_URL}/api/agents/status`, { headers: getHeaders() })
+      .then(r => r.json())
+      .then(data => setAgentStatus(data))
+      .catch(console.error)
+  }, [])
+
+  // Fetch workflows + tools when orchestrator changes
+  useEffect(() => {
+    fetch(`${BASE_API_URL}/api/agents/workflows?orchestrator_type=${orchestratorType}`, { headers: getHeaders() })
+      .then(r => r.json())
+      .then(data => {
+        const wf = data.workflows || []
+        const tools = data.tools || []
+        setWorkflows(wf)
+        setAvailableTools(tools)
+        setSelectedWorkflow(wf[0] || '')
+        setSelectedTools([])
+      })
+      .catch(console.error)
+  }, [orchestratorType])
 
   useEffect(() => {
     if (messagesRef.current) messagesRef.current.scrollTop = messagesRef.current.scrollHeight
@@ -93,12 +104,12 @@ export default function AgentChat({ onLogout, onExit, selectedConversationId }) 
     try {
       const payload = {
         question: currentQuery,
-        tools: orchestratorType === 'autogen' ? selectedTools : [],
+        tools: selectedTools,
         max_steps: maxSteps,
         temperature,
         orchestrator_type: orchestratorType,
         debug,
-        ...(orchestratorType === 'autogen' && selectedWorkflow && { workflow: selectedWorkflow }),
+        ...(selectedWorkflow && { workflow: selectedWorkflow }),
         ...(conversationId && { conversation_id: conversationId })
       }
 
@@ -160,47 +171,59 @@ export default function AgentChat({ onLogout, onExit, selectedConversationId }) 
             onChange={e => setOrchestratorType(e.target.value)}
             disabled={loading}
           >
-            <option value="custom">Custom</option>
-            <option value="autogen">AutoGen</option>
+            {Object.entries(agentStatus.orchestrator_types)
+              .filter(([, enabled]) => enabled)
+              .map(([key]) => (
+                <option key={key} value={key}>{key.charAt(0).toUpperCase() + key.slice(1)}</option>
+              ))
+            }
           </select>
-          {orchestratorType === 'autogen' && (
-            <>
-              <select
-                className="form-select form-select-sm"
-                style={{ width: 'auto' }}
-                value={selectedWorkflow}
-                onChange={e => setSelectedWorkflow(e.target.value)}
+          {workflows.length > 0 && (
+            <select
+              className="form-select form-select-sm"
+              style={{ width: 'auto' }}
+              value={selectedWorkflow}
+              onChange={e => setSelectedWorkflow(e.target.value)}
+              disabled={loading}
+            >
+              {workflows.map(w => <option key={w} value={w}>{w}</option>)}
+            </select>
+          )}
+          {availableTools.length > 0 && (
+            <div className="dropdown">
+              <button
+                className="btn btn-sm btn-outline-secondary dropdown-toggle"
+                type="button"
+                data-bs-toggle="dropdown"
                 disabled={loading}
               >
-                {autogenMeta.workflows.map(w => <option key={w} value={w}>{w}</option>)}
-              </select>
-              <div className="dropdown">
-                <button
-                  className="btn btn-sm btn-outline-secondary dropdown-toggle"
-                  type="button"
-                  data-bs-toggle="dropdown"
-                  disabled={loading}
-                >
-                  Tools {selectedTools.length > 0 && `(${selectedTools.length})`}
-                </button>
-                <ul className="dropdown-menu p-2" style={{ minWidth: 180 }}>
-                  {autogenMeta.tools.map(t => (
-                    <li key={t}>
-                      <label className="dropdown-item d-flex align-items-center gap-2" style={{ cursor: 'pointer' }}>
+                Tools {selectedTools.length > 0 && `(${selectedTools.length})`}
+              </button>
+              <ul className="dropdown-menu p-2" style={{ minWidth: 220, maxHeight: 300, overflowY: 'auto' }}>
+                {availableTools.map(t => {
+                  const name = typeof t === 'string' ? t : t.name
+                  const desc = typeof t === 'object' ? t.description : null
+                  return (
+                    <li key={name}>
+                      <label className="dropdown-item d-flex align-items-start gap-2" style={{ cursor: 'pointer' }} title={desc}>
                         <input
                           type="checkbox"
-                          checked={selectedTools.includes(t)}
+                          className="mt-1"
+                          checked={selectedTools.includes(name)}
                           onChange={e => setSelectedTools(prev =>
-                            e.target.checked ? [...prev, t] : prev.filter(x => x !== t)
+                            e.target.checked ? [...prev, name] : prev.filter(x => x !== name)
                           )}
                         />
-                        {t}
+                        <div>
+                          <div className="small fw-semibold">{name}</div>
+                          {desc && <div className="text-muted" style={{ fontSize: '0.75em' }}>{desc}</div>}
+                        </div>
                       </label>
                     </li>
-                  ))}
-                </ul>
-              </div>
-            </>
+                  )
+                })}
+              </ul>
+            </div>
           )}
           <div className="input-group input-group-sm" style={{ width: 110 }}>
             <span className="input-group-text">Steps</span>
