@@ -1,0 +1,7 @@
+mcp[cli]
+yfinance
+matplotlib
+requests
+beautifulsoup4
+duckduckgo-search
+python-dotenv
