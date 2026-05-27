@@ -12,6 +12,7 @@ from .workflows import (
     execute_research_workflow,
     execute_smart_assistant_workflow,
     execute_smart_travel_planner_workflow,
+    execute_prompt_evaluation_workflow,
 )
 
 logger = logging.getLogger(__name__)
@@ -40,6 +41,7 @@ class AutoGenOrchestrator(IAgentOrchestrator):
     # Workflow names available at class level (handlers wired in __init__)
     AVAILABLE_WORKFLOWS: List[str] = [
         "debate", "research", "smart_assistant", "smart_travel_planner",
+        "prompt_evaluation",
     ]
 
     def __init__(self, model_client: Any) -> None:
@@ -50,6 +52,7 @@ class AutoGenOrchestrator(IAgentOrchestrator):
             "research": self._run_research,
             "smart_assistant": self._run_smart_assistant,
             "smart_travel_planner": self._run_smart_travel_planner,
+            "prompt_evaluation": self._run_prompt_evaluation,
         }
 
     # ------------------------------------------------------------------
@@ -110,3 +113,6 @@ class AutoGenOrchestrator(IAgentOrchestrator):
 
     async def _run_smart_travel_planner(self, query: str, tools: List[Callable], max_steps: int) -> AgentResponse:
         return await execute_smart_travel_planner_workflow(self.model_client, self._tool_cache, query, tools, max_steps)
+
+    async def _run_prompt_evaluation(self, query: str, tools: List[Callable], max_steps: int) -> AgentResponse:
+        return await execute_prompt_evaluation_workflow(self.model_client, query, tools, max_steps)

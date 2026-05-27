@@ -169,6 +169,7 @@ User Request → FastAPI Router → Container → Modular Services → Response
   - `workflows/research.py` - 6-agent research pipeline
   - `workflows/smart_assistant.py` - ToolSelector → ToolExecutor → Summarizer
   - `workflows/smart_travel_planner.py` - TravelToolSelector → ToolExecutor → TravelPlanner
+  - `workflows/prompt_evaluation.py` - PromptParser → CriteriaJudge → Improver → EvalReporter
 - `orchestrators/custom/` - Pure-Python multi-agent orchestrator (no AutoGen dependency)
   - `custom_orchestrator.py` - Thin dispatcher; same 4 workflows as AutoGen
   - `workflows/debate.py` - 3-agent debate via sequential `llm_fn` calls
@@ -782,7 +783,7 @@ Response: {
 ```json
 Request: {
   "question": "What is Tesla stock price and weather in New York?",
-  "workflow": "smart_assistant",   // debate | research | smart_assistant | smart_travel_planner
+  "workflow": "smart_assistant",   // debate | research | smart_assistant | smart_travel_planner | prompt_evaluation
   "orchestrator_type": "autogen",  // autogen | custom | mcp
   "tools": [],                     // empty = all available
   "max_steps": 5,
@@ -800,7 +801,7 @@ Response: {
   ],
   "tools_used": ["get_stock_price", "get_weather"],
   "available_tools": ["web_search", "scrape_url", ...],
-  "available_workflows": ["debate", "research", "smart_assistant", "smart_travel_planner"],
+  "available_workflows": ["debate", "research", "smart_assistant", "smart_travel_planner", "prompt_evaluation"],
   "orchestrator_type": "autogen",
   "conversation_id": "conv_xxx",
   "debug_info": {"intent": "STOCK_AND_WEATHER", "confidence": 0.95, "routing_source": "llm", ...}
@@ -826,7 +827,7 @@ Response: {
 ```json
 Response: {
   "orchestrator_type": "autogen",
-  "workflows": ["debate", "research", "smart_assistant", "smart_travel_planner"],
+  "workflows": ["debate", "research", "smart_assistant", "smart_travel_planner", "prompt_evaluation"],
   "tools": ["web_search", "scrape_url", ...]
 }
 ```
@@ -1784,6 +1785,15 @@ All three orchestrators share the same `WORKFLOW_REGISTRY` pattern and delegate 
 | `get_currency_exchange` | `tool_travel` | Real currency conversion (exchangerate.host) |
 | `get_geo_distance` | `tool_travel` | Real straight-line distance (OpenStreetMap) |
 
+**`prompt_evaluation` workflow — 4-agent pipeline**:
+1. **PromptParser** — extracts intent, variables, constraints, role framing, missing context
+2. **CriteriaJudge** — scores on 5 criteria (Clarity, Specificity, Context, Safety, Token Efficiency 0-10) and lists concrete issues as JSON
+3. **Improver** — rewrites the prompt fixing every issue while preserving original intent
+4. **EvalReporter** — assembles final markdown report: scores table, issues list, improved prompt, changes made, verdict
+- No tools required — pure LLM reasoning pipeline
+- Input: raw prompt text as `question`
+- Output: structured markdown evaluation report
+
 **`smart_assistant` workflow — 3-agent pipeline**:
 1. **ToolSelector** (LLM, max 2 steps) — analyses query, returns JSON tool plan with intent + args
 2. **ToolExecutor** (deterministic, parallel) — runs selected tools via `_execute_tool_calls()` with caching
@@ -2724,6 +2734,7 @@ logging.getLogger("app.modules.agents").setLevel(logging.DEBUG)
 | `workflows/research.py` | Start, done |
 | `workflows/smart_assistant.py` | Start, selector result (intent/confidence/routing), executor result count, done |
 | `workflows/smart_travel_planner.py` | Start, selector result (intent/confidence/destination/routing), executor result count, done |
+| `workflows/prompt_evaluation.py` | Start (query_len, max_steps), done (steps, answer_len) |
 
 ---
 
@@ -3089,7 +3100,7 @@ python tests/test_rbac_comprehensive.py
 
 ---
 
-**Last Updated**: 2025-01-14
+**Last Updated**: 2025-01-14 (Added `prompt_evaluation` workflow: 4-agent pipeline PromptParser→CriteriaJudge→Improver→EvalReporter; scores on 5 criteria; produces structured markdown report with improved prompt and verdict)
 
 **Recent changes (autogen/custom/mcp refactor)**:
 - `orchestrators/utils/` created as shared package — `tool_registry`, `tool_utils`, `json_utils`, `plan_normalizer`, `step_utils` moved here; all three orchestrators import from this single location, zero duplication
