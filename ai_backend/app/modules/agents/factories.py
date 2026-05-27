@@ -4,7 +4,11 @@ import logging
 from typing import List, Optional
 
 from .interfaces import ITool, IAgentOrchestrator
-from .orchestrators import CustomOrchestrator, AutoGenOrchestrator, AUTOGEN_AVAILABLE, MCPOrchestrator, MCP_AVAILABLE
+from .orchestrators import (
+    CustomOrchestrator, AutoGenOrchestrator, AUTOGEN_AVAILABLE,
+    MCPOrchestrator, MCP_AVAILABLE,
+    CrewAIOrchestrator, CREWAI_AVAILABLE,
+)
 from .tools import (
     SearchDocumentsTool, GetUserTicketsTool, GetTicketCommentsTool,
     AnalyzeDataTool, SummarizeStatusTool, ResearchDataTool,
@@ -119,6 +123,11 @@ class AgentOrchestratorFactory:
             provider = LlamaServerProvider(colabllm_config or {})
             return MCPOrchestrator(model_client=provider.client)
 
+        if orchestrator_type.lower() == "crewai":
+            if not CREWAI_AVAILABLE:
+                raise ValueError("CrewAIOrchestrator not available (crewai not installed)")
+            return CrewAIOrchestrator()
+
         raise ValueError(f"Unknown orchestrator type: {orchestrator_type}")
 
     @staticmethod
@@ -128,4 +137,5 @@ class AgentOrchestratorFactory:
             "custom": True,
             "autogen": AUTOGEN_AVAILABLE,
             "mcp": MCP_AVAILABLE,
+            "crewai": CREWAI_AVAILABLE,
         }

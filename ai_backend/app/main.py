@@ -14,8 +14,7 @@ from app.api_routes_audio import router as audio_router
 from app.api_routes_vision import router as vision_router
 from app.api_routes_media import router as media_router
 from app.api_routes_agents import router as agents_router
-from app.api_routes_crew import router as crew_router
-from app.api_routes_cleanup import router as cleanup_router  # NEW: Cleanup routes
+from app.api_routes_cleanup import router as cleanup_router
 from app.logging_config import setup_logging
 from app.modules.integration import get_container
 from app.modules.config import API_PREFIX
@@ -66,9 +65,8 @@ app.include_router(templates_router)  # Template management
 app.include_router(audio_router)  # NEW: Audio processing routes
 app.include_router(vision_router)  # NEW: Vision processing routes
 app.include_router(media_router)  # NEW: Media serving routes
-app.include_router(agents_router)  # NEW: Agent workflows
-app.include_router(crew_router)  # NEW: CrewAI workflows
-app.include_router(cleanup_router)  # NEW: Cleanup and metadata enrichment
+app.include_router(agents_router)  # Agent workflows (autogen | custom | mcp | crewai)
+app.include_router(cleanup_router)  # Cleanup and metadata enrichment
 # app.include_router(training_router)
 
 # CORS (for development only)

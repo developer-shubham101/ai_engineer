@@ -15,4 +15,16 @@ except ImportError:
     MCPOrchestrator = None
     MCP_AVAILABLE = False
 
-__all__ = ["CustomOrchestrator", "AutoGenOrchestrator", "AUTOGEN_AVAILABLE", "MCPOrchestrator", "MCP_AVAILABLE"]
+try:
+    from .crewai.crewai_orchestrator import CrewAIOrchestrator
+    CREWAI_AVAILABLE = True
+except ImportError:
+    CrewAIOrchestrator = None
+    CREWAI_AVAILABLE = False
+
+__all__ = [
+    "CustomOrchestrator",
+    "AutoGenOrchestrator", "AUTOGEN_AVAILABLE",
+    "MCPOrchestrator", "MCP_AVAILABLE",
+    "CrewAIOrchestrator", "CREWAI_AVAILABLE",
+]

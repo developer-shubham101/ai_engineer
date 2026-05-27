@@ -27,3 +27,33 @@ synthesis_task:
   description: "Create a comprehensive report on: {topic} combining research findings and analytical insights into a well-structured document."
   expected_output: "A professional report with executive summary, key findings, analysis, and recommendations."
   agent: synthesizer
+
+tool_selector_task:
+  description: "Analyse this user query and determine the best approach to answer it: {topic}. Identify what information is needed and outline a clear plan."
+  expected_output: "A concise plan describing the intent of the query and the steps needed to answer it accurately."
+  agent: tool_selector
+
+assistant_summarizer_task:
+  description: "Using the plan and findings from the tool selector, provide a clear, complete, and well-formatted answer to: {topic}"
+  expected_output: "A clear, concise, and well-formatted answer that directly addresses the user's question."
+  agent: assistant_summarizer
+
+prompt_parser_task:
+  description: "Parse the following prompt and extract its structural components: {topic}. Identify intent, variables, constraints, role framing, and missing context."
+  expected_output: "A bullet-point breakdown of the prompt's intent, variables, constraints, role framing, and missing context."
+  agent: prompt_parser
+
+criteria_judge_task:
+  description: "Evaluate the following prompt on 5 criteria (Clarity, Specificity, Context, Safety, Token Efficiency, scored 0-10): {topic}. List all concrete issues found."
+  expected_output: "A JSON object with scores for each criterion, an overall score, and a list of specific issues found."
+  agent: criteria_judge
+
+prompt_improver_task:
+  description: "Rewrite the following prompt to fix all issues identified by the judge, preserving the original intent: {topic}"
+  expected_output: "The improved prompt followed by a bullet list of changes made."
+  agent: prompt_improver
+
+eval_reporter_task:
+  description: "Assemble a complete prompt evaluation report for: {topic}. Use all outputs from the parser, judge, and improver."
+  expected_output: "A structured markdown report with sections: Original Prompt, Parsed Structure, Scores table, Issues Found, Improved Prompt, Changes Made, Verdict."
+  agent: eval_reporter

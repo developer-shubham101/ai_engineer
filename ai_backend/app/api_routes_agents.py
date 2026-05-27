@@ -32,7 +32,7 @@ class AgentQueryRequest(BaseModel):
     max_steps: int = 5
     temperature: float = 0.1
     provider: str = "local"
-    orchestrator_type: str = "autogen"   # autogen | custom | mcp
+    orchestrator_type: str = "autogen"   # autogen | custom | mcp | crewai
     conversation_id: Optional[str] = None
     debug: bool = False
 
@@ -103,7 +103,7 @@ async def get_agent_status():
 async def list_workflows(orchestrator_type: str = "autogen"):
     """List available workflows and tools for a given orchestrator type.
 
-    **orchestrator_type**: `autogen` | `custom` | `mcp`
+    **orchestrator_type**: `autogen` | `custom` | `mcp` | `crewai`
     """
     try:
         orch = _create_orchestrator(orchestrator_type)
@@ -179,13 +179,14 @@ async def query_agent(
 ):
     """Execute an agent workflow.
 
-    **orchestrator_type**: `autogen` | `custom` | `mcp`
+    **orchestrator_type**: `autogen` | `custom` | `mcp` | `crewai`
 
-    **workflow** (autogen / custom):
+    **workflow** (autogen / custom / crewai):
     - `smart_assistant`      — ToolSelector → ToolExecutor → Summarizer
     - `smart_travel_planner` — TravelToolSelector → ToolExecutor → TravelPlanner
     - `debate`               — Advocate / Critic / Moderator
     - `research`             — 6-agent research pipeline
+    - `prompt_evaluation`    — PromptParser → CriteriaJudge → Improver → EvalReporter
 
     **workflow** (mcp):
     - `smart_assistant` only
