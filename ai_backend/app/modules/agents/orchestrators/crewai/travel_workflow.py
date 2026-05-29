@@ -18,9 +18,9 @@ import re
 import time
 from typing import Any, Dict, List, Optional, Tuple
 
-from ..agents.function_tools.tool_weather import get_weather
-from ..agents.function_tools.tool_web_search import web_search
-from ..agents.function_tools.tool_travel import (
+from ...function_tools.tool_weather import get_weather
+from ...function_tools.tool_web_search import web_search
+from ...function_tools.tool_travel import (
     estimate_trip_budget,
     generate_itinerary,
     generate_trip_summary,

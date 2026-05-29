@@ -12,7 +12,7 @@ from mcp.client.sse import sse_client
 
 logger = logging.getLogger(__name__)
 
-MCP_SERVER_URL = "http://localhost:8000/sse"
+MCP_SERVER_URL = "http://localhost:4154/sse"
 
 
 class MCPClient:

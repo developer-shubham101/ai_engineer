@@ -71,28 +71,44 @@ class CrewAIOrchestrator(IAgentOrchestrator, ICrewOrchestrator):
     # ------------------------------------------------------------------
 
     def _agent(self, key: str) -> Agent:
+        """Create an agent from YAML configuration."""
         if self.llm is None:
             raise RuntimeError("CrewAI LLM not initialised — check CREW_BASE_URL")
         cfg = self._agents_config.get(key, {})
+        if not cfg:
+            logger.warning("[CrewAI] Agent config not found for key=%s, using defaults", key)
         return Agent(
             role=cfg.get("role", key),
             goal=cfg.get("goal", f"Complete tasks as {key}"),
             backstory=cfg.get("backstory", f"You are a {key} agent."),
             verbose=cfg.get("verbose", True),
+            allow_delegation=cfg.get("allow_delegation", False),
             llm=self.llm,
         )
 
     def _task(self, key: str, agent: Agent, topic: str) -> Task:
+        """Create a task from YAML configuration."""
         cfg = self._tasks_config.get(key, {})
+        if not cfg:
+            logger.warning("[CrewAI] Task config not found for key=%s, using defaults", key)
         return Task(
             description=cfg.get("description", f"Complete task for {topic}").format(topic=topic),
             expected_output=cfg.get("expected_output", "Task completion summary"),
             agent=agent,
         )
 
-    def _run_crew(self, agents: List[Agent], tasks: List[Task]) -> str:
-        crew = Crew(agents=agents, tasks=tasks, process=Process.sequential, verbose=True)
-        return str(crew.kickoff())
+    def _run_crew(self, agents: List[Agent], tasks: List[Task], process: Process = Process.sequential) -> str:
+        """Execute a crew with the given agents and tasks."""
+        crew = Crew(
+            agents=agents,
+            tasks=tasks,
+            process=process,
+            verbose=True,
+            memory=False,  # Disable memory for faster execution
+            cache=False,   # Disable cache for consistent results
+        )
+        result = crew.kickoff()
+        return str(result)
 
     # ------------------------------------------------------------------
     # IAgentOrchestrator interface
@@ -200,67 +216,70 @@ class CrewAIOrchestrator(IAgentOrchestrator, ICrewOrchestrator):
 
     def _debate(self, topic: str) -> Tuple[str, List[str]]:
         """Advocate → Critic → Moderator."""
-        advocate = self._agent("debate_advocate")
-        critic = self._agent("debate_critic")
-        moderator = self._agent("debate_moderator")
-        tasks = [
-            self._task("debate_advocate_task", advocate, topic),
-            self._task("debate_critic_task", critic, topic),
-            self._task("debate_moderator_task", moderator, topic),
-        ]
         try:
-            return self._run_crew([advocate, critic, moderator], tasks), ["Advocate", "Critic", "Moderator"]
+            advocate = self._agent("debate_advocate")
+            critic = self._agent("debate_critic")
+            moderator = self._agent("debate_moderator")
+            tasks = [
+                self._task("debate_advocate_task", advocate, topic),
+                self._task("debate_critic_task", critic, topic),
+                self._task("debate_moderator_task", moderator, topic),
+            ]
+            result = self._run_crew([advocate, critic, moderator], tasks)
+            return result, ["Advocate", "Critic", "Moderator"]
         except Exception as e:
-            logger.error("[CrewAI] debate failed: %s", e)
+            logger.error("[CrewAI] debate failed: %s", e, exc_info=True)
             return f"Debate failed: {e}", []
 
     def _research(self, topic: str) -> Tuple[str, List[str]]:
         """Researcher → Analyst → Synthesizer."""
-        researcher = self._agent("researcher")
-        analyst = self._agent("analyst")
-        synthesizer = self._agent("synthesizer")
-        tasks = [
-            self._task("research_task", researcher, topic),
-            self._task("analysis_task", analyst, topic),
-            self._task("synthesis_task", synthesizer, topic),
-        ]
         try:
-            return self._run_crew([researcher, analyst, synthesizer], tasks), ["Researcher", "Analyst", "Synthesizer"]
+            researcher = self._agent("researcher")
+            analyst = self._agent("analyst")
+            synthesizer = self._agent("synthesizer")
+            tasks = [
+                self._task("research_task", researcher, topic),
+                self._task("analysis_task", analyst, topic),
+                self._task("synthesis_task", synthesizer, topic),
+            ]
+            result = self._run_crew([researcher, analyst, synthesizer], tasks)
+            return result, ["Researcher", "Analyst", "Synthesizer"]
         except Exception as e:
-            logger.error("[CrewAI] research failed: %s", e)
+            logger.error("[CrewAI] research failed: %s", e, exc_info=True)
             return f"Research failed: {e}", []
 
     def _smart_assistant(self, topic: str) -> Tuple[str, List[str]]:
         """ToolSelector → Summarizer."""
-        selector = self._agent("tool_selector")
-        summarizer = self._agent("assistant_summarizer")
-        tasks = [
-            self._task("tool_selector_task", selector, topic),
-            self._task("assistant_summarizer_task", summarizer, topic),
-        ]
         try:
-            return self._run_crew([selector, summarizer], tasks), ["ToolSelector", "Summarizer"]
+            selector = self._agent("tool_selector")
+            summarizer = self._agent("assistant_summarizer")
+            tasks = [
+                self._task("tool_selector_task", selector, topic),
+                self._task("assistant_summarizer_task", summarizer, topic),
+            ]
+            result = self._run_crew([selector, summarizer], tasks)
+            return result, ["ToolSelector", "Summarizer"]
         except Exception as e:
-            logger.error("[CrewAI] smart_assistant failed: %s", e)
+            logger.error("[CrewAI] smart_assistant failed: %s", e, exc_info=True)
             return f"Smart assistant failed: {e}", []
 
     def _prompt_evaluation(self, topic: str) -> Tuple[str, List[str]]:
         """PromptParser → CriteriaJudge → Improver → EvalReporter."""
-        parser = self._agent("prompt_parser")
-        judge = self._agent("criteria_judge")
-        improver = self._agent("prompt_improver")
-        reporter = self._agent("eval_reporter")
-        tasks = [
-            self._task("prompt_parser_task", parser, topic),
-            self._task("criteria_judge_task", judge, topic),
-            self._task("prompt_improver_task", improver, topic),
-            self._task("eval_reporter_task", reporter, topic),
-        ]
         try:
-            return self._run_crew([parser, judge, improver, reporter], tasks), \
-                   ["PromptParser", "CriteriaJudge", "Improver", "EvalReporter"]
+            parser = self._agent("prompt_parser")
+            judge = self._agent("criteria_judge")
+            improver = self._agent("prompt_improver")
+            reporter = self._agent("eval_reporter")
+            tasks = [
+                self._task("prompt_parser_task", parser, topic),
+                self._task("criteria_judge_task", judge, topic),
+                self._task("prompt_improver_task", improver, topic),
+                self._task("eval_reporter_task", reporter, topic),
+            ]
+            result = self._run_crew([parser, judge, improver, reporter], tasks)
+            return result, ["PromptParser", "CriteriaJudge", "Improver", "EvalReporter"]
         except Exception as e:
-            logger.error("[CrewAI] prompt_evaluation failed: %s", e)
+            logger.error("[CrewAI] prompt_evaluation failed: %s", e, exc_info=True)
             return f"Prompt evaluation failed: {e}", []
 
     async def _travel_planner(self, request: CrewRequest, start: float) -> CrewResponse:

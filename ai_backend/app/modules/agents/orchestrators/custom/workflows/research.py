@@ -4,7 +4,7 @@ from __future__ import annotations
 import logging
 from typing import Any, Callable, Dict, List
 
-from interfaces import AgentResponse
+from ....interfaces import AgentResponse
 
 logger = logging.getLogger(__name__)
 

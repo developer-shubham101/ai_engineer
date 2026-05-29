@@ -1,4 +1,4 @@
-"""CrewAI orchestrator adapter — wraps CrewOrchestrator, returns AgentResponse."""
+"""CrewAI orchestrator adapter — wraps CrewAIOrchestrator, returns AgentResponse."""
 from __future__ import annotations
 
 import logging
@@ -6,8 +6,8 @@ import time
 from typing import Any, Dict, List, Optional
 
 from ...interfaces import IAgentOrchestrator, AgentRequest, AgentResponse
-from ....crew_ai.orchestrator import CrewOrchestrator
-from ....crew_ai.interfaces import CrewRequest
+from .orchestrator import CrewAIOrchestrator as CrewOrchestrator
+from .interfaces import CrewRequest
 
 logger = logging.getLogger(__name__)
 

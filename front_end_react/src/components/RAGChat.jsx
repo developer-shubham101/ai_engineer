@@ -8,7 +8,6 @@ import PromptTemplateManager from './PromptTemplateManager.jsx'
 import ConversationSidebar from './ConversationSidebar.jsx'
 import ConversationMessageDetail from './ConversationMessageDetail.jsx'
 import AudioRecorder from './AudioRecorder.jsx'
-import CrewAIChat from './CrewAIChat.jsx'
 import AgentChat from './AgentChat.jsx'
 import ToastList from './ToastList.jsx'
 import ReactMarkdown from 'react-markdown'
@@ -25,12 +24,10 @@ export default function RAGChat({ onLogout, initialMode = 'rag', initialConvId =
     return storedToken ? getSessionIdFromToken(storedToken) : '';
   })
 
-  const [crewMode, setCrewMode] = useState(initialMode === 'crew')
+  const [crewMode, setCrewMode] = useState(false)
   const [agentMode, setAgentMode] = useState(initialMode === 'agent')
   const [agentConversations, setAgentConversations] = useState([])
   const [activeAgentConversationId, setActiveAgentConversationId] = useState(null)
-  const [crewConversations, setCrewConversations] = useState([])
-  const [activeCrewConversationId, setActiveCrewConversationId] = useState(null)
 
   async function loadAgentConversations(targetConvId = null) {
     if (!token) return
@@ -107,8 +104,6 @@ export default function RAGChat({ onLogout, initialMode = 'rag', initialConvId =
       fetchPromptTemplates()
       if (initialMode === 'agent') {
         loadAgentConversations(initialConvId)
-      } else if (initialMode === 'crew') {
-        // crew handled by CrewAIChat on mount
       } else {
         loadConversations(initialConvId)
       }
@@ -117,10 +112,10 @@ export default function RAGChat({ onLogout, initialMode = 'rag', initialConvId =
 
   // Sync URL when mode or active conversation changes
   useEffect(() => {
-    const mode = agentMode ? 'agent' : crewMode ? 'crew' : 'rag'
-    const convId = agentMode ? activeAgentConversationId : crewMode ? activeCrewConversationId : activeConversationId
+    const mode = agentMode ? 'agent' : 'rag'
+    const convId = agentMode ? activeAgentConversationId : activeConversationId
     setQueryParams(mode, convId)
-  }, [agentMode, crewMode, activeConversationId, activeAgentConversationId, activeCrewConversationId])
+  }, [agentMode, activeConversationId, activeAgentConversationId])
   // Auto-scroll messages
   useEffect(() => {
     if (messagesRef.current) messagesRef.current.scrollTop = messagesRef.current.scrollHeight
@@ -771,32 +766,20 @@ export default function RAGChat({ onLogout, initialMode = 'rag', initialConvId =
     <div className="chat-container">
       {/* Conversation Sidebar */}
       <ConversationSidebar
-        conversations={agentMode ? agentConversations : crewMode ? crewConversations : conversations}
-        activeConversationId={agentMode ? activeAgentConversationId : crewMode ? activeCrewConversationId : activeConversationId}
-        onSelectConversation={agentMode ? (id) => setActiveAgentConversationId(id) : crewMode ? (id) => setActiveCrewConversationId(id) : switchConversation}
-        onCreateConversation={agentMode ? createNewAgentConversation : crewMode ? () => {} : () => createNewConversation()}
+        conversations={agentMode ? agentConversations : conversations}
+        activeConversationId={agentMode ? activeAgentConversationId : activeConversationId}
+        onSelectConversation={agentMode ? (id) => setActiveAgentConversationId(id) : switchConversation}
+        onCreateConversation={agentMode ? createNewAgentConversation : () => createNewConversation()}
         onRenameConversation={renameConversation}
         onDeleteConversation={deleteConversation}
         isOpen={sidebarOpen}
         onToggle={() => setSidebarOpen(!sidebarOpen)}
-        mode={agentMode ? 'agent' : crewMode ? 'crew' : 'rag'}
+        mode={agentMode ? 'agent' : 'rag'}
       />
 
 
       {/* Main Chat Area */}
-      {crewMode ? (
-        <div className="chat-main-content">
-          <CrewAIChat
-            onLogout={onLogout}
-            onExit={() => setCrewMode(false)}
-            selectedConversationId={activeCrewConversationId}
-            onConversationChange={(convs, activeId) => {
-              setCrewConversations(convs)
-              setActiveCrewConversationId(activeId)
-            }}
-          />
-        </div>
-      ) : agentMode ? (
+      {agentMode ? (
         <div className="chat-main-content">
           <AgentChat
             onLogout={onLogout}
@@ -1189,22 +1172,11 @@ export default function RAGChat({ onLogout, initialMode = 'rag', initialConvId =
                       onClick={() => {
                         const entering = !agentMode
                         setAgentMode(entering)
-                        if (crewMode) setCrewMode(false)
                         if (entering) loadAgentConversations()
                       }}
                     >
                       <i className="bi bi-cpu me-2"></i>
                       {agentMode ? 'Exit Agent Mode' : 'Enter Agent Mode'}
-                    </button>
-                    <button
-                      className={`btn btn-sm w-100 mb-2 ${crewMode ? 'btn-primary' : 'btn-outline-primary'}`}
-                      onClick={() => {
-                        setCrewMode(!crewMode)
-                        if (agentMode) setAgentMode(false)
-                      }}
-                    >
-                      <i className="bi bi-robot me-2"></i>
-                      {crewMode ? 'Exit CrewAI Mode' : 'Enter CrewAI Mode'}
                     </button>
                     <button
                       className="btn btn-sm btn-outline-danger w-100"
