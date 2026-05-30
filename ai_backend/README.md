@@ -1,249 +1,236 @@
 # 🚀 Multi-Provider Enterprise RAG System
 
-[![Python](https://img.shields.io/badge/Python-3.8+-blue.svg)](https://python.org)
+[![Python](https://img.shields.io/badge/Python-3.10+-blue.svg)](https://python.org)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.104+-green.svg)](https://fastapi.tiangolo.com)
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
 > **Enterprise-grade RAG system with multi-provider LLM support, advanced RBAC, and offline-first architecture**
-
-> **Enterprise-grade RAG system with multi-provider LLM support, advanced RBAC, and offline-first architecture**
 >
 > 🎓 **Educational Reference Implementation**: This backend serves as a comprehensive study guide for building scalable AI systems.
 
-A production-ready **Retrieval-Augmented Generation (RAG) system** that works with multiple LLM providers through a unified API. Supports both **offline operation** with local models and **cloud integration** with major AI providers. It is designed to help you **learn and master** the intricacies of RAG architectures.
+A production-ready **Retrieval-Augmented Generation (RAG) system** that works with multiple LLM providers through a unified API. Supports both **offline operation** with local models and **cloud integration** with major AI providers.
+
+---
 
 ## ✨ Key Features
 
-- 🤖 **Multi-Provider Support** - Local models, OpenAI GPT, Google Gemini, Hugging Face
-- 🔒 **Enterprise RBAC** - Role-based access control with flexible overrides
-- 📚 **Document Versioning** - Non-destructive updates with full history
-- 💬 **Session Management** - Persistent conversations with context
-- 🚀 **Offline-First** - Works without internet using local LLMs
-- 🤖 **Agent Framework** - Modular architecture with AutoGen and custom orchestrators
-- 🤖 **CrewAI Integration** - Multi-agent workflows with debate and research capabilities
-- ⚡ **Optimized Prompts** - Smart token budgeting and context truncation
-- 🔍 **Debug Tools** - Complete prompt/response logging
-- 🛡️ **Security** - JWT authentication with audit trails
+- 🤖 **Multi-Provider RAG** — Local (GGUF), OpenAI GPT, Google Gemini, Hugging Face, CustomLLM, LlamaServer
+- 🔒 **Enterprise RBAC** — Role hierarchy with sensitivity levels and department restrictions
+- 📚 **Document Versioning** — Non-destructive updates with full version history
+- 💬 **Persistent Conversations** — SQLite-backed history with cross-device access
+- 🚀 **Offline-First** — Fully functional without internet using local GGUF models
+- 🤖 **4 Agent Orchestrators** — AutoGen, Custom, MCP, CrewAI via unified `/api/agents/query`
+- 🎭 **5 Agent Workflows** — debate, research, smart_assistant, smart_travel_planner, prompt_evaluation
+- 🔍 **Hybrid Retrieval** — BM25 + vector search with cross-encoder reranking
+- 🧩 **Paragraph-Aware Chunking** — Semantic boundary-respecting document chunking
+- 🎙️ **Multimodal** — Speech-to-Text, Text-to-Speech, OCR, emotion detection
+- 🛡️ **JWT Auth** — HS256 tokens with audit logging
+- ⚡ **Prompt Optimization** — Token budgeting, context truncation, template system
+- 🔌 **MCP Support** — Model Context Protocol orchestrator
+
+---
 
 ## 🏗️ Architecture
 
-```mermaid
-graph TB
-    A[User Request] --> B[FastAPI Router]
-    B --> C[Provider Service]
-    C --> D[Base RAG Service]
-    D --> E[Response]
-    
-    D --> F[ChromaDB]
-    D --> G[RBAC Filter]
-    D --> H[Session Manager]
-    
-    C --> I[Local LLM]
-    C --> J[OpenAI GPT]
-    C --> K[Google Gemini]
-    C --> L[Hugging Face]
+```
+HTTP Request
+  → FastAPI Router
+  → JWT Auth (optional)
+  → RBAC Check
+  → Container (DI)
+  → Service (RAG / Agent / CrewAI)
+  → Response
 ```
 
-### Supported Providers
+### Supported RAG Providers
 
-| Provider | Models | Status |
-|----------|--------|---------|
-| **Local** | Mistral-7B, Phi-2, Llama-3.2, Gemma-2B | ✅ Offline |
-| **OpenAI** | GPT-3.5, GPT-4 | ✅ API |
-| **Google** | Gemini-2.5-Flash, Gemini-2.5-Pro | ✅ API |
-| **Hugging Face** | Various models | ✅ API |
-| **ColabLLM** | Custom models via /ask endpoint | ✅ API |
+| Provider | Endpoint | Status |
+|----------|----------|--------|
+| Local GGUF | `local` | ✅ Offline |
+| OpenAI GPT | `gpt`, `openai` | ✅ API |
+| Google Gemini | `google` | ✅ API |
+| Hugging Face | `huggingface`, `hf` | ✅ API |
+| CustomLLM | `customllm` | ✅ API (preferred for 3rd-party) |
+| ColabLLM | `colabllm` | ✅ API (legacy alias) |
+| LlamaServer | `llamaserver` | ✅ Local server |
+
+### Agent Orchestrators
+
+| Type | `orchestrator_type` | Workflows |
+|------|---------------------|-----------|
+| AutoGen v0.4 | `autogen` | All 5 |
+| Custom (LLM-loop) | `custom` | debate, research, smart_assistant, smart_travel_planner |
+| MCP | `mcp` | smart_assistant |
+| CrewAI | `crewai` | debate, research, smart_travel_planner |
+
+### Agent Workflows
+
+| Workflow | Agents | Description |
+|----------|--------|-------------|
+| `debate` | Advocate, Critic, Moderator | Multi-perspective debate |
+| `research` | Planner, Researcher, Verifier, Analyst, Evaluator, ReportWriter | 6-agent research pipeline |
+| `smart_assistant` | ToolSelector, ToolExecutor, Summarizer | Auto tool selection + execution |
+| `smart_travel_planner` | TravelToolSelector, ToolExecutor, TravelPlanner | Intent-driven travel planning |
+| `prompt_evaluation` | PromptParser, CriteriaJudge, Improver, EvalReporter | Prompt quality scoring + rewrite |
+
+---
 
 ## 🚀 Quick Start
 
 ### Prerequisites
-- Python 3.8+
+- Python 3.10+
 - 8GB+ RAM (for local models)
-- Git
 
 ### Installation
 
 ```bash
-# Clone the repository
 git clone https://github.com/your-username/ai_backend.git
 cd ai_backend
-
-# Install dependencies
 pip install -r requirements.txt
-
-# Set up environment variables (optional for cloud providers)
-cp .env.example .env
-# Edit .env with your API keys
-
-# Start the server
+cp .env.example .env   # edit with your API keys
 python -m app.main
 ```
 
 ### First Query
 
 ```bash
-# Test with local model (no API key needed)
+# RAG query (no auth needed)
 curl -X POST "http://localhost:8000/api/rag/local/query" \
   -H "Content-Type: application/json" \
   -d '{"question": "What are the company policies?", "use_llm": true}'
+
+# Agent query
+curl -X POST "http://localhost:8000/api/agents/query" \
+  -H "Content-Type: application/json" \
+  -d '{"question": "What is Tesla stock price?", "orchestrator_type": "autogen", "workflow": "smart_assistant"}'
+
+# Prompt evaluation
+curl -X POST "http://localhost:8000/api/agents/query" \
+  -H "Content-Type: application/json" \
+  -d '{"question": "Tell me about AI.", "orchestrator_type": "autogen", "workflow": "prompt_evaluation"}'
 ```
 
-## 📖 Use Cases
-
-This system is perfect for:
-
-- 🏢 **Enterprise Knowledge Management** - Centralized company information with role-based access
-- 🎓 **Learning RAG Systems** - Complete implementation with multiple providers
-- 🔬 **AI Research** - Experiment with different LLM providers and prompt strategies
-- 🛠️ **Prototyping** - Quick setup for AI-powered applications
-- 📚 **Document Q&A** - Intelligent search and retrieval from document collections
+---
 
 ## 🔧 Configuration
 
 ### Environment Variables
 
 ```bash
-# Optional: Cloud provider API keys
-OPENAI_API_KEY=your_openai_key
-GOOGLE_API_KEY=your_google_key
-HUGGINGFACE_API_TOKEN=your_hf_token
+# Cloud RAG providers (optional)
+OPENAI_API_KEY=<your_openai_key>
+GOOGLE_API_KEY=<your_google_key>
+HUGGINGFACE_API_TOKEN=<your_hf_token>
 
-# ColabLLM provider (optional)
-COLABLLM_BASE_URL=http://localhost:8080
-COLABLLM_API_KEY=
+# Custom / third-party LLM
+CUSTOMLLM_BASE_URL=http://localhost:8080
+CUSTOMLLM_API_KEY=<your_key>
 
-# Server configuration
+# LlamaServer (local OpenAI-compatible server)
+LLAMASERVER_BASE_URL=http://127.0.0.1:8080/v1
+LLAMASERVER_MODEL_NAME=mistral-7b-instruct-v0.2
+
+# CrewAI LLM (llama-server endpoint)
+CREW_BASE_URL=http://localhost:8080
+
+# Agent tools (optional upgrades)
+OPENWEATHER_API_KEY=<your_key>   # real weather data
+SERPAPI_KEY=<your_key>           # upgrade web_search from DuckDuckGo to SerpAPI
+
+# Vector store: faiss (default) or chroma
+VECTOR_STORE_TYPE=faiss
+
+# Embedding model key
+EMBEDDING_MODEL_KEY=bge-small-en-v1.5
+
+# Auth
+JWT_SECRET_KEY=<change-in-production>
+JWT_EXPIRATION_DAYS=1
+
+# Server
 HOST=0.0.0.0
 PORT=8000
 DEBUG=false
-
-# Model settings
-DEFAULT_MODEL_NAME=mistral-7b-instruct-v0.2
-EMBEDDING_MODEL_NAME=bge-small-en-v1.5
 ```
 
 ### Local Models
 
-Place GGUF model files in the `models/` directory:
+Place GGUF files in `models/`:
 
 ```
 models/
 ├── mistral-7b-instruct-v0.2.Q3_K_M.gguf
 ├── phi-2-q4_k_m.gguf
 ├── llama-3.2-1b-instruct-q4_k_m.gguf
-└── ...
+└── gemma-2b-it-q4_k_m.gguf
 ```
 
-Models are auto-detected and available via the API.
+---
 
 ## 🔐 Security & RBAC
 
 ### Role Hierarchy
 
 ```
-SuperAdmin (Level 4) ──┐
-                       ├── Full system access
-Manager (Level 3) ─────┤
-                       ├── Department management
-HR (Level 2) ──────────┤
-                       ├── Employee data access
-Employee (Level 1) ────┤
-                       ├── Standard documents
-Guest (Level 0) ───────┘
-                       └── Public content only
+SuperAdmin (4) → Manager (3) → HR (2) → Employee (1) → Guest (0)
 ```
 
-### Document Security
+### Sensitivity Levels
 
-- **Automatic Filtering**: Documents filtered by user role before LLM processing
-- **Metadata-Based**: Each document chunk has sensitivity and access rules
-- **Audit Logging**: All access attempts logged for compliance
-- **Role Overrides**: Flexible `allowed_roles` bypass standard hierarchy
-
-### Example Document Metadata
-
-```json
-{
-  "sensitivity": "department_confidential",
-  "department": "HR",
-  "allowed_roles": ["SuperAdmin", "HR"],
-  "owner_id": "user123"
-}
-```
+| Level | Value | Access |
+|-------|-------|--------|
+| `super_confidential` | 4 | SuperAdmin only |
+| `highly_confidential` | 3 | Manager+ |
+| `role_confidential` | 2 | HR+ |
+| `department_confidential` | 1 | Employee+ (same dept) |
+| `public_internal` | 0 | Everyone |
+| `personal` | 1 | Owner + HR+ |
 
 ---
 
-## 📊 Performance & Monitoring
-
-### Built-in Analytics
-
-- **Token Usage Tracking** - Monitor prompt efficiency and costs
-- **Response Time Metrics** - Track performance across providers
-- **RBAC Audit Logs** - Security compliance and access monitoring
-- **Debug Mode** - Complete prompt/response logging for optimization
-
-### Optimization Features
-
-- **Smart Context Truncation** - Automatic handling of long documents
-- **Token Budgeting** - Dynamic allocation between system/context/query
-- **Compressed Prompts** - Efficient system instructions (60-80 tokens)
-- **Provider Fallbacks** - Automatic switching on failures
-
 ## 🔌 API Reference
 
-### Query Endpoints
+### RAG Queries
 
 ```http
 POST /api/rag/{provider}/query
 ```
 
-**Providers**: `local`, `google`, `gpt`, `huggingface`
-
-**Request**:
 ```json
 {
   "question": "What are the leave policies?",
+  "conversation_id": "conv_xxx",
   "top_k": 3,
   "use_llm": true,
-  "max_tokens": 256
+  "max_tokens": 256,
+  "temperature": 0.1,
+  "debug": false
 }
 ```
 
-**Response**:
-```json
-{
-  "answer": "Annual leave is 20 days per year...",
-  "retrieved": [
-    {
-      "id": "doc_123",
-      "text": "Leave policy document...",
-      "metadata": {...},
-      "distance": 0.85
-    }
-  ],
-  "context": "Combined context from retrieved documents",
-  "final_prompt": "System: You are an HR assistant..." // Debug mode
-}
-```
-
-### CrewAI Multi-Agent Workflows
+### Agent Workflows
 
 ```http
-POST /api/crew/query
+POST /api/agents/query
 ```
 
 ```json
 {
-  "topic": "Should companies adopt remote work policies?",
-  "workflow_type": "debate",
-  "temperature": 0.7
+  "question": "Plan a 3-day trip to Goa",
+  "orchestrator_type": "autogen",
+  "workflow": "smart_travel_planner",
+  "tools": [],
+  "max_steps": 5
 }
 ```
 
-**Available Workflows:**
-- **debate**: Multi-agent debate with Advocate, Critic, Moderator
-- **research**: Comprehensive research with Researcher, Analyst, Synthesizer
+```http
+GET /api/agents/workflows?orchestrator_type=autogen
+GET /api/agents/tools
+GET /api/agents/status
+POST /api/agents/tools/{tool_name}/test
+```
 
 ### Authentication
 
@@ -252,19 +239,61 @@ POST /api/auth/token
 ```
 
 ```json
-{
-  "username": "employee1",
-  "password": "password123"
-}
+{"username": "<username>", "password": "<password>"}
+```
+
+### Conversations
+
+```http
+GET  /api/conversations
+POST /api/conversations
+GET  /api/conversations/{id}/messages
+PUT  /api/conversations/{id}
+DELETE /api/conversations/{id}
 ```
 
 ### Document Management
 
 ```http
-POST /api/rag/documents/add     # Add document
-POST /api/rag/documents/seed    # Load sample data
-GET  /api/rag/documents/list    # List documents
+POST /api/rag/documents/add
+POST /api/rag/documents/add-file
+POST /api/rag/documents/update
+POST /api/rag/documents/seed
+GET  /api/rag/documents/list
+GET  /api/rag/documents/{id}/versions
 ```
+
+### Prompt Templates
+
+```http
+POST   /api/templates
+GET    /api/templates
+GET    /api/templates/{name}
+PUT    /api/templates/{name}
+DELETE /api/templates/{name}
+POST   /api/templates/test/{name}
+```
+
+### Multimodal
+
+```http
+POST /api/audio/stt      # Speech-to-Text (Vosk / Whisper)
+POST /api/audio/tts      # Text-to-Speech (pyttsx3)
+POST /api/audio/emotion  # Emotion detection
+POST /api/vision/ocr     # OCR (Tesseract / PaddleOCR)
+POST /api/vision/describe
+GET  /api/media/{user_id}/{filename}
+```
+
+### Metadata Enrichment
+
+```http
+POST /api/cleanupdata
+GET  /api/cleanupdata/status
+GET  /api/cleanupdata/preview/{document_id}
+```
+
+---
 
 ## 🛠️ Development
 
@@ -273,69 +302,80 @@ GET  /api/rag/documents/list    # List documents
 ```
 ai_backend/
 ├── app/
-│   ├── services/           # Core business logic
-│   ├── api_routes_*.py     # API endpoints
-│   ├── main.py            # FastAPI app
-│   └── config.py          # Configuration
-├── models/                # Local LLM files
-├── data/                  # Sample documents
-├── database/              # SQLite databases
-└── requirements.txt       # Dependencies
+│   ├── modules/
+│   │   ├── agents/
+│   │   │   ├── function_tools/       # 21 callable tools
+│   │   │   ├── orchestrators/
+│   │   │   │   ├── autogen/          # AutoGen v0.4 orchestrator + workflows/
+│   │   │   │   ├── custom/           # LLM-loop orchestrator + workflows/
+│   │   │   │   ├── mcp/              # MCP orchestrator
+│   │   │   │   ├── crewai/           # CrewAI orchestrator + travel_workflow
+│   │   │   │   └── utils/            # Shared: tool_registry, plan_normalizer, step_utils...
+│   │   │   ├── interfaces.py
+│   │   │   └── factories.py
+│   │   ├── auth/                     # JWT, RBAC, user/session managers
+│   │   ├── config/                   # Settings, constants, model configs
+│   │   ├── conversation/             # SQLite conversation history
+│   │   ├── core/                     # DocumentManager, VersionManager, chunking
+│   │   ├── llm/                      # RAGOrchestrator, providers, prompt system
+│   │   ├── multimodal/               # STT, TTS, OCR, emotion
+│   │   ├── vector_db/                # FAISS/Chroma, BM25, reranker, embeddings
+│   │   └── integration.py            # DI Container
+│   ├── api_routes_*.py               # Route files (no api_routes_crew.py)
+│   └── main.py
+├── crew_config/
+│   ├── agents.yaml                   # CrewAI agent definitions
+│   └── tasks.yaml                    # CrewAI task definitions
+├── data/                             # Sample documents
+│   └── cleaned/                      # LLM-enriched documents
+├── models/                           # Local GGUF models
+├── database/                         # SQLite databases
+├── requirements.txt
+├── requirements_agents.txt           # Agent-specific deps
+├── requirements_mcp.txt              # MCP deps
+└── requirements_multimodal.txt       # Multimodal deps
 ```
 
-### Adding New Providers
+### Adding a New Agent Workflow
 
-1. Create service class inheriting from `BaseRAGService`
-2. Implement `generate_response()` method
-3. Add route in `api_routes_rag.py`
-4. Update provider list in documentation
+1. Create `app/modules/agents/orchestrators/autogen/workflows/my_workflow.py`
+2. Export from `workflows/__init__.py`
+3. Add to `AutoGenOrchestrator.AVAILABLE_WORKFLOWS` and `WORKFLOW_REGISTRY`
+4. Add dispatcher `_run_my_workflow()` in `autogen_orchestrator.py`
+5. Mirror in `custom/workflows/` and `crewai/orchestrator.py` + YAML configs
+
+### Adding a New RAG Provider
+
+1. Create provider class in `app/modules/llm/providers/`
+2. Register in `provider_factory.py`
+3. Add to `VALID_PROVIDERS` in `constants.py`
 
 ### Running Tests
 
 ```bash
-# Run optimization tests
-python test_optimized_prompt.py
-
-# Test specific provider
-curl -X POST "http://localhost:8000/api/rag/local/query" \
-  -H "Content-Type: application/json" \
-  -d '{"question": "test", "use_llm": false}'
+pytest test_module/ -v
+python validate_container_full.py
 ```
+
+---
 
 ## 📚 Documentation
 
-- **[API Documentation](http://localhost:8000/docs)** - Interactive Swagger UI
-- **[Technical Context](APP_CONTEXT.md)** - Detailed system architecture
-- **[Data Format Guide](data/README.md)** - Document structure and metadata
-- **[Contributing Guide](CONTRIBUTING.md)** - Development guidelines
+- **[API Docs](http://localhost:8000/docs)** — Interactive Swagger UI
+- **[APP_CONTEXT.md](APP_CONTEXT.md)** — Complete technical architecture reference
+- **[AUTO_GEN.md](AUTO_GEN.md)** — AutoGen orchestrator deep-dive
 
-## 🤝 Contributing
-
-We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
-
-### Quick Contribution Steps
-
-1. Fork the repository
-2. Create a feature branch: `git checkout -b feature/amazing-feature`
-3. Commit changes: `git commit -m 'Add amazing feature'`
-4. Push to branch: `git push origin feature/amazing-feature`
-5. Open a Pull Request
-
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+---
 
 ## 🙏 Acknowledgments
 
-- **ChromaDB** - Vector database
-- **FastAPI** - Web framework
-- **Sentence Transformers** - Embedding models
-- **llama-cpp-python** - Local LLM inference
-- **OpenAI, Google, Hugging Face** - Cloud AI providers
-
-## ⭐ Star History
-
-[![Star History Chart](https://api.star-history.com/svg?repos=your-username/ai_backend&type=Date)](https://star-history.com/#your-username/ai_backend&Date)
+- **FastAPI** — Web framework
+- **ChromaDB / FAISS** — Vector stores
+- **Sentence Transformers** — Embedding models
+- **llama-cpp-python** — Local LLM inference
+- **AutoGen v0.4** — Multi-agent framework
+- **CrewAI** — Crew-based multi-agent workflows
+- **OpenAI, Google, Hugging Face** — Cloud AI providers
 
 ---
 
@@ -343,14 +383,6 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 **Built with ❤️ for the AI community**
 
-[Report Bug](https://github.com/your-username/ai_backend/issues) • [Request Feature](https://github.com/your-username/ai_backend/issues) • [Discussions](https://github.com/your-username/ai_backend/discussions)
+[Report Bug](https://github.com/your-username/ai_backend/issues) • [Request Feature](https://github.com/your-username/ai_backend/issues)
 
 </div>
-
-
-
-
-
-
-
-

@@ -97,6 +97,7 @@ User Request → FastAPI Router → Container → Modular Services → Response
 **🤖 LLM Module** (`app/modules/llm/`)
 - `rag_orchestrator.py` - RAG workflow orchestration
 - `providers/` - LLM provider implementations (Local, Google, GPT, HF, ColabLLM, LlamaServer)
+- `services/colabllm_rag_service.py` - ColabLLM RAG service implementation
 - `provider_factory.py` - Factory for dynamic provider selection
 - `prompt_manager.py` - Optimized prompt construction with token budgeting
 - `prompt_chain.py` - Chain of Responsibility pattern for dynamic prompt building
@@ -108,7 +109,7 @@ User Request → FastAPI Router → Container → Modular Services → Response
 - `colabllm_plugin.py` - ColabLLM provider plugin
 - `llamaserver_plugin.py` - LlamaServer provider plugin
 - `interfaces.py` - LLM and RAG interfaces
-- `prompt_templates/` - External prompt template files (balanced_enterprise, strict_rag, pirate, etc.)
+- `prompt_templates/` - External prompt template files (balanced_enterprise, strict_rag, pirate, reasoning_analyst, personalized_chat, ultra_compact)
 
 **🗄️ Vector DB Module** (`app/modules/vector_db/`)
 - `chroma_impl.py` - ChromaDB implementation
@@ -130,18 +131,20 @@ User Request → FastAPI Router → Container → Modular Services → Response
 - `cleanup_service.py` - **NEW: Document cleanup and enrichment pipeline**
 
 
-**🤖 CrewAI Module** (`app/modules/crew_ai/`)
+**🤖 CrewAI Module** (`app/modules/agents/orchestrators/crewai/`)
 - `interfaces.py` - CrewAI interfaces (`ICrewOrchestrator`, `CrewRequest`, `CrewResponse`)
 - `orchestrator.py` - CrewAI orchestrator using official `crewai` library
-- `factory.py` - Factory for creating CrewAI orchestrators
-- `crew_config/agents.yaml` - Agent role/goal/backstory definitions
-- `crew_config/tasks.yaml` - Task description/expected_output definitions
-- **Workflows**: `debate` (Advocate, Critic, Moderator), `research` (Researcher, Analyst, Synthesizer)
+- `crewai_orchestrator.py` - CrewAI orchestrator implementation
+- `travel_workflow.py` - CrewAI travel planning workflow
+- `crew_config/agents.yaml` - Agent role/goal/backstory definitions (at project root `crew_config/`)
+- `crew_config/tasks.yaml` - Task description/expected_output definitions (at project root `crew_config/`)
+- **Workflows**: `debate` (Advocate, Critic, Moderator), `research` (Researcher, Analyst, Synthesizer), `smart_travel_planner`
 - **LLM**: llama-server via `CREW_BASE_URL` (OpenAI-compatible, configured in settings)
 
 **🎭 Multimodal Module** (`app/modules/multimodal/`) - **NEW**
 - `interfaces.py` - Multimodal processing interfaces
 - `file_manager.py` - User file management with RBAC
+- `audio_utils.py` - Audio preprocessing utilities
 - `stt_providers.py` - Speech-to-Text providers (Vosk, Whisper)
 - `tts_providers.py` - Text-to-Speech providers (pyttsx3, espeak)
 - `vision_providers.py` - Vision providers (Tesseract, PaddleOCR)
@@ -149,7 +152,7 @@ User Request → FastAPI Router → Container → Modular Services → Response
 
 **🤖 Agents Module** (`app/modules/agents/`)
 - `interfaces.py` - Agent and tool interfaces (`IAgentOrchestrator`, `AgentRequest`, `AgentResponse`, `ITool`)
-- `factories.py` - `AgentOrchestratorFactory` — creates `autogen`, `custom`, or `mcp` orchestrator
+- `factories.py` - `AgentOrchestratorFactory` — creates `autogen`, `custom`, `mcp`, or `crewai` orchestrator
 - `agent_runner.py` - Legacy LLM-loop runner (REGISTRY used by `run_agent()` only)
 - `tools.py` - ITool implementations (legacy, used by agent_runner only)
 - `utils.py` - Utility classes for mock data and formatting
@@ -178,7 +181,13 @@ User Request → FastAPI Router → Container → Modular Services → Response
   - `workflows/smart_travel_planner.py` - TravelToolSelector(llm_fn) → ToolExecutor → TravelPlanner(llm_fn)
 - `orchestrators/mcp/` - MCP-backed orchestrator (AutoGen agents + MCP tool transport)
   - `mcp_client.py` - `MCPClient` — `list_tools()`, `call_tool()`, `call_tools_parallel()`
+  - `mcp_client_stdio.py` - `MCPClient` stdio transport variant
   - `mcp_orchestrator.py` - `smart_assistant` only; ToolSelector/Summarizer identical to AutoGen
+- `orchestrators/crewai/` - CrewAI multi-agent orchestrator
+  - `orchestrator.py` - CrewAI orchestrator using official `crewai` library
+  - `crewai_orchestrator.py` - CrewAI orchestrator implementation
+  - `interfaces.py` - CrewAI-specific interfaces
+  - `travel_workflow.py` - CrewAI travel planning workflow
 
 **⚙️ Config Module** (`app/modules/config/`)
 - `settings.py` - Environment and application settings
@@ -203,8 +212,7 @@ User Request → FastAPI Router → Container → Modular Services → Response
 - `api_routes_vision.py` - Vision processing (OCR, Image Analysis)
 - `api_routes_media.py` - Media file serving with RBAC
 - `api_routes_models.py` - Model management endpoints
-- `api_routes_agents.py` - Agent workflow endpoints
-- `api_routes_crew.py` - CrewAI multi-agent workflow endpoints
+- `api_routes_agents.py` - Agent workflow endpoints (autogen, custom, mcp, crewai via unified `/api/agents/query`)
 - `api_routes_cleanup.py` - Document cleanup and metadata enrichment
 - `api_routes_templates.py` - Prompt template CRUD endpoints
 - `dependencies.py` - Dependency injection using container
@@ -565,6 +573,7 @@ ai_backend/
 │   │   ├── multimodal/      # Multimodal AI module (NEW)
 │   │   │   ├── interfaces.py      # Multimodal interfaces
 │   │   │   ├── file_manager.py    # User file management
+│   │   │   ├── audio_utils.py     # Audio preprocessing utilities
 │   │   │   ├── stt_providers.py   # Speech-to-Text providers
 │   │   │   ├── tts_providers.py   # Text-to-Speech providers
 │   │   │   ├── vision_providers.py # Vision/OCR providers
@@ -579,6 +588,8 @@ ai_backend/
 │   │   │   │   ├── colabllm.py    # ColabLLM provider
 │   │   │   │   ├── llamaserver.py # LlamaServer provider
 │   │   │   │   └── providers.py   # Provider registry
+│   │   │   ├── services/          # Higher-level LLM services
+│   │   │   │   └── colabllm_rag_service.py  # ColabLLM RAG service
 │   │   │   ├── prompt_templates/  # External template files
 │   │   │   │   ├── balanced_enterprise.txt
 │   │   │   │   ├── strict_rag.txt
@@ -629,7 +640,8 @@ ai_backend/
 │   │   │       │       ├── debate.py
 │   │   │       │       ├── research.py
 │   │   │       │       ├── smart_assistant.py
-│   │   │       │       └── smart_travel_planner.py
+│   │   │       │       ├── smart_travel_planner.py
+│   │   │       │       └── prompt_evaluation.py
 │   │   │       ├── custom/                  # Pure-Python orchestrator (no AutoGen)
 │   │   │       │   ├── custom_orchestrator.py  # Thin dispatcher → WORKFLOW_REGISTRY
 │   │   │       │   └── workflows/
@@ -638,10 +650,17 @@ ai_backend/
 │   │   │       │       ├── research.py
 │   │   │       │       ├── smart_assistant.py
 │   │   │       │       └── smart_travel_planner.py
-│   │   │       └── mcp/                     # MCP-backed orchestrator
+│   │   │       ├── mcp/                     # MCP-backed orchestrator
+│   │   │       │   ├── __init__.py
+│   │   │       │   ├── mcp_client.py        # MCPClient (list_tools, call_tool, call_tools_parallel)
+│   │   │       │   ├── mcp_client_stdio.py  # MCPClient stdio transport variant
+│   │   │       │   └── mcp_orchestrator.py  # smart_assistant only
+│   │   │       └── crewai/                  # CrewAI orchestrator
 │   │   │           ├── __init__.py
-│   │   │           ├── mcp_client.py        # MCPClient (list_tools, call_tool, call_tools_parallel)
-│   │   │           └── mcp_orchestrator.py  # smart_assistant only
+│   │   │           ├── orchestrator.py      # CrewAI orchestrator (official crewai library)
+│   │   │           ├── crewai_orchestrator.py # CrewAI orchestrator implementation
+│   │   │           ├── interfaces.py        # CrewAI-specific interfaces
+│   │   │           └── travel_workflow.py   # CrewAI travel planning workflow
 │   │   ├── core/            # Core business logic
 │   │   │   ├── document_manager.py # Document operations
 │   │   │   ├── version_manager.py  # Document versioning
@@ -673,8 +692,7 @@ ai_backend/
 │   ├── api_routes_vision.py # Vision processing endpoints
 │   ├── api_routes_media.py  # Media serving endpoints
 │   ├── api_routes_models.py # Model management endpoints
-│   ├── api_routes_agents.py # Agent workflow endpoints
-│   ├── api_routes_crew.py   # CrewAI workflow endpoints
+│   ├── api_routes_agents.py # Agent workflow endpoints (autogen, custom, mcp, crewai)
 │   ├── api_routes_cleanup.py # Cleanup and enrichment endpoints
 │   ├── api_routes_templates.py # Prompt template endpoints
 │   ├── dependencies.py      # FastAPI dependencies
@@ -698,11 +716,11 @@ ai_backend/
 │   │   └── v2/             # Version 2 documents
 │   ├── companyData/         # Legacy company documents
 │   ├── examples/            # Example documents
-│   └── missions_output/     # Generated content
-├── cleaned/                 # Enriched documents (NEW)
+│   ├── globalCompany/       # Financial PDFs (AAPL, AMZN, MSFT, etc.)
+│   ├── missions_output/     # Generated content
+│   └── cleaned/             # Enriched/cleaned documents
+├── data/cleaned/            # Enriched documents (inside data/)
 │   └── company/            # Cleaned company documents
-│       ├── v1/             # Enriched v1 documents
-│       └── v2/             # Enriched v2 documents
 ├── database/                # SQLite databases
 ├── models/                  # Local LLM models (GGUF)
 ├── embeddings_models/       # Embedding models
@@ -719,7 +737,13 @@ ai_backend/
 ├── documents/              # Documentation
 ├── archive/                # Archived files
 ├── requirements.txt        # Python dependencies
-├── requirements_multimodal.txt # Multimodal AI dependencies (NEW)
+├── requirements_agents.txt # Agent-specific dependencies
+├── requirements_mcp.txt    # MCP-specific dependencies
+├── requirements_multimodal.txt # Multimodal AI dependencies
+├── requirements_pdf.txt    # PDF parsing dependencies
+├── AUTO_GEN.md             # AutoGen orchestrator deep-dive
+├── FINAL_IMPLEMENTATION_SUMMARY.md # Implementation summary
+├── QUERY_PIPELINE_SUMMARY.md # Query pipeline documentation
 └── validate_container_full.py
 ```
 
@@ -906,9 +930,11 @@ Response: {
 ```
 - Reads from `agent_messages` table — completely separate from RAG `messages` table
 
-### CrewAI Multi-Agent Workflows (`/api/crew/`) - **NEW**
+### CrewAI Multi-Agent Workflows (`/api/agents/query` with `orchestrator_type="crewai"`)
 
-**POST /api/crew/query** - Execute CrewAI multi-agent workflows
+CrewAI workflows are accessed via the unified `/api/agents/query` endpoint with `orchestrator_type="crewai"`. There is no separate `/api/crew/` route.
+
+**POST /api/agents/query** (CrewAI) - Execute CrewAI multi-agent workflows
 ```json
 Request: {
   "topic": "Should companies adopt remote work policies?",
@@ -931,29 +957,17 @@ Response: {
 - Both user and assistant messages saved to `messages` table with `chat_type="crew"`
 - Assistant message persists: `workflow_type`, `agents_used`, `iterations`, `processing_time_ms`
 
-**GET /api/crew/status** - Get CrewAI system status and workflow details
-```json
-Response: {
-  "available_workflows": [
-    {"name": "debate",   "description": "...", "agents": ["Advocate", "Critic", "Moderator"]},
-    {"name": "research", "description": "...", "agents": ["Researcher", "Analyst", "Synthesizer"]}
-  ],
-  "status": "active"
-}
-```
-
-**GET /api/crew/workflows** - List available workflows
-
-**Available Workflows:**
+**Available CrewAI Workflows:**
 - **debate**: Multi-agent debate with Advocate, Critic, and Moderator
 - **research**: Comprehensive research with Researcher, Analyst, and Synthesizer
+- **smart_travel_planner**: CrewAI travel planning workflow
 
 **Key Features:**
 - **Official CrewAI Library**: Uses `crewai.Agent`, `crewai.Task`, `crewai.Crew`
 - **YAML Configuration**: Agent and task definitions in `crew_config/agents.yaml` and `crew_config/tasks.yaml`
 - **Sequential Processing**: Tasks executed in order with context passed between agents
 - **LLM**: llama-server via `CREW_BASE_URL` (OpenAI-compatible endpoint)
-- **DB Persistence**: Every query saved to `messages` table (`chat_type="crew"`)
+- **DB Persistence**: Every query saved to `messages` table (`chat_type="crew"`) via unified agent conversation manager
 
 ### Audio Processing (`/api/audio/`) - **NEW**
 
@@ -1733,9 +1747,10 @@ All three orchestrators share the same `WORKFLOW_REGISTRY` pattern and delegate 
 
 | Orchestrator | LLM mechanism | Tool execution | Workflows |
 |---|---|---|---|
-| `autogen` | `AssistantAgent` + `RoundRobinGroupChat` (AutoGen v0.4) | `execute_tool_calls()` via `asyncio.to_thread` | debate, research, smart_assistant, smart_travel_planner |
+| `autogen` | `AssistantAgent` + `RoundRobinGroupChat` (AutoGen v0.4) | `execute_tool_calls()` via `asyncio.to_thread` | debate, research, smart_assistant, smart_travel_planner, prompt_evaluation |
 | `custom` | Plain `async llm_fn(system, user) → str` (LlamaServerProvider) | `execute_tool_calls()` via `asyncio.to_thread` | debate, research, smart_assistant, smart_travel_planner |
 | `mcp` | `AssistantAgent` + `RoundRobinGroupChat` (AutoGen v0.4) | `MCPClient.call_tools_parallel()` via MCP stdio | smart_assistant only |
+| `crewai` | `crewai.Agent` + `crewai.Crew` (official CrewAI library) | CrewAI task execution | debate, research, smart_travel_planner |
 
 **`WORKFLOW_REGISTRY`** (same for autogen and custom):
 | Workflow | Agents |
@@ -1744,6 +1759,7 @@ All three orchestrators share the same `WORKFLOW_REGISTRY` pattern and delegate 
 | `research` | Planner, Researcher, Verifier, Analyst, Evaluator, ReportWriter |
 | `smart_assistant` | ToolSelector → ToolExecutor (deterministic) → Summarizer |
 | `smart_travel_planner` | TravelToolSelector → ToolExecutor (deterministic) → TravelPlanner |
+| `prompt_evaluation` | PromptParser → CriteriaJudge → Improver → EvalReporter (autogen only) |
 
 **Shared `orchestrators/utils/`** — single source of truth, no duplication:
 - `get_tool_registry()` — lazy map of 21 tool names → callables
@@ -1758,7 +1774,7 @@ All three orchestrators share the same `WORKFLOW_REGISTRY` pattern and delegate 
 - `build_executor_steps(results)` — convert tool result envelopes to step dicts
 - `merge_steps(pre, post)` — renumber and concatenate step lists
 
-**Adding a new workflow**: create `workflows/my_workflow.py` in both `autogen/workflows/` and `custom/workflows/`, add entry to `WORKFLOW_REGISTRY` in both orchestrators, add dispatcher method `_run_my_workflow`.
+**Adding a new workflow**: create `workflows/my_workflow.py` in both `autogen/workflows/` and `custom/workflows/`, add entry to `WORKFLOW_REGISTRY` in both orchestrators, add dispatcher method `_run_my_workflow`. Mirror in `crewai/orchestrator.py` + YAML configs if needed.
 
 **Tool registry** (`tool_registry.py` → `get_tool_registry()`) — names match `agent_runner.REGISTRY`:
 
@@ -3100,7 +3116,7 @@ python tests/test_rbac_comprehensive.py
 
 ---
 
-**Last Updated**: 2025-01-14 (Added `prompt_evaluation` workflow: 4-agent pipeline PromptParser→CriteriaJudge→Improver→EvalReporter; scores on 5 criteria; produces structured markdown report with improved prompt and verdict)
+**Last Updated**: 2025-06-01 (Corrected CrewAI module location to `orchestrators/crewai/`; added `mcp_client_stdio.py`, `audio_utils.py`, `colabllm_rag_service.py`; unified CrewAI under `/api/agents/query`; added `data/globalCompany/` and `data/cleaned/`; added `requirements_mcp.txt`; corrected `prompt_evaluation` workflow: 4-agent pipeline PromptParser→CriteriaJudge→Improver→EvalReporter; scores on 5 criteria; produces structured markdown report with improved prompt and verdict)
 
 **Recent changes (autogen/custom/mcp refactor)**:
 - `orchestrators/utils/` created as shared package — `tool_registry`, `tool_utils`, `json_utils`, `plan_normalizer`, `step_utils` moved here; all three orchestrators import from this single location, zero duplication
