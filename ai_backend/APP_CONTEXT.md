@@ -41,7 +41,7 @@ This system is built as a **learning playground and reference implementation** f
 ### Key Features
 - ✅ **Multi-provider LLM support** with unified API
 - ✅ **All providers registered** — `local`, `google`, `openai`/`gpt`, `huggingface`/`hf`, `customllm`, `colabllm`, `llamaserver` with alias resolution
-- ✅ **Complete query preprocessing pipeline** — normalization, spell correction (runs before normalization), synonym/acronym expansion, query classification; `QueryPreprocessor` singleton per orchestrator (no per-query re-init)
+- ✅ **Complete query preprocessing pipeline** — normalization, spell correction (runs before normalization), synonym/acronym expansion, query classification; `QueryPreprocessor` singleton per orchestrator (no per-query re-init); domain vocabulary protected from mis-correction; repeated-char deduplication; run-together word segmentation (`wordninja`); digit-word splitting; auto LLM rewrite for broken grammar (unknown-word ratio > 30%)
 - ✅ **Multi-variant hybrid retrieval** — top-3 query variants searched across BM25 + vector store; results fused with weighted RRF before RBAC filter
 - ✅ **BM25 hybrid retrieval** — `re.findall(r'[a-z0-9]+', ...)` tokenizer handles enterprise identifiers (e.g. `PTO-2024-Q1`); index rebuilt after every document add/update via `_bm25_dirty` flag
 - ✅ **Weighted RRF fusion** — `bm25_weight`/`vector_weight` driven by `query_type` (POLICY/FACTUAL → higher BM25 weight; semantic queries → higher vector weight)
@@ -122,7 +122,7 @@ User Request → FastAPI Router → Container → Modular Services → Response
 - `reranker.py` - Cross-encoder reranking for improved retrieval quality
 - `bm25_index.py` - BM25 keyword-based retrieval; `_tokenize()` uses `re.findall(r'[a-z0-9]+', ...)` to split on hyphens/underscores for enterprise identifiers
 - `hybrid_retrieval.py` - Weighted Reciprocal Rank Fusion (`bm25_weight`/`vector_weight` params); dead `hybrid_search()` helper removed
-- `query_preprocessor.py` - Query normalization, spell correction (runs on original before normalization), acronym/synonym expansion, query type classification (`QueryType` enum)
+- `query_preprocessor.py` - Query normalization, spell correction (runs on original before normalization), acronym/synonym expansion, query type classification (`QueryType` enum); domain word protection (expansion keys + `rbac`, `pto`, `wfh`, etc. loaded into spell checker at init); `remove_repeated_chars()` collapses 3+ repeated chars; `split_concatenated_words()` via `wordninja`; digit-word splitting in `correct_spelling()`; `_looks_broken()` auto-enables LLM rewrite when unknown-word ratio > 30%
 - `interfaces.py` - Vector database interfaces
 
 **🔧 Core Module** (`app/modules/core/`)
@@ -3086,6 +3086,66 @@ python tests/test_rbac_comprehensive.py
 - **Clear Output**: Detailed test results and failure reporting
 - **Documentation**: Comprehensive test coverage documentation
 
+## 22.5 Query Input Robustness Pipeline
+
+### Overview
+
+The `QueryPreprocessor` (`app/modules/vector_db/query_preprocessor.py`) applies a 6-stage pipeline before any retrieval occurs. All stages run inside `process_query()` in this order:
+
+| Stage | Method | Purpose |
+|---|---|---|
+| 1 | `remove_repeated_chars()` | Collapse 3+ repeated chars: `leeeeave` → `leeave` |
+| 2 | `split_concatenated_words()` | Split run-together words via `wordninja`: `leavepolicy` → `leave policy` |
+| 3 | `correct_spelling()` | Spell correction with digit-word split + domain word protection |
+| 4 | `normalize_query()` | Lowercase, strip special chars (apostrophes preserved) |
+| 5 | `expand_query()` | Acronym/synonym expansion from `self.expansions` dict |
+| 6 | `_looks_broken()` + LLM rewrite | Auto-enable LLM rewrite when unknown-word ratio > 30% |
+
+### Domain Word Protection
+
+At init, all expansion keys plus hardcoded domain terms are loaded into the spell checker's word frequency table so they are never mis-corrected:
+
+```python
+domain_words = set(self.expansions.keys()) | {
+    'rbac', 'pto', 'wfh', 'ooo', 'rto', 'sso', 'mfa',
+    'onboarding', 'offboarding', 'payroll', 'reimbursement',
+}
+self.spell_checker.word_frequency.load_words(domain_words)
+```
+
+Without this, `pyspellchecker` would silently corrupt domain queries: `rbac` → `race`, `pto` → `pro`, `wfh` → `who`.
+
+### Apostrophe Preservation
+
+`normalize_query()` uses `[^a-z0-9\s\-']` (apostrophe included) so contractions like `"what's"` survive normalization intact.
+
+### Digit-Word Splitting
+
+Inside `correct_spelling()`, before the digit-skip guard, digit-word combos are split:
+- `"3day"` → `["3", "day"]`
+- `"2weeks"` → `["2", "weeks"]`
+
+This ensures BM25 tokenizer receives proper tokens instead of unmatched compound strings.
+
+### Auto LLM Rewrite
+
+`_looks_broken(query)` returns `True` when more than 30% of words are unknown to the spell checker (skips queries ≤ 3 words to avoid false positives on short acronym queries). When triggered and an `llm_provider` is passed to `process_query()`, `use_llm_rewrite` is auto-enabled and `rewrite_with_llm()` fires.
+
+### Vague Query Retrieval Boost
+
+In `RAGOrchestrator.retrieve_documents()`, queries of ≤ 2 words are detected as vague and get a larger candidate pool for the reranker:
+
+```python
+is_vague = len(query.split()) <= 2
+retrieval_k = max(top_k * 6, 30) if is_vague else max(top_k * 4, 20)
+```
+
+### New Dependency
+
+`wordninja` added to `requirements.txt` — pure Python word segmentation, no model download required.
+
+---
+
 ## 23. AI Assistant Instructions
 
 **When generating code:**
@@ -3120,7 +3180,7 @@ python tests/test_rbac_comprehensive.py
 
 ---
 
-**Last Updated**: 2025-06-15 (Retrieval pipeline hardening from MISSING_TODO audit — see section 25 for full change log)
+**Last Updated**: 2025-06-15 (Query input robustness hardening from MISSING_TODO audit — domain word protection, apostrophe fix, repeated-char dedup, digit-word split, wordninja segmentation, auto LLM rewrite, vague query retrieval_k boost)
 
 **Recent changes (autogen/custom/mcp refactor)**:
 - `orchestrators/utils/` created as shared package — `tool_registry`, `tool_utils`, `json_utils`, `plan_normalizer`, `step_utils` moved here; all three orchestrators import from this single location, zero duplication
