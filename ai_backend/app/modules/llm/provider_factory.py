@@ -80,6 +80,47 @@ class GoogleProviderPlugin(ProviderPlugin):
         return bool(google_api_key)
 
 
+class OpenAIProviderPlugin(ProviderPlugin):
+    """OpenAI/GPT provider plugin."""
+
+    @property
+    def name(self) -> str:
+        return "openai"
+
+    @property
+    def requires_api_key(self) -> bool:
+        return True
+
+    async def create_provider(self, config: Optional[Dict[str, Any]] = None):
+        from app.modules.llm.providers.openai import OpenAILLMProvider
+        model_name = (config or {}).get("model_name", "gpt-3.5-turbo")
+        return OpenAILLMProvider(model_name=model_name)
+
+    def is_available(self) -> bool:
+        import os
+        return bool(os.getenv("OPENAI_API_KEY"))
+
+
+class HuggingFaceProviderPlugin(ProviderPlugin):
+    """Hugging Face provider plugin."""
+
+    @property
+    def name(self) -> str:
+        return "huggingface"
+
+    @property
+    def requires_api_key(self) -> bool:
+        return True
+
+    async def create_provider(self, config: Optional[Dict[str, Any]] = None):
+        from app.modules.llm.providers.huggingface import HuggingFaceLLMProvider
+        return HuggingFaceLLMProvider()
+
+    def is_available(self) -> bool:
+        import os
+        return bool(os.getenv("HUGGINGFACE_API_TOKEN"))
+
+
 class ProviderRegistry:
     """Registry for provider plugins."""
     
@@ -92,6 +133,8 @@ class ProviderRegistry:
         plugins = [
             LocalProviderPlugin(),
             GoogleProviderPlugin(),
+            OpenAIProviderPlugin(),
+            HuggingFaceProviderPlugin(),
         ]
         
         # Register ColabLLM plugin
@@ -132,6 +175,10 @@ class ProviderRegistry:
     
     async def create_provider(self, name: str, config: Optional[Dict[str, Any]] = None):
         """Create provider instance."""
+        # Resolve aliases
+        aliases = {"gpt": "openai", "hf": "huggingface"}
+        name = aliases.get(name, name)
+
         plugin = self.get_plugin(name)
         if not plugin:
             raise ValueError(f"Unknown provider: {name}")

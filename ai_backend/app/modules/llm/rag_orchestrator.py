@@ -17,6 +17,7 @@ from .prompt_manager import PromptManager
 from .provider_factory import create_provider
 from ..auth.interfaces import ISessionManager
 from ..vector_db.interfaces import IVectorStore
+from ..vector_db.query_preprocessor import QueryPreprocessor, QueryType
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +36,7 @@ class RAGOrchestrator(IRAGOrchestrator):
         self.langchain_selector = ConditionalPromptSelector(template_manager)
         self.middleware_stack = create_default_middleware_stack()
         self._reranker = None  # lazy singleton
+        self._preprocessor = QueryPreprocessor()  # singleton — avoids SpellChecker re-init per query
 
     def _get_conversation_debug_log_path(self, conversation_id: Optional[str]) -> Path:
         """Return the per-conversation RAG debug log path."""
@@ -142,10 +144,7 @@ class RAGOrchestrator(IRAGOrchestrator):
         global prompt_data
         
         # Step 0: Query Preprocessing (before middleware)
-        from app.modules.vector_db.query_preprocessor import QueryPreprocessor
-        preprocessor = QueryPreprocessor()
-        
-        processed_query = await preprocessor.process_query(
+        processed_query = await self._preprocessor.process_query(
             query=request.question,
             use_spell_correction=True,
             use_expansion=True,
@@ -478,7 +477,6 @@ class RAGOrchestrator(IRAGOrchestrator):
         5. Return top-k documents
         """
         from app.modules.config.constants import ROLE_LEVELS, SENSITIVITY_LEVELS
-        from app.modules.vector_db.query_preprocessor import QueryPreprocessor
         try:
             retrieval_k = max(top_k * 4, 20)
 
@@ -492,15 +490,13 @@ class RAGOrchestrator(IRAGOrchestrator):
             bm25_index = container.get_bm25_index()
 
             # Build query variants for multi-variant retrieval
-            preprocessor = QueryPreprocessor()
-            processed = await preprocessor.process_query(
+            processed = await self._preprocessor.process_query(
                 query=query, use_spell_correction=True, use_expansion=True
             )
             # Use top-3 unique variants to avoid redundant fetches
             variants = list(dict.fromkeys(processed.all_variants))[:3]
 
             # Determine RRF weights based on query type
-            from app.modules.vector_db.query_preprocessor import QueryType
             if processed.query_type in (QueryType.POLICY, QueryType.FACTUAL):
                 bm25_weight, vector_weight = 1.5, 1.0
             else:

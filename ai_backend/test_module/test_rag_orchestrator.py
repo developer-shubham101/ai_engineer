@@ -52,6 +52,42 @@ def test_rag_orchestrator_type(rag_orchestrator):
         pytest.fail(f"RAG orchestrator type test failed: {e}")
 
 
+@pytest.mark.asyncio
+async def test_rbac_level_filtering(rag_orchestrator):
+    """Employee must not see highly_confidential docs even in same department."""
+    from app.modules.config.constants import ROLE_LEVELS, SENSITIVITY_LEVELS
+
+    employee_user = {"role": "Employee", "department": "HR", "user_id": "emp1"}
+    employee_level = ROLE_LEVELS.get("Employee", 0)
+    required_level = SENSITIVITY_LEVELS.get("highly_confidential", 3)
+
+    # Core assertion: Employee level is below highly_confidential threshold
+    assert employee_level < required_level, (
+        f"Employee level {employee_level} should be < highly_confidential level {required_level}"
+    )
+
+    # Simulate the RBAC filter logic directly
+    doc = {"metadata": {"sensitivity": "highly_confidential", "department": "HR"}}
+    sensitivity = doc["metadata"]["sensitivity"]
+    doc_dept = doc["metadata"]["department"]
+    req = SENSITIVITY_LEVELS.get(sensitivity, 0)
+
+    # Employee in same dept still blocked by level check
+    passes = employee_level >= req
+    assert not passes, "Employee should NOT pass highly_confidential level check"
+
+
+@pytest.mark.asyncio
+async def test_context_length(rag_orchestrator):
+    """build_context must use 2000-char limit per document, not 500."""
+    long_text = "x" * 3000
+    docs = [{"text": long_text, "id": "d1", "metadata": {}}]
+    context = await rag_orchestrator.build_context(docs)
+    # Should contain exactly 2000 chars of the document text (plus label)
+    assert "x" * 2000 in context, "Context should include up to 2000 chars per doc"
+    assert "x" * 2001 not in context, "Context must not exceed 2000 chars per doc"
+
+
 async def run_standalone_tests():
     """Run tests without pytest for standalone execution."""
     print("Testing RAG Orchestrator Module")

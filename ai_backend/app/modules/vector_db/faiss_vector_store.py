@@ -149,10 +149,7 @@ class FaissVectorStore(IVectorStore):
         new_index = faiss.IndexFlatIP(self.dimension)
         new_documents: Dict[int, Any] = {}
 
-        for new_pos, doc_info in enumerate(self.documents.values()):
-            # Re-encode is not available here; we must reconstruct from the old index.
-            # Retrieve the stored vector by its old position key.
-            old_pos = list(self.documents.keys())[new_pos]
+        for new_pos, (old_pos, doc_info) in enumerate(self.documents.items()):
             try:
                 vec = np.zeros((1, self.dimension), dtype='float32')
                 self.index.reconstruct(old_pos, vec[0])

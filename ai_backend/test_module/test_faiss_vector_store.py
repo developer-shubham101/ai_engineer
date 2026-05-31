@@ -85,5 +85,37 @@ async def test_persistence(faiss_container):
     assert len(results) > 0
     assert "Document for persistence test." in [r['text'] for r in results]
 
+
+@pytest.mark.asyncio
+async def test_delete_and_compact(vector_store):
+    """Delete removes doc from search results and document_count decreases."""
+    text = "Unique document for delete test XYZ123."
+    doc_id = await vector_store.add_document(text, {"source": "delete_test"})
+    count_before = vector_store.get_collection_info()["document_count"]
+
+    deleted = await vector_store.delete_document(doc_id)
+    assert deleted is True
+
+    count_after = vector_store.get_collection_info()["document_count"]
+    assert count_after == count_before - 1
+
+    results = await vector_store.search_documents("Unique document delete test XYZ123", top_k=5)
+    assert all(r["id"] != doc_id for r in results), "Deleted doc should not appear in search results"
+
+
+@pytest.mark.asyncio
+async def test_compact_preserves_remaining_docs(vector_store):
+    """After delete+compact, remaining docs are still searchable."""
+    id_a = await vector_store.add_document("Alpha document about finance.", {"source": "alpha"})
+    id_b = await vector_store.add_document("Beta document about engineering.", {"source": "beta"})
+
+    await vector_store.delete_document(id_a)
+
+    results = await vector_store.search_documents("engineering", top_k=5)
+    result_ids = [r["id"] for r in results]
+    assert id_b in result_ids, "Non-deleted doc must remain searchable after compact"
+    assert id_a not in result_ids, "Deleted doc must not appear after compact"
+
+
 if __name__ == "__main__":
     pytest.main([__file__])

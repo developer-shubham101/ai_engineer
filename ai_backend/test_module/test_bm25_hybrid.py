@@ -1,6 +1,10 @@
 """Test BM25 hybrid retrieval with keyword matching."""
 import asyncio
 import logging
+import os
+import pytest
+
+os.environ.setdefault("VECTOR_STORE_TYPE", "faiss")
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -151,3 +155,67 @@ if __name__ == "__main__":
     
     asyncio.run(test_bm25_hybrid())
     asyncio.run(test_keyword_advantage())
+
+
+# ---------------------------------------------------------------------------
+# pytest-compatible tests
+# ---------------------------------------------------------------------------
+
+def test_bm25_tokenizer_splits_identifiers():
+    """_tokenize must split on hyphens/underscores so PTO-2024-Q1 matches sub-terms."""
+    from app.modules.vector_db.bm25_index import BM25Index
+    idx = BM25Index()
+    tokens = idx._tokenize("PTO-2024-Q1 leave_policy")
+    assert "pto" in tokens
+    assert "2024" in tokens
+    assert "q1" in tokens
+    assert "leave" in tokens
+    assert "policy" in tokens
+
+
+def test_rrf_weighted_fusion():
+    """reciprocal_rank_fusion respects bm25_weight and vector_weight."""
+    from app.modules.vector_db.hybrid_retrieval import reciprocal_rank_fusion
+    bm25 = [{"id": "a", "text": "a", "metadata": {}}]
+    vector = [{"id": "b", "text": "b", "metadata": {}}]
+    # Heavy BM25 weight — doc "a" should score higher
+    results = reciprocal_rank_fusion(bm25, vector, k=60, bm25_weight=10.0, vector_weight=1.0)
+    assert results[0]["id"] == "a"
+    # Heavy vector weight — doc "b" should score higher
+    results2 = reciprocal_rank_fusion(bm25, vector, k=60, bm25_weight=1.0, vector_weight=10.0)
+    assert results2[0]["id"] == "b"
+
+
+@pytest.mark.asyncio
+async def test_bm25_freshness_after_api_add():
+    """BM25 index must find a document added via add_document_to_rag_local."""
+    from app.modules.integration import get_container, reset_container
+    reset_container()
+    container = get_container()
+    container.initialize()
+
+    doc_manager = container.get_document_manager()
+    bm25_index = container.get_bm25_index()
+
+    if not bm25_index or not bm25_index.is_available():
+        pytest.skip("rank_bm25 not installed")
+
+    unique_term = "xyzuniquetermfortesting9871"
+    await doc_manager.add_document_to_rag_local(
+        source_name="bm25_freshness_test",
+        text=f"This document contains the term {unique_term}.",
+        metadata={"sensitivity": "public_internal", "department": "General"},
+        created_by="test"
+    )
+
+    # Dirty flag must be set
+    assert doc_manager._bm25_dirty is True
+
+    # Flush
+    await doc_manager._refresh_bm25_if_dirty()
+    assert doc_manager._bm25_dirty is False
+
+    results = bm25_index.search(unique_term, top_k=5)
+    assert any(unique_term in r["text"] for r in results), (
+        "BM25 must find the document added via API after refresh"
+    )

@@ -40,34 +40,38 @@ This system is built as a **learning playground and reference implementation** f
 
 ### Key Features
 - ✅ **Multi-provider LLM support** with unified API
-- ✅ **Complete query preprocessing pipeline** - Normalization, spell correction, synonym expansion, query classification (Tier 1 optimization)
-- ✅ **Multi-variant hybrid retrieval** - Searches with all query variants for maximum coverage (Tier 1 optimization)
-- ✅ **BM25 hybrid retrieval** for keyword + semantic search (Tier 1 optimization)
-- ✅ **Cross-encoder reranking** for improved retrieval quality (Tier 1 optimization)
-- ✅ **Paragraph-aware chunking** for semantic coherence (Tier 1 optimization)
+- ✅ **All providers registered** — `local`, `google`, `openai`/`gpt`, `huggingface`/`hf`, `customllm`, `colabllm`, `llamaserver` with alias resolution
+- ✅ **Complete query preprocessing pipeline** — normalization, spell correction (runs before normalization), synonym/acronym expansion, query classification; `QueryPreprocessor` singleton per orchestrator (no per-query re-init)
+- ✅ **Multi-variant hybrid retrieval** — top-3 query variants searched across BM25 + vector store; results fused with weighted RRF before RBAC filter
+- ✅ **BM25 hybrid retrieval** — `re.findall(r'[a-z0-9]+', ...)` tokenizer handles enterprise identifiers (e.g. `PTO-2024-Q1`); index rebuilt after every document add/update via `_bm25_dirty` flag
+- ✅ **Weighted RRF fusion** — `bm25_weight`/`vector_weight` driven by `query_type` (POLICY/FACTUAL → higher BM25 weight; semantic queries → higher vector weight)
+- ✅ **Cross-encoder reranking** — singleton `self._reranker` on `RAGOrchestrator`; no per-query model reload
+- ✅ **Level-based RBAC filtering** — `ROLE_LEVELS[user_role] >= SENSITIVITY_LEVELS[sensitivity]`; `department_confidential` requires both level AND same dept; `personal` requires owner match OR HR+ level
+- ✅ **Paragraph-aware chunking** for semantic coherence
 - ✅ **Enterprise RBAC** with flexible role overrides
 - ✅ **Document versioning** with non-destructive updates
 - ✅ **Session-aware conversations** with profile management
 - ✅ **Persistent conversation history** with cross-device access
 - ✅ **Agentic mode** with step-by-step reasoning capabilities
 - ✅ **Agent Tools System** with real-time stock, weather, web search, URL scraping and file operations
-- ✅ **Internet Search** - DuckDuckGo (free) or SerpAPI for real-time information in agents
-- ✅ **Multimodal AI capabilities** - Audio, Vision, and Media processing
-- ✅ **Agent Framework** - Modular architecture with AutoGen and custom orchestrators
-- ✅ **CrewAI Integration** - Multi-agent workflows with debate and research capabilities
-- ✅ **LlamaServer Integration** - Direct llama-server.exe support with OpenAI-compatible API
+- ✅ **Internet Search** — DuckDuckGo (free) or SerpAPI for real-time information in agents
+- ✅ **Multimodal AI capabilities** — Audio, Vision, and Media processing
+- ✅ **Agent Framework** — Modular architecture with AutoGen and custom orchestrators
+- ✅ **CrewAI Integration** — Multi-agent workflows with debate and research capabilities
+- ✅ **LlamaServer Integration** — Direct llama-server.exe support with OpenAI-compatible API
 - ✅ **Speech-to-Text & Text-to-Speech** with multiple providers
 - ✅ **OCR and Image Analysis** with CPU-friendly implementations
 - ✅ **Emotion Detection** from audio inputs
-- ✅ **LLM-assisted metadata generation** - Semantic enrichment for improved RAG
+- ✅ **LLM-assisted metadata generation** — Semantic enrichment for improved RAG
 - ✅ **Offline-first architecture** with cloud integration
 - ✅ **JWT authentication** with comprehensive audit logging
-- ✅ **Prompt optimization** with token budgeting and context truncation
+- ✅ **Prompt optimization** with token budgeting and context truncation (2000 chars/doc)
 - ✅ **Debug capabilities** with final_prompt exposure for optimization
 - ✅ **Production-ready** with 8GB+ RAM support for local models
-- ✅ **Temperature control** - Unified temperature parameter across all providers
-- ✅ **Comprehensive RAG logging** - Full pipeline tracking for debugging
-- ✅ **Agent conversation persistence** - Agent interactions saved to separate `agent_messages` table
+- ✅ **Temperature control** — Unified temperature parameter across all providers
+- ✅ **Comprehensive RAG logging** — Full pipeline tracking for debugging
+- ✅ **Agent conversation persistence** — Agent interactions saved to separate `agent_messages` table
+- ✅ **Offline retrieval benchmark** — `scripts/benchmark_retrieval.py` tracks Recall@3, MRR, latency p50/p95 over full pipeline
 
 ---
 
@@ -98,7 +102,7 @@ User Request → FastAPI Router → Container → Modular Services → Response
 - `rag_orchestrator.py` - RAG workflow orchestration
 - `providers/` - LLM provider implementations (Local, Google, GPT, HF, ColabLLM, LlamaServer)
 - `services/colabllm_rag_service.py` - ColabLLM RAG service implementation
-- `provider_factory.py` - Factory for dynamic provider selection
+- `provider_factory.py` - Factory for dynamic provider selection with alias resolution (`gpt`→`openai`, `hf`→`huggingface`); registers `OpenAIProviderPlugin` and `HuggingFaceProviderPlugin` alongside Local, Google, ColabLLM, LlamaServer
 - `prompt_manager.py` - Optimized prompt construction with token budgeting
 - `prompt_chain.py` - Chain of Responsibility pattern for dynamic prompt building
 - `prompt_builder.py` - Low-level prompt building utilities
@@ -116,9 +120,9 @@ User Request → FastAPI Router → Container → Modular Services → Response
 - `faiss_vector_store.py` - FAISS implementation (configurable via `VECTOR_STORE_TYPE` env var)
 - `embedding_manager.py` - Embedding model management
 - `reranker.py` - Cross-encoder reranking for improved retrieval quality
-- `bm25_index.py` - **NEW: BM25 keyword-based retrieval**
-- `hybrid_retrieval.py` - **NEW: Reciprocal Rank Fusion for hybrid search**
-- `query_preprocessor.py` - **NEW: Query normalization and spell correction**
+- `bm25_index.py` - BM25 keyword-based retrieval; `_tokenize()` uses `re.findall(r'[a-z0-9]+', ...)` to split on hyphens/underscores for enterprise identifiers
+- `hybrid_retrieval.py` - Weighted Reciprocal Rank Fusion (`bm25_weight`/`vector_weight` params); dead `hybrid_search()` helper removed
+- `query_preprocessor.py` - Query normalization, spell correction (runs on original before normalization), acronym/synonym expansion, query type classification (`QueryType` enum)
 - `interfaces.py` - Vector database interfaces
 
 **🔧 Core Module** (`app/modules/core/`)
@@ -1456,10 +1460,10 @@ personal (1)              - Owner + HR+ level
 ```
 
 ### RBAC Features
-- **Level-based validation**: Users can only create documents at their level or below
-- **Role overrides**: `allowed_roles` bypasses hierarchy
-- **Department restrictions**: Users below HR level can only update their department
-- **Personal documents**: Owner access + HR+ level override
+- **Level-based validation**: `ROLE_LEVELS[user_role] >= SENSITIVITY_LEVELS[sensitivity]` — pure numeric check, no flat OR logic
+- **department_confidential**: requires BOTH sufficient level AND same department as document
+- **personal documents**: owner access (`owner_id == user_id`) OR HR+ level (`user_level >= role_confidential`)
+- **Role overrides**: `allowed_roles` metadata field bypasses hierarchy entirely
 - **Pre-response filtering**: Unauthorized content removed before LLM generation
 
 ### Example Metadata
@@ -3116,7 +3120,7 @@ python tests/test_rbac_comprehensive.py
 
 ---
 
-**Last Updated**: 2025-06-01 (Corrected CrewAI module location to `orchestrators/crewai/`; added `mcp_client_stdio.py`, `audio_utils.py`, `colabllm_rag_service.py`; unified CrewAI under `/api/agents/query`; added `data/globalCompany/` and `data/cleaned/`; added `requirements_mcp.txt`; corrected `prompt_evaluation` workflow: 4-agent pipeline PromptParser→CriteriaJudge→Improver→EvalReporter; scores on 5 criteria; produces structured markdown report with improved prompt and verdict)
+**Last Updated**: 2025-06-15 (Retrieval pipeline hardening from MISSING_TODO audit — see section 25 for full change log)
 
 **Recent changes (autogen/custom/mcp refactor)**:
 - `orchestrators/utils/` created as shared package — `tool_registry`, `tool_utils`, `json_utils`, `plan_normalizer`, `step_utils` moved here; all three orchestrators import from this single location, zero duplication

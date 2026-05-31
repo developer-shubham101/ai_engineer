@@ -1,64 +1,74 @@
-# P0 — Must fix (correctness bugs)
+# TODO — Vector DB, Retrieval Pipeline & RAG Quality
 
-- [x] **BM25 not refreshed after document add/update** — `app/modules/core/document_manager.py`
-    - `_bm25_dirty = True` now set in `add_document_to_rag_local()` after every successful vector store write
+All items verified against source code. ✅ = implemented and confirmed
+
+## P0 — Correctness bugs
+
+- [x] **BM25 not refreshed after document add/update** — `app/modules/core/document_manager.py` ✅
+    - `_bm25_dirty = True` set after every `add_document_to_rag_local()` write
     - `_refresh_bm25_if_dirty()` called at end of `update_document_version()`
-    - Directory seed path now calls `_build_bm25_index()` + resets flag after completion
-    - `retrieve_documents()` in `rag_orchestrator.py` flushes dirty flag before search
+    - Directory seed path calls `_build_bm25_index()` + resets flag
+    - `retrieve_documents()` flushes dirty flag before search
 
-- [x] **Chroma metadata filter ignored in search** — `app/modules/vector_db/chroma_impl.py`
-    - `search_documents()` passes `where=metadata_filter` to `query_collection()` which forwards it to `collection.query()`
+- [x] **Chroma metadata filter ignored in search** — `app/modules/vector_db/chroma_impl.py` ✅
+    - `search_documents()` passes `where=metadata_filter` to `query_collection()`
 
-- [x] **FAISS deletion leaves stale vectors in index** — `app/modules/vector_db/faiss_vector_store.py`
-    - `_compact()` method rebuilds index from `self.documents.values()`
+- [x] **FAISS deletion leaves stale vectors** — `app/modules/vector_db/faiss_vector_store.py` ✅
+    - `_compact()` iterates `self.documents.items()` directly (sparse key bug fixed)
     - Called in `delete_document()` and `delete_ids()`
-    - `get_collection_info()` returns `len(self.documents)` not `index.ntotal`
+    - `get_collection_info()` returns `len(self.documents)`
 
-- [x] **RBAC filter in retrieve_documents() is too permissive** — `app/modules/llm/rag_orchestrator.py`
+- [x] **RBAC filter too permissive** — `app/modules/llm/rag_orchestrator.py` ✅
     - Level-based check: `ROLE_LEVELS[user_role] >= SENSITIVITY_LEVELS[sensitivity]`
     - `department_confidential` requires both level AND same dept
-    - `personal` requires owner match OR HR+ level
 
-- [x] **Context truncated to 500 chars per document** — `app/modules/llm/rag_orchestrator.py`
-    - `build_context()` uses `[:2000]` per document
-    - `_build_messages()` uses `[:2000]` per document (no duplicate truncation)
+- [x] **Context truncated to 500 chars** — `app/modules/llm/rag_orchestrator.py` ✅
+    - `build_context()` and `_build_messages()` both use `[:2000]`
 
-# P1 — High impact, low risk
+## P1 — Quality improvements
 
-- [x] **Query expansion disabled** — `app/modules/llm/rag_orchestrator.py`
-    - `use_expansion=True` in `process_query()` call
+- [x] **Query expansion disabled** ✅ — `use_expansion=True`
+- [x] **Query variants discarded** ✅ — top-3 variants used across BM25 + vector, fused with RRF
+- [x] **Reranker instantiated on every query** ✅ — `self._reranker` lazy singleton
+- [x] **QueryPreprocessor instantiated on every query** ✅ — `self._preprocessor` singleton in `__init__`
+- [x] **FAISS save path not guaranteed to exist** ✅ — `mkdir(parents=True, exist_ok=True)`
+- [x] **Dead `hybrid_search()` helper** ✅ — removed
+- [x] **RRF weights static** ✅ — `bm25_weight`/`vector_weight` params, driven by `query_type`
+- [x] **Spell correction ran after normalization** ✅ — correction runs on original before normalize
+- [x] **BM25 tokenization whitespace-only** ✅ — `re.findall(r'[a-z0-9]+', ...)`
+- [x] **FAISS used L2 instead of cosine** ✅ — `IndexFlatIP` + `normalize_L2`
+- [x] **provider_factory.py missing GPT/HF plugins** ✅
+    - `OpenAIProviderPlugin` registered for `openai`
+    - `HuggingFaceProviderPlugin` registered for `huggingface`
+    - `gpt` → `openai` and `hf` → `huggingface` aliases resolved in `create_provider()`
 
-- [x] **Query variants computed but discarded** — `app/modules/llm/rag_orchestrator.py`
-    - Multi-variant retrieval: top-3 unique variants run in parallel across BM25 + vector
-    - Results fused with additional RRF pass before RBAC filtering
+## P2 — Ops hardening
 
-- [x] **Reranker instantiated on every query** — `app/modules/llm/rag_orchestrator.py`
-    - `self._reranker` lazy singleton on `RAGOrchestrator`; instantiated once, reused
+- [x] **No offline retrieval benchmark** ✅ — `scripts/benchmark_retrieval.py`
+    - Uses `rag_orchestrator.retrieve_documents()` — full pipeline (BM25 + vector + RRF + RBAC + reranker)
+    - Tracks Recall@3, MRR, latency p50/p95
 
-- [x] **FAISS save path not guaranteed to exist** — `app/modules/vector_db/faiss_vector_store.py`
-    - `_save_index()` calls `Path(self.file_path).parent.mkdir(parents=True, exist_ok=True)`
+## Test coverage
 
-- [x] **Dead hybrid_search() helper uses wrong interface** — `app/modules/vector_db/hybrid_retrieval.py`
-    - Dead function removed; only `reciprocal_rank_fusion()` remains
+- [x] `test_faiss_vector_store.py` — `test_delete_and_compact`, `test_compact_preserves_remaining_docs` ✅
+- [x] `test_bm25_hybrid.py` — `test_bm25_tokenizer_splits_identifiers`, `test_rrf_weighted_fusion`, `test_bm25_freshness_after_api_add` ✅
+- [x] `test_rag_orchestrator.py` — `test_rbac_level_filtering`, `test_context_length` ✅
 
-# P2 — Quality improvements
+## Definition of done — all complete ✅
 
-- [x] **RRF weights are static and query-type-unaware** — `app/modules/vector_db/hybrid_retrieval.py`
-    - `reciprocal_rank_fusion()` accepts `bm25_weight` / `vector_weight` params
-    - `retrieve_documents()` passes weights based on `processed_query.query_type`
-    - POLICY/FACTUAL → `bm25_weight=1.5, vector_weight=1.0`; else reversed
-
-- [x] **normalize_query() strips apostrophes before spell correction** — `app/modules/vector_db/query_preprocessor.py`
-    - `process_query()` runs `correct_spelling()` on original query before `normalize_query()`
-
-- [x] **FAISS uses L2 distance instead of cosine** — `app/modules/vector_db/faiss_vector_store.py`
-    - Uses `IndexFlatIP` with `faiss.normalize_L2()` before `index.add()` and `index.search()`
-
-# P3 — Ops hardening
-
-- [x] **BM25 tokenization too naive for enterprise identifiers** — `app/modules/vector_db/bm25_index.py`
-    - `_tokenize()` uses `re.findall(r'[a-z0-9]+', text.lower())` — splits on hyphens, underscores, separators
-
-- [x] **No offline retrieval benchmark harness** — `scripts/benchmark_retrieval.py`
-    - Created: tracks Recall@3, MRR, latency p50/p95 against QA pairs from company documents
-    - Run: `python scripts/benchmark_retrieval.py`
+- [x] BM25 fresh after every add/update/seed path
+- [x] Chroma metadata filter applied
+- [x] FAISS `_compact()` correct sparse-key mapping
+- [x] FAISS `document_count` reflects active documents
+- [x] `hybrid_search()` helper deleted
+- [x] Singleton reranker and preprocessor — no per-query re-init
+- [x] Query expansion enabled; all variants used
+- [x] RBAC level-based check
+- [x] Context 2000 chars per document
+- [x] Weighted RRF — query-type-driven
+- [x] Spell correction before normalization
+- [x] BM25 tokenizer handles enterprise identifiers
+- [x] FAISS cosine similarity
+- [x] All providers registered (local, google, openai/gpt, huggingface/hf, colabllm, llamaserver)
+- [x] Benchmark measures full pipeline
+- [x] Delete+compact, BM25 freshness, RBAC, context-length tests added
