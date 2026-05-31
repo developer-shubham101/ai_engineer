@@ -29,11 +29,12 @@ class RAGOrchestrator(IRAGOrchestrator):
     def __init__(self, vector_store: IVectorStore, session_manager: ISessionManager, conversation_manager=None, template_manager=None):
         self.vector_store = vector_store
         self.session_manager = session_manager
-        self.conversation_manager = conversation_manager  # NEW: Conversation manager for persistent history
+        self.conversation_manager = conversation_manager
         self.prompt_manager = PromptManager()
         self.prompt_chain = PromptChain(session_manager)
         self.langchain_selector = ConditionalPromptSelector(template_manager)
         self.middleware_stack = create_default_middleware_stack()
+        self._reranker = None  # lazy singleton
 
     def _get_conversation_debug_log_path(self, conversation_id: Optional[str]) -> Path:
         """Return the per-conversation RAG debug log path."""
@@ -147,7 +148,7 @@ class RAGOrchestrator(IRAGOrchestrator):
         processed_query = await preprocessor.process_query(
             query=request.question,
             use_spell_correction=True,
-            use_expansion=False,
+            use_expansion=True,
             use_llm_rewrite=False
         )
         
@@ -468,75 +469,130 @@ class RAGOrchestrator(IRAGOrchestrator):
     async def retrieve_documents(self, query: str, user: Dict[str, Any], top_k: int = 5,
                                  category: Optional[str] = None) -> List[Dict[str, Any]]:
         """Retrieve relevant documents with hybrid BM25+vector search and cross-encoder reranking.
-        
+
         Pipeline:
-        1. Retrieve top-20 from both BM25 and vector store
-        2. Merge with Reciprocal Rank Fusion (RRF)
-        3. Apply RBAC filtering
-        4. Rerank with cross-encoder
+        1. Retrieve top-20 from both BM25 and vector store across all query variants
+        2. Merge with weighted Reciprocal Rank Fusion (RRF)
+        3. Apply level-based RBAC filtering
+        4. Rerank with cross-encoder singleton
         5. Return top-k documents
         """
+        from app.modules.config.constants import ROLE_LEVELS, SENSITIVITY_LEVELS
+        from app.modules.vector_db.query_preprocessor import QueryPreprocessor
         try:
-            # Step 1: Hybrid retrieval (BM25 + Vector)
-            retrieval_k = max(top_k * 4, 20)  # Retrieve 4x or minimum 20
-            logger.info(f"Hybrid retrieval: fetching top-{retrieval_k} from BM25 and vector store")
-            
-            # Get BM25 index from container
+            retrieval_k = max(top_k * 4, 20)
+
             from app.modules.integration import get_container
             container = get_container()
-            bm25_index = container.get_bm25_index()
-            
-            # BM25 search
-            bm25_results = []
-            if bm25_index and bm25_index.is_available():
-                bm25_results = bm25_index.search(query, top_k=retrieval_k)
-                logger.info(f"BM25 retrieved {len(bm25_results)} documents")
-            
-            # Vector search
-            vector_results = await self.vector_store.search_documents(
-                query=query,
-                top_k=retrieval_k,
-                metadata_filter={"category": category} if category else None
-            )
-            logger.info(f"Vector search retrieved {len(vector_results)} documents")
-            
-            # Step 2: Merge with RRF
-            from app.modules.vector_db.hybrid_retrieval import reciprocal_rank_fusion
-            merged_results = reciprocal_rank_fusion(bm25_results, vector_results, k=60)
-            logger.info(f"RRF fusion: {len(bm25_results)} BM25 + {len(vector_results)} vector → {len(merged_results)} merged")
 
-            # Step 3: Apply RBAC filtering
-            filtered_results = []
+            # Flush any pending BM25 updates from API document adds
+            document_manager = container.get_document_manager()
+            if document_manager and document_manager._bm25_dirty:
+                await document_manager._refresh_bm25_if_dirty()
+            bm25_index = container.get_bm25_index()
+
+            # Build query variants for multi-variant retrieval
+            preprocessor = QueryPreprocessor()
+            processed = await preprocessor.process_query(
+                query=query, use_spell_correction=True, use_expansion=True
+            )
+            # Use top-3 unique variants to avoid redundant fetches
+            variants = list(dict.fromkeys(processed.all_variants))[:3]
+
+            # Determine RRF weights based on query type
+            from app.modules.vector_db.query_preprocessor import QueryType
+            if processed.query_type in (QueryType.POLICY, QueryType.FACTUAL):
+                bm25_weight, vector_weight = 1.5, 1.0
+            else:
+                bm25_weight, vector_weight = 1.0, 1.5
+
+            metadata_filter = {"category": category} if category else None
+
+            # Collect results across all variants
+            all_bm25: List[Dict[str, Any]] = []
+            all_vector: List[Dict[str, Any]] = []
+            seen_bm25: set = set()
+            seen_vector: set = set()
+
+            for variant in variants:
+                if bm25_index and bm25_index.is_available():
+                    for doc in bm25_index.search(variant, top_k=retrieval_k):
+                        if doc["id"] not in seen_bm25:
+                            all_bm25.append(doc)
+                            seen_bm25.add(doc["id"])
+
+                for doc in await self.vector_store.search_documents(
+                    query=variant, top_k=retrieval_k, metadata_filter=metadata_filter
+                ):
+                    if doc["id"] not in seen_vector:
+                        all_vector.append(doc)
+                        seen_vector.add(doc["id"])
+
+            logger.info(
+                "Multi-variant retrieval (%d variants): %d BM25, %d vector candidates",
+                len(variants), len(all_bm25), len(all_vector),
+            )
+
+            from app.modules.vector_db.hybrid_retrieval import reciprocal_rank_fusion
+            merged_results = reciprocal_rank_fusion(
+                all_bm25, all_vector, k=60,
+                bm25_weight=bm25_weight, vector_weight=vector_weight,
+            )
+
+            # Level-based RBAC filtering
             user_role = user.get("role", "Guest")
             user_dept = user.get("department", "General")
+            user_level = ROLE_LEVELS.get(user_role, 0)
+            user_id = user.get("user_id")
 
+            filtered_results = []
             for doc in merged_results:
                 metadata = doc.get("metadata", {})
-                doc_dept = metadata.get("department", "General")
                 sensitivity = metadata.get("sensitivity", "public_internal")
+                doc_dept = metadata.get("department", "General")
+                required_level = SENSITIVITY_LEVELS.get(sensitivity, 0)
 
-                if sensitivity == "public_internal" or doc_dept == user_dept or user_role in ["SuperAdmin", "Manager"]:
+                # personal: owner or HR+
+                if sensitivity == "personal":
+                    owner_id = metadata.get("owner_id")
+                    if owner_id == user_id or user_level >= SENSITIVITY_LEVELS["role_confidential"]:
+                        filtered_results.append(doc)
+                    continue
+
+                # allowed_roles override
+                allowed_roles = metadata.get("allowed_roles")
+                if allowed_roles and user_role in allowed_roles:
                     filtered_results.append(doc)
-            
-            logger.info(f"RBAC filtering: {len(merged_results)} -> {len(filtered_results)} documents")
+                    continue
 
-            # Step 4: Rerank with cross-encoder
+                # department_confidential: same dept AND sufficient level
+                if sensitivity == "department_confidential":
+                    if user_level >= required_level and user_dept == doc_dept:
+                        filtered_results.append(doc)
+                    continue
+
+                # all other levels: pure level check
+                if user_level >= required_level:
+                    filtered_results.append(doc)
+
+            logger.info("RBAC filtering: %d -> %d documents", len(merged_results), len(filtered_results))
+
+            # Rerank with cross-encoder singleton
             if len(filtered_results) > top_k:
                 try:
-                    from app.modules.vector_db.reranker import CrossEncoderReranker
-                    reranker = CrossEncoderReranker()
-                    reranked_results = reranker.rerank(
-                        query=query,
-                        documents=filtered_results,
-                        top_k=top_k
+                    if self._reranker is None:
+                        from app.modules.vector_db.reranker import CrossEncoderReranker
+                        self._reranker = CrossEncoderReranker()
+                    reranked = self._reranker.rerank(
+                        query=query, documents=filtered_results, top_k=top_k
                     )
-                    logger.info(f"Cross-encoder reranking: {len(filtered_results)} -> {top_k} documents")
-                    return reranked_results
+                    logger.info("Cross-encoder reranking: %d -> %d documents", len(filtered_results), top_k)
+                    return reranked
                 except Exception as e:
-                    logger.warning(f"Reranking failed, using RRF scores: {e}")
+                    logger.warning("Reranking failed, using RRF scores: %s", e)
                     return filtered_results[:top_k]
-            else:
-                return filtered_results[:top_k]
+
+            return filtered_results[:top_k]
 
         except Exception as e:
             logger.error("Document retrieval failed: %s", str(e), exc_info=True)
@@ -791,7 +847,7 @@ class RAGOrchestrator(IRAGOrchestrator):
         
         # Prepare variables
         source_docs = "\n\n".join([
-            f"Document {i+1}: {doc.get('text', '')[:500]}..."
+            f"Document {i+1}: {doc.get('text', '')[:2000]}"
             for i, doc in enumerate(documents[:5])
         ]) if documents else ""
         
@@ -867,9 +923,9 @@ class RAGOrchestrator(IRAGOrchestrator):
             return ""
 
         context_parts = []
-        for i, doc in enumerate(documents[:5]):  # Limit to top 5
+        for i, doc in enumerate(documents[:5]):
             text = doc.get("text", "")
             if text:
-                context_parts.append(f"Document {i + 1}: {text[:500]}...")  # Truncate
+                context_parts.append(f"Document {i + 1}: {text[:2000]}")
 
         return "\n\n".join(context_parts)

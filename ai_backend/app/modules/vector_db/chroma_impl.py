@@ -115,17 +115,21 @@ class ChromaVectorStore(IVectorStore):
     def query_collection(self,
                          query_embeddings: Optional[List[List[float]]] = None,
                          query_texts: Optional[List[str]] = None,
-                         n_results: int = 3) -> Dict[str, Any]:
+                         n_results: int = 3,
+                         where: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """
         Query the managed collection by embeddings or text. (Original function name)
         """
         collection = self._collection
 
         try:
+            kwargs: Dict[str, Any] = {"n_results": n_results}
+            if where:
+                kwargs["where"] = where
             if query_embeddings is not None:
-                return collection.query(query_embeddings=query_embeddings, n_results=n_results)
+                return collection.query(query_embeddings=query_embeddings, **kwargs)
             if query_texts is not None:
-                return collection.query(query_texts=query_texts, n_results=n_results)
+                return collection.query(query_texts=query_texts, **kwargs)
             raise ValueError("Either query_embeddings or query_texts must be provided")
         except Exception as e:
             logger.exception("query_collection failed: %s", e)
@@ -284,42 +288,29 @@ class ChromaVectorStore(IVectorStore):
     async def search_documents(self, query: str, top_k: int = 5, metadata_filter: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
         """Search for similar documents."""
         try:
-            # Generate query embedding
             query_embeddings = await self.embedding_manager.encode([query])
 
-            # Use the utility method
-            # NOTE: Ignoring metadata_filter for now, as query_collection only takes embeddings/text
             results = self.query_collection(
                 query_embeddings=query_embeddings,
-                n_results=top_k
+                n_results=top_k,
+                where=metadata_filter if metadata_filter else None,
             )
 
-            # Convert raw ChromaDB results format to IVectorStore format
             formatted_results = []
             if results.get("ids") and results.get("documents"):
-                # Handle potential list of lists structure from ChromaDB results
                 ids = results["ids"][0]
                 docs = results["documents"][0]
                 metas = results["metadatas"][0]
                 distances = results["distances"][0]
 
                 for i in range(len(ids)):
-                    doc_id = ids[i]
-                    doc_text = docs[i]
-                    doc_meta = metas[i] or {}
-                    doc_distance = distances[i]
-
-                    # NOTE: A proper implementation would pass metadata_filter to query_collection
-                    # or apply filtering here if query_collection cannot.
-
                     formatted_results.append({
-                        "id": doc_id,
-                        "text": doc_text,
-                        "metadata": doc_meta,
-                        "distance": doc_distance
+                        "id": ids[i],
+                        "text": docs[i],
+                        "metadata": metas[i] or {},
+                        "distance": distances[i]
                     })
 
-            # Results are usually sorted by distance (ascending) by ChromaDB
             return formatted_results
 
         except Exception as e:

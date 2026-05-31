@@ -31,6 +31,7 @@ class DocumentManager:
         self.vector_store = vector_store
         self.version_manager = version_manager
         self.embedding_manager = embedding_manager
+        self._bm25_dirty = False  # debounce: avoid full rebuild on every chunk during bulk seed
 
     @staticmethod
     def _generate_ids(prefix: str, n: int) -> List[str]:
@@ -104,9 +105,11 @@ class DocumentManager:
                     sub_chunks = chunk_text_basic(c["text"])
                     
                     for sc in sub_chunks:
-                        chunks.append(sc)
+                        section_name = c.get("section", "").strip()
+                        chunk_text = f"Section: {section_name}\n\n{sc}" if section_name else sc
+                        chunks.append(chunk_text)
                         chunk_meta = dict(sanitized_base)
-                        chunk_meta["section"] = c["section"]
+                        chunk_meta["section"] = section_name
                         chunk_meta["chunk_type"] = "semantic"
                         chunk_meta["chunk_index"] = idx
                         metadatas.append(chunk_meta)
@@ -160,6 +163,9 @@ class DocumentManager:
             logger.exception("Failed to add documents to Chroma collection: %s", e)
             raise
 
+        # Mark BM25 dirty so next retrieval triggers a rebuild
+        self._bm25_dirty = True
+
         # Create version record in version tracking database
         try:
             self.version_manager.create_version_record(
@@ -196,6 +202,13 @@ class DocumentManager:
             "version": version,
             "chunk_count": len(ids)
         }
+
+    async def _refresh_bm25_if_dirty(self) -> None:
+        """Rebuild BM25 index only when documents have changed since last build."""
+        if not self._bm25_dirty:
+            return
+        await self._build_bm25_index()
+        self._bm25_dirty = False
 
     async def update_document_version(
             self,
@@ -238,6 +251,8 @@ class DocumentManager:
             document_id=document_id, old_version=parent_version, new_version=next_version,
             status=status, has_notes=bool(version_notes)
         )
+
+        await self._refresh_bm25_if_dirty()
         return result
 
     async def get_document_version(
@@ -572,6 +587,12 @@ class DocumentManager:
                         except Exception as e:
                             logger.exception("Failed to seed file %s: %s", child, e)
                             continue
+
+            # Build BM25 index once after all directory files are seeded
+            if added_ids:
+                await self._build_bm25_index()
+                self._bm25_dirty = False
+
             return added_ids
 
         # Otherwise, it's a single file; ingest it. (Old behavior, primarily for backward compatibility)
@@ -597,6 +618,7 @@ class DocumentManager:
         # Build BM25 index after seeding
         if added_ids:
             await self._build_bm25_index()
+            self._bm25_dirty = False
 
         return added_ids
 

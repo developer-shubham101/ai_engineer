@@ -274,15 +274,15 @@ Rewritten query:"""
         # Classify query type
         query_type = self.classify_query(query)
         logger.info(f"Query type: {query_type.value}")
-        
-        # Normalize
-        normalized = self.normalize_query(query)
-        
-        # Spell correction
+
+        # Spell correction on original query (before normalization strips apostrophes)
         corrected = None
         if use_spell_correction and self.is_available():
-            corrected = self.correct_spelling(normalized)
-        
+            corrected = self.correct_spelling(query)
+
+        # Normalize (after spell correction so apostrophes are intact during correction)
+        normalized = self.normalize_query(corrected if corrected else query)
+
         # Expansion
         expanded = None
         if use_expansion:

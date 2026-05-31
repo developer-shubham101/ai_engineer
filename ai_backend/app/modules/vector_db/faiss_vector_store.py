@@ -37,12 +37,14 @@ class FaissVectorStore(IVectorStore):
             self._initialized = True
             logger.info(f"FAISS index loaded from {self.file_path}")
         except (FileNotFoundError, EOFError):
-            self.index = faiss.IndexFlatL2(self.dimension)
+            self.index = faiss.IndexFlatIP(self.dimension)
             self.documents = {}
             self._initialized = True
             logger.info("No FAISS index found. Initialized a new one.")
 
     def _save_index(self):
+        from pathlib import Path
+        Path(self.file_path).parent.mkdir(parents=True, exist_ok=True)
         with open(self.file_path, "wb") as f:
             data = {
                 "index": faiss.serialize_index(self.index),
@@ -57,7 +59,7 @@ class FaissVectorStore(IVectorStore):
             doc_id = str(uuid.uuid4())
             embedding = await self.embedding_manager.encode([text])
             embedding_np = np.array(embedding).astype('float32')
-            
+            faiss.normalize_L2(embedding_np)
             self.index.add(embedding_np)
             doc_index = self.index.ntotal - 1
             
@@ -75,7 +77,7 @@ class FaissVectorStore(IVectorStore):
         try:
             query_embedding = await self.embedding_manager.encode([query])
             query_embedding_np = np.array(query_embedding).astype('float32')
-            
+            faiss.normalize_L2(query_embedding_np)
             distances, indices = self.index.search(query_embedding_np, top_k)
             
             results = []
@@ -104,17 +106,16 @@ class FaissVectorStore(IVectorStore):
     async def delete_document(self, document_id: str) -> bool:
         """Delete document from vector store.
         Note: FAISS does not support direct deletion by ID.
-        This is a placeholder and does not fully remove the vector.
+        Removes from document map then compacts the index.
         """
-        logger.warning("FAISS does not support efficient deletion. Document will be marked as deleted.")
-        
-        # Find the index corresponding to the document_id
-        for index, doc in self.documents.items():
+        logger.warning("FAISS does not support efficient deletion. Rebuilding index after delete.")
+
+        for index, doc in list(self.documents.items()):
             if doc['id'] == document_id:
-                # Mark as deleted
                 del self.documents[index]
+                self._compact()
                 self._save_index()
-                logger.info(f"Document {document_id} marked as deleted.")
+                logger.info(f"Document {document_id} deleted and index compacted.")
                 return True
         return False
 
@@ -132,7 +133,7 @@ class FaissVectorStore(IVectorStore):
         """Get information about the collection."""
         return {
             "name": "faiss_index",
-            "document_count": self.index.ntotal,
+            "document_count": len(self.documents),
             "embedding_dimension": self.dimension
         }
 
@@ -142,6 +143,27 @@ class FaissVectorStore(IVectorStore):
             if doc['id'] == document_id:
                 return doc
         return None
+
+    def _compact(self) -> None:
+        """Rebuild FAISS index from current documents, removing stale deleted vectors."""
+        new_index = faiss.IndexFlatIP(self.dimension)
+        new_documents: Dict[int, Any] = {}
+
+        for new_pos, doc_info in enumerate(self.documents.values()):
+            # Re-encode is not available here; we must reconstruct from the old index.
+            # Retrieve the stored vector by its old position key.
+            old_pos = list(self.documents.keys())[new_pos]
+            try:
+                vec = np.zeros((1, self.dimension), dtype='float32')
+                self.index.reconstruct(old_pos, vec[0])
+                new_index.add(vec)
+                new_documents[new_pos] = doc_info
+            except Exception as e:
+                logger.warning("Could not reconstruct vector at pos %d during compact: %s", old_pos, e)
+
+        self.index = new_index
+        self.documents = new_documents
+        logger.info("FAISS index compacted: %d live documents", len(self.documents))
 
     # =========================================================================
     # Batch Operations
@@ -160,7 +182,7 @@ class FaissVectorStore(IVectorStore):
                 raise ValueError("Embeddings must be pre-computed for batch operations in FAISS")
             
             embeddings_np = np.array(embeddings).astype('float32')
-            
+            faiss.normalize_L2(embeddings_np)
             # Add all embeddings to the index
             start_index = self.index.ntotal
             self.index.add(embeddings_np)
@@ -204,26 +226,23 @@ class FaissVectorStore(IVectorStore):
             raise
 
     def delete_ids(self, ids: List[str]) -> None:
-        """Delete multiple documents by their IDs.
-        Note: FAISS does not support efficient deletion. Documents will be marked as deleted.
-        """
+        """Delete multiple documents by their IDs and compact the index."""
         try:
             deleted_count = 0
-            indices_to_delete = []
-            
-            for doc_index, doc_info in self.documents.items():
-                if doc_info["id"] in ids:
-                    indices_to_delete.append(doc_index)
-            
+            indices_to_delete = [
+                doc_index for doc_index, doc_info in self.documents.items()
+                if doc_info["id"] in ids
+            ]
             for idx in indices_to_delete:
                 del self.documents[idx]
                 deleted_count += 1
-            
+
             if deleted_count > 0:
+                self._compact()
                 self._save_index()
-            
+
             logger.info(f"Deleted {deleted_count} documents from FAISS collection")
-            
+
         except Exception as e:
             logger.exception("Failed to delete documents by IDs: %s", e)
             raise
@@ -271,6 +290,7 @@ class FaissVectorStore(IVectorStore):
             
             # Use provided embeddings
             query_embeddings_np = np.array(query_embeddings).astype('float32')
+            faiss.normalize_L2(query_embeddings_np)
             distances, indices = self.index.search(query_embeddings_np, n_results)
             
             # Format results similar to ChromaDB
@@ -339,7 +359,7 @@ class FaissVectorStore(IVectorStore):
         """Delete all documents from the collection."""
         try:
             # Reinitialize the index
-            self.index = faiss.IndexFlatL2(self.dimension)
+            self.index = faiss.IndexFlatIP(self.dimension)
             self.documents = {}
             self._save_index()
             logger.info("Deleted all documents from FAISS collection")
@@ -361,7 +381,7 @@ class FaissVectorStore(IVectorStore):
                 logger.info(f"Deleted FAISS index file: {self.file_path}")
             
             # Reinitialize
-            self.index = faiss.IndexFlatL2(self.dimension)
+            self.index = faiss.IndexFlatIP(self.dimension)
             self.documents = {}
             self._initialized = True
             

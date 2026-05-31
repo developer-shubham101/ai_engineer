@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from typing import List, Dict, Any, Optional
 from dataclasses import dataclass
 
@@ -88,8 +89,8 @@ class BM25Index:
         return results
     
     def _tokenize(self, text: str) -> List[str]:
-        """Simple tokenization: lowercase and split on whitespace."""
-        return text.lower().split()
+        """Tokenize on whitespace and separators to handle identifiers like PTO-2024-Q1."""
+        return re.findall(r'[a-z0-9]+', text.lower())
     
     def clear(self) -> None:
         """Clear the index."""
