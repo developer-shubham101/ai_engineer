@@ -45,6 +45,7 @@ chromadb
 faiss-cpu
 rank-bm25
 pyspellchecker
+wordninja
 
 # --- Text Parsing & Processing ---
 tiktoken

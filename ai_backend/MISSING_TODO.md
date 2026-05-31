@@ -72,3 +72,60 @@ All items verified against source code. ✅ = implemented and confirmed
 - [x] All providers registered (local, google, openai/gpt, huggingface/hf, colabllm, llamaserver)
 - [x] Benchmark measures full pipeline
 - [x] Delete+compact, BM25 freshness, RBAC, context-length tests added
+
+---
+
+# Query Input Robustness — Misspell / Bad Grammar / No Spaces
+
+All items implemented in `app/modules/vector_db/query_preprocessor.py` unless noted. All complete ✅
+
+## P0 — Active bugs (fixed)
+
+- [x] **Domain words mis-corrected by spell checker** — `query_preprocessor.py` ✅
+    - `pyspellchecker` mis-corrected domain terms: `rbac` → `race`, `pto` → `pro`, `wfh` → `who`
+    - Fixed: domain vocabulary (all expansion keys + `rbac`, `pto`, `wfh`, `ooo`, `rto`, `sso`, `mfa`, `onboarding`, `offboarding`, `payroll`, `reimbursement`) loaded into `spell_checker.word_frequency` at init
+
+- [x] **Apostrophe stripped before spell correction** — `query_preprocessor.py` ✅
+    - `normalize_query()` regex now preserves apostrophes: `[^a-z0-9\s\-']`
+    - `"what's"` no longer becomes `"what s"` before spell correction
+
+## P1 — Missing capabilities (implemented)
+
+- [x] **Words run together without spaces** — `query_preprocessor.py` ✅
+    - New `split_concatenated_words()` uses `wordninja` to split `"leavepolicy"` → `"leave policy"`
+    - Applies to words > 8 chars that are all-alpha; called before spell correction in `process_query()`
+    - Dependency added: `wordninja` in `requirements.txt`
+
+- [x] **Repeated characters** — `query_preprocessor.py` ✅
+    - New `remove_repeated_chars()` collapses 3+ repeated chars to 2: `"leeeeave"` → `"leeave"`
+    - Called first in `process_query()` before all other steps; zero new dependencies
+
+- [x] **Digit-word run-together** — `query_preprocessor.py` ✅
+    - `correct_spelling()` now splits digit-word combos before the digit-skip guard
+    - `"3day"` → `["3", "day"]`, `"2weeks"` → `["2", "weeks"]`; BM25 tokenizer gets proper tokens
+
+- [x] **Grammar issues not handled** — `query_preprocessor.py` ✅
+    - New `_looks_broken()` returns `True` when unknown-word ratio > 30% (skips queries ≤ 3 words)
+    - `process_query()` auto-enables `use_llm_rewrite=True` when broken query detected and `llm_provider` is available
+    - `rewrite_with_llm()` was already implemented; now fires automatically on broken input
+
+## P2 — Retrieval tuning (implemented)
+
+- [x] **Vague single/two-word queries get noisy candidates** — `rag_orchestrator.py` ✅
+    - `retrieve_documents()` detects queries ≤ 2 words and sets `retrieval_k = max(top_k * 6, 30)`
+    - Normal queries remain at `max(top_k * 4, 20)`
+
+## `process_query()` pipeline order (final)
+
+1. `remove_repeated_chars()` — collapse `leeeeave` → `leeave`
+2. `split_concatenated_words()` — split `leavepolicy` → `leave policy` (wordninja)
+3. `correct_spelling()` — spell correction with digit-word split + domain word protection
+4. `normalize_query()` — lowercase, strip special chars (apostrophes preserved)
+5. `expand_query()` — acronym/synonym expansion
+6. `_looks_broken()` + auto LLM rewrite — grammar repair if provider available
+
+## New dependency
+
+```text
+wordninja  # word segmentation for run-together words (added to requirements.txt)
+```

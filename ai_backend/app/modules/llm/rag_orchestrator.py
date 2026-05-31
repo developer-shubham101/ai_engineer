@@ -148,7 +148,8 @@ class RAGOrchestrator(IRAGOrchestrator):
             query=request.question,
             use_spell_correction=True,
             use_expansion=True,
-            use_llm_rewrite=False
+            use_llm_rewrite=False,
+            llm_provider=None  # provider resolved later; _looks_broken auto-enables rewrite if provider passed
         )
         
         # Log preprocessing results
@@ -479,6 +480,9 @@ class RAGOrchestrator(IRAGOrchestrator):
         from app.modules.config.constants import ROLE_LEVELS, SENSITIVITY_LEVELS
         try:
             retrieval_k = max(top_k * 4, 20)
+            is_vague = len(query.split()) <= 2
+            if is_vague:
+                retrieval_k = max(top_k * 6, 30)
 
             from app.modules.integration import get_container
             container = get_container()
@@ -491,7 +495,8 @@ class RAGOrchestrator(IRAGOrchestrator):
 
             # Build query variants for multi-variant retrieval
             processed = await self._preprocessor.process_query(
-                query=query, use_spell_correction=True, use_expansion=True
+                query=query, use_spell_correction=True, use_expansion=True,
+                llm_provider=None  # provider not available here; auto-rewrite fires in process_query
             )
             # Use top-3 unique variants to avoid redundant fetches
             variants = list(dict.fromkeys(processed.all_variants))[:3]

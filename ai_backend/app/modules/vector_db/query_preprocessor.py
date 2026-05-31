@@ -63,7 +63,7 @@ class QueryPreprocessor:
                 logger.warning(f"Failed to initialize spell checker: {e}")
         else:
             logger.warning("pyspellchecker not installed. Spell correction disabled.")
-        
+
         # Enhanced synonym/acronym dictionary
         self.expansions = {
             # Time off
@@ -96,7 +96,15 @@ class QueryPreprocessor:
             'config': 'configuration settings',
             'admin': 'administrator administration',
         }
-        
+
+        # Protect domain words from spell correction
+        if self.spell_checker:
+            domain_words = set(self.expansions.keys()) | {
+                'rbac', 'pto', 'wfh', 'ooo', 'rto', 'sso', 'mfa',
+                'onboarding', 'offboarding', 'payroll', 'reimbursement',
+            }
+            self.spell_checker.word_frequency.load_words(domain_words)
+
         # Query classification patterns
         self.query_patterns = {
             QueryType.FACTUAL: [r'\bwho\b', r'\bwhat\b', r'\bwhen\b', r'\bwhere\b', r'\bwhich\b'],
@@ -138,8 +146,8 @@ class QueryPreprocessor:
         # Lowercase
         normalized = query.lower()
         
-        # Remove special characters except alphanumeric, spaces, hyphens
-        normalized = re.sub(r'[^a-z0-9\s\-]', ' ', normalized)
+        # Remove special characters except alphanumeric, spaces, hyphens, apostrophes
+        normalized = re.sub(r"[^a-z0-9\s\-']", ' ', normalized)
         
         # Collapse multiple spaces
         normalized = re.sub(r'\s+', ' ', normalized)
@@ -149,6 +157,36 @@ class QueryPreprocessor:
         
         return normalized
     
+    def remove_repeated_chars(self, query: str) -> Optional[str]:
+        """Collapse 3+ repeated characters to 2 (e.g. 'leeeeave' -> 'leeave')."""
+        cleaned = re.sub(r'(.)\1{2,}', r'\1\1', query)
+        return cleaned if cleaned != query else None
+
+    def split_concatenated_words(self, query: str) -> Optional[str]:
+        """Split run-together words using wordninja (e.g. 'leavepolicy' -> 'leave policy')."""
+        try:
+            import wordninja
+        except ImportError:
+            return None
+        words = query.split()
+        result, changed = [], False
+        for word in words:
+            if len(word) > 8 and word.isalpha():
+                split = wordninja.split(word)
+                if len(split) > 1:
+                    result.extend(split)
+                    changed = True
+                    continue
+            result.append(word)
+        return ' '.join(result) if changed else None
+
+    def _looks_broken(self, query: str) -> bool:
+        """Return True if >30% of words are unknown — likely broken grammar."""
+        if not self.spell_checker or len(query.split()) <= 3:
+            return False
+        unknown = self.spell_checker.unknown(query.split())
+        return len(unknown) / len(query.split()) > 0.3
+
     def correct_spelling(self, query: str) -> Optional[str]:
         """
         Correct spelling errors in query.
@@ -169,6 +207,14 @@ class QueryPreprocessor:
                     corrected_words.append(word)
                     continue
                 
+                # Split digit-word combos before the digit-skip guard
+                digit_split = re.sub(r'(\d+)([a-zA-Z]+)', r'\1 \2', word)
+                digit_split = re.sub(r'([a-zA-Z]+)(\d+)', r'\1 \2', digit_split)
+                if digit_split != word:
+                    corrected_words.extend(digit_split.split())
+                    has_corrections = True
+                    continue
+
                 # Skip words with hyphens or numbers (likely identifiers)
                 if '-' in word or any(c.isdigit() for c in word):
                     corrected_words.append(word)
@@ -275,21 +321,37 @@ Rewritten query:"""
         query_type = self.classify_query(query)
         logger.info(f"Query type: {query_type.value}")
 
-        # Spell correction on original query (before normalization strips apostrophes)
+        # 1. Collapse repeated chars (leeeeave -> leeave)
+        deduped = self.remove_repeated_chars(query)
+        working = deduped if deduped else query
+
+        # 2. Split run-together words (leavepolicy -> leave policy)
+        segmented = self.split_concatenated_words(working)
+        if segmented:
+            working = segmented
+
+        # 3. Spell correction on pre-processed query (before normalization strips apostrophes)
         corrected = None
         if use_spell_correction and self.is_available():
-            corrected = self.correct_spelling(query)
+            corrected = self.correct_spelling(working)
+            if corrected and corrected == working:
+                corrected = None  # no real change
 
-        # Normalize (after spell correction so apostrophes are intact during correction)
-        normalized = self.normalize_query(corrected if corrected else query)
+        # 4. Normalize (after spell correction so apostrophes are intact during correction)
+        normalized = self.normalize_query(corrected if corrected else working)
 
-        # Expansion
+        # 5. Expansion
         expanded = None
         if use_expansion:
             base_query = corrected if corrected else normalized
             expanded = self.expand_query(base_query)
-        
-        # LLM rewrite (optional, slower but more accurate)
+
+        # 6. Auto LLM rewrite for broken grammar
+        if not use_llm_rewrite and llm_provider and self._looks_broken(working):
+            use_llm_rewrite = True
+            logger.info("Auto-enabling LLM rewrite: query looks broken")
+
+        # 7. LLM rewrite (optional, slower but more accurate)
         rewritten = None
         if use_llm_rewrite and llm_provider:
             rewritten = await self.rewrite_with_llm(query, llm_provider)
