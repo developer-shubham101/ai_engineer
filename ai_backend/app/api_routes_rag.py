@@ -68,6 +68,18 @@ class QueryResponse(BaseModel):
     final_prompt: Optional[str] = None
 
 
+class PreprocessRequest(BaseModel):
+    query: str
+
+
+class PreprocessResponse(BaseModel):
+    original: str
+    corrected: Optional[str] = None
+    expanded: Optional[str] = None
+    query_type: str
+    suggestion: Optional[str] = None  # best single suggestion to show the user
+
+
 class AddDocRequest(BaseModel):
     source_name: str
     text: str
@@ -159,6 +171,40 @@ def get_document_instance() -> DocumentManager:
 
     document_manager: DocumentManager = container.get_document_manager()
     return document_manager
+
+
+# ---------------------------
+# Query Preprocessing (as-you-type suggestion)
+# ---------------------------
+@router.post("/query/preprocess", response_model=PreprocessResponse)
+async def preprocess_query(req: PreprocessRequest):
+    """Fix spelling, split run-together words, and expand acronyms.
+
+    Call this on each keystroke pause (debounced) to show the user a
+    corrected query suggestion before they submit.
+    """
+    from app.modules.vector_db.query_preprocessor import QueryPreprocessor
+    preprocessor = QueryPreprocessor()
+    try:
+        result = await preprocessor.process_query(
+            query=req.query,
+            use_spell_correction=True,
+            use_expansion=True,
+        )
+        # Pick the best single suggestion: rewritten > corrected > expanded > None
+        suggestion = result.rewritten or result.corrected or result.expanded
+        if suggestion == req.query:
+            suggestion = None
+        return PreprocessResponse(
+            original=result.original,
+            corrected=result.corrected,
+            expanded=result.expanded,
+            query_type=result.query_type.value,
+            suggestion=suggestion,
+        )
+    except Exception as e:
+        logger.exception("Query preprocessing failed: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # ---------------------------

@@ -17,7 +17,6 @@ from .prompt_manager import PromptManager
 from .provider_factory import create_provider
 from ..auth.interfaces import ISessionManager
 from ..vector_db.interfaces import IVectorStore
-from ..vector_db.query_preprocessor import QueryPreprocessor, QueryType
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +35,6 @@ class RAGOrchestrator(IRAGOrchestrator):
         self.langchain_selector = ConditionalPromptSelector(template_manager)
         self.middleware_stack = create_default_middleware_stack()
         self._reranker = None  # lazy singleton
-        self._preprocessor = QueryPreprocessor()  # singleton — avoids SpellChecker re-init per query
 
     def _get_conversation_debug_log_path(self, conversation_id: Optional[str]) -> Path:
         """Return the per-conversation RAG debug log path."""
@@ -142,27 +140,7 @@ class RAGOrchestrator(IRAGOrchestrator):
         3. Unauthenticated User: Basic RAG without session
         """
         global prompt_data
-        
-        # Step 0: Query Preprocessing (before middleware)
-        processed_query = await self._preprocessor.process_query(
-            query=request.question,
-            use_spell_correction=True,
-            use_expansion=True,
-            use_llm_rewrite=False,
-            llm_provider=None  # provider resolved later; _looks_broken auto-enables rewrite if provider passed
-        )
-        
-        # Log preprocessing results
-        logger.info(f"Query preprocessing: original='{processed_query.original}'")
-        logger.info(f"Query type: {processed_query.query_type.value}")
-        if processed_query.corrected:
-            logger.info(f"Spell correction: '{processed_query.corrected}'")
-        logger.info(f"Total query variants: {len(processed_query.all_variants)}")
-        
-        # Update request with corrected query if available
-        if processed_query.corrected:
-            request.question = processed_query.corrected
-        
+
         request = await self.middleware_stack.process_request(request)
 
         start_time = time.time()
@@ -493,51 +471,27 @@ class RAGOrchestrator(IRAGOrchestrator):
                 await document_manager._refresh_bm25_if_dirty()
             bm25_index = container.get_bm25_index()
 
-            # Build query variants for multi-variant retrieval
-            processed = await self._preprocessor.process_query(
-                query=query, use_spell_correction=True, use_expansion=True,
-                llm_provider=None  # provider not available here; auto-rewrite fires in process_query
-            )
-            # Use top-3 unique variants to avoid redundant fetches
-            variants = list(dict.fromkeys(processed.all_variants))[:3]
-
-            # Determine RRF weights based on query type
-            if processed.query_type in (QueryType.POLICY, QueryType.FACTUAL):
-                bm25_weight, vector_weight = 1.5, 1.0
-            else:
-                bm25_weight, vector_weight = 1.0, 1.5
-
             metadata_filter = {"category": category} if category else None
 
-            # Collect results across all variants
             all_bm25: List[Dict[str, Any]] = []
             all_vector: List[Dict[str, Any]] = []
-            seen_bm25: set = set()
-            seen_vector: set = set()
 
-            for variant in variants:
-                if bm25_index and bm25_index.is_available():
-                    for doc in bm25_index.search(variant, top_k=retrieval_k):
-                        if doc["id"] not in seen_bm25:
-                            all_bm25.append(doc)
-                            seen_bm25.add(doc["id"])
+            if bm25_index and bm25_index.is_available():
+                all_bm25 = bm25_index.search(query, top_k=retrieval_k)
 
-                for doc in await self.vector_store.search_documents(
-                    query=variant, top_k=retrieval_k, metadata_filter=metadata_filter
-                ):
-                    if doc["id"] not in seen_vector:
-                        all_vector.append(doc)
-                        seen_vector.add(doc["id"])
+            all_vector = await self.vector_store.search_documents(
+                query=query, top_k=retrieval_k, metadata_filter=metadata_filter
+            )
 
             logger.info(
-                "Multi-variant retrieval (%d variants): %d BM25, %d vector candidates",
-                len(variants), len(all_bm25), len(all_vector),
+                "Retrieval: %d BM25, %d vector candidates",
+                len(all_bm25), len(all_vector),
             )
 
             from app.modules.vector_db.hybrid_retrieval import reciprocal_rank_fusion
             merged_results = reciprocal_rank_fusion(
                 all_bm25, all_vector, k=60,
-                bm25_weight=bm25_weight, vector_weight=vector_weight,
+                bm25_weight=1.0, vector_weight=1.0,
             )
 
             # Level-based RBAC filtering

@@ -82,6 +82,8 @@ export default function RAGChat({ onLogout, initialMode = 'rag', initialConvId =
   const [composer, setComposer] = useState('')
   const [messages, setMessages] = useState([])
   const [inFlight, setInFlight] = useState(false)
+  const [preprocessResult, setPreprocessResult] = useState(null)
+  const [preprocessLoading, setPreprocessLoading] = useState(false)
   const [selectedFile, setSelectedFile] = useState(null)
   const [fileMeta, setFileMeta] = useState({ department: '', sensitivity: 'public_internal', tags: '' })
   const [toasts, setToasts] = useState([])
@@ -436,6 +438,27 @@ export default function RAGChat({ onLogout, initialMode = 'rag', initialConvId =
 
     // Reset input
     e.target.value = ''
+  }
+
+  async function handlePreprocess() {
+    if (!composer.trim()) return
+    setPreprocessLoading(true)
+    setPreprocessResult(null)
+    try {
+      const headers = { 'Content-Type': 'application/json' }
+      if (token) headers['Authorization'] = `Bearer ${token}`
+      const res = await fetch(`${BASE_API_URL}/api/rag/query/preprocess`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ query: composer })
+      })
+      if (!res.ok) throw new Error('Preprocess failed')
+      setPreprocessResult(await res.json())
+    } catch (err) {
+      addToast(err.message, 'danger', 'Preprocess')
+    } finally {
+      setPreprocessLoading(false)
+    }
   }
 
   async function sendQuery() {
@@ -942,6 +965,25 @@ export default function RAGChat({ onLogout, initialMode = 'rag', initialConvId =
                   </div>
 
                   <div className="mt-3">
+                    {preprocessResult && (
+                      <div className="alert alert-info py-2 px-3 mb-2 small d-flex flex-wrap align-items-center gap-2">
+                        <span className="text-muted">Suggestions:</span>
+                        {preprocessResult.corrected && preprocessResult.corrected !== preprocessResult.original && (
+                          <button className="btn btn-sm btn-outline-primary py-0" onClick={() => { setComposer(preprocessResult.corrected); setPreprocessResult(null) }}>
+                            ✏️ {preprocessResult.corrected}
+                          </button>
+                        )}
+                        {preprocessResult.expanded && (
+                          <button className="btn btn-sm btn-outline-secondary py-0" onClick={() => { setComposer(preprocessResult.expanded); setPreprocessResult(null) }}>
+                            🔍 {preprocessResult.expanded}
+                          </button>
+                        )}
+                        {preprocessResult.query_type && (
+                          <span className="badge bg-secondary">{preprocessResult.query_type}</span>
+                        )}
+                        <button className="btn-close ms-auto" style={{ fontSize: '0.6em' }} onClick={() => setPreprocessResult(null)}></button>
+                      </div>
+                    )}
                     <div className="d-flex gap-2">
                       <div className="d-flex align-items-center gap-2 flex-grow-1">
                         <AudioRecorder onRecordingComplete={handleAudioRecorded} />
@@ -968,16 +1010,22 @@ export default function RAGChat({ onLogout, initialMode = 'rag', initialConvId =
                           }}
                         />
                       </div>
-                      <div className="d-flex flex-column align-items-end">
-                        <div className="mb-2">
-                          <button
-                            className="btn btn-primary"
-                            disabled={inFlight}
-                            onClick={sendQuery}
-                          >
-                            {inFlight ? "Sending..." : "Send"}
-                          </button>
-                        </div>
+                      <div className="d-flex flex-column align-items-end gap-2">
+                        <button
+                          className="btn btn-outline-info btn-sm"
+                          disabled={preprocessLoading || !composer.trim()}
+                          onClick={handlePreprocess}
+                          title="Preprocess query (spell-check & expand)"
+                        >
+                          {preprocessLoading ? <span className="spinner-border spinner-border-sm"></span> : '✨'}
+                        </button>
+                        <button
+                          className="btn btn-primary"
+                          disabled={inFlight}
+                          onClick={sendQuery}
+                        >
+                          {inFlight ? 'Sending...' : 'Send'}
+                        </button>
                       </div>
                     </div>
                   </div>

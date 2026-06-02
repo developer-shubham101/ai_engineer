@@ -14,6 +14,27 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
+# Terms that must never be spell-corrected.
+# Matching is case-insensitive — add entries in any case.
+PROTECTED_TERMS: frozenset[str] = frozenset({
+    # Finance
+    "PAT", "EBITDA", "IPO", "ROI", "CAGR", "OPEX", "CAPEX", "EBIT", "NAV", "NPA",
+    # Technology
+    "GPU", "CPU", "TPU", "API", "SDK", "CLI", "IDE", "VPN", "DNS", "CDN",
+    "WiFi", "IoT", "SaaS", "PaaS", "IaaS", "CI", "CD", "R&D",
+    # Auth / Security
+    "RBAC", "SSO", "MFA", "JWT", "OAuth", "LDAP",
+    # HR / Workplace
+    "PTO", "WFH", "OOO", "RTO", "KPI",
+    # Internal product / project codes
+    "TBG", "TADS", "TOS", "TDL",
+    # Tools
+    "Jira", "Slack", "GitHub", "GitLab",
+})
+
+# Lowercase lookup set used at runtime (built once)
+_PROTECTED_LOWER: frozenset[str] = frozenset(t.lower() for t in PROTECTED_TERMS)
+
 
 class QueryType(Enum):
     """Query classification types."""
@@ -102,7 +123,7 @@ class QueryPreprocessor:
             domain_words = set(self.expansions.keys()) | {
                 'rbac', 'pto', 'wfh', 'ooo', 'rto', 'sso', 'mfa',
                 'onboarding', 'offboarding', 'payroll', 'reimbursement',
-            }
+            } | _PROTECTED_LOWER
             self.spell_checker.word_frequency.load_words(domain_words)
 
         # Query classification patterns
@@ -206,7 +227,12 @@ class QueryPreprocessor:
                 if len(word) <= 2:
                     corrected_words.append(word)
                     continue
-                
+
+                # Never correct protected terms (case-insensitive)
+                if word.lower() in _PROTECTED_LOWER:
+                    corrected_words.append(word)
+                    continue
+
                 # Split digit-word combos before the digit-skip guard
                 digit_split = re.sub(r'(\d+)([a-zA-Z]+)', r'\1 \2', word)
                 digit_split = re.sub(r'([a-zA-Z]+)(\d+)', r'\1 \2', digit_split)
