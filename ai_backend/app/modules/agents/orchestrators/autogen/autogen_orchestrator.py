@@ -7,6 +7,7 @@ from typing import Any, Callable, Dict, List, Optional
 from ...interfaces import IAgentOrchestrator, AgentRequest, AgentResponse
 from ..utils import get_tool_registry
 from ..utils import resolve_tools
+from ..utils.semantic_cache import SemanticCache
 from .workflows import (
     execute_debate_workflow,
     execute_research_workflow,
@@ -46,7 +47,7 @@ class AutoGenOrchestrator(IAgentOrchestrator):
 
     def __init__(self, model_client: Any) -> None:
         self.model_client = model_client
-        self._tool_cache: Dict[str, Any] = {}
+        self._tool_cache = SemanticCache()
         self.WORKFLOW_REGISTRY: Dict[str, Callable] = {
             "debate": self._run_debate,
             "research": self._run_research,

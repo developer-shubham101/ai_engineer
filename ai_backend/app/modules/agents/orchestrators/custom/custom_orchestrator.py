@@ -7,6 +7,7 @@ from typing import Any, Callable, Dict, List, Optional
 
 from ...interfaces import IAgentOrchestrator, AgentRequest, AgentResponse
 from ..utils import get_tool_registry, resolve_tools
+from ..utils.semantic_cache import SemanticCache
 from .workflows import (
     execute_debate_workflow,
     execute_research_workflow,
@@ -53,7 +54,7 @@ class CustomOrchestrator(IAgentOrchestrator):
                     Falls back to a no-op echo if not provided.
         """
         self._llm_fn = llm_fn or self._echo_llm
-        self._tool_cache: Dict[str, Any] = {}
+        self._tool_cache = SemanticCache()
         self.WORKFLOW_REGISTRY: Dict[str, Callable] = {
             "debate": self._run_debate,
             "research": self._run_research,

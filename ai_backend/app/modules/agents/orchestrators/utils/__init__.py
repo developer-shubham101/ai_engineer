@@ -10,6 +10,7 @@ from .plan_normalizer import (
 )
 from .tool_registry import get_tool_registry
 from .tool_utils import build_tool_catalog, resolve_tools, resolve_agent_tools, execute_tool, execute_tool_calls
+from .semantic_cache import SemanticCache
 
 __all__ = [
     "extract_json_object",
@@ -27,4 +28,5 @@ __all__ = [
     "resolve_agent_tools",
     "execute_tool",
     "execute_tool_calls",
+    "SemanticCache",
 ]

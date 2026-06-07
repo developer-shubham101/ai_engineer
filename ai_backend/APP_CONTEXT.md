@@ -109,7 +109,7 @@ User Request → FastAPI Router → Container → Modular Services → Response
 - `template_manager.py` - Database-backed prompt template management
 - `langchain_prompt_selector.py` - LangChain-based prompt selection
 - `model_manager.py` - Local model loading and caching
-- `middleware.py` - LLM request/response middleware
+- `middleware.py` - LLM request/response middleware (CachingMiddleware uses shared `semantic_cache` singleton from `orchestrators/utils/semantic_cache.py` for embedding-based response caching)
 - `colabllm_plugin.py` - ColabLLM provider plugin
 - `llamaserver_plugin.py` - LlamaServer provider plugin
 - `interfaces.py` - LLM and RAG interfaces
@@ -169,6 +169,7 @@ User Request → FastAPI Router → Container → Modular Services → Response
   - `json_utils.py` - `extract_json_object` (fast-path → markdown block → generic → auto-repair)
   - `plan_normalizer.py` - `normalize_tool_plan`, `normalize_travel_tool_plan`, `TRAVEL_TOOL_NAMES`, fallback plans
   - `step_utils.py` - `run_team`, `build_executor_steps`, `merge_steps`
+  - `semantic_cache.py` - `SemanticCache` class + module-level `semantic_cache` singleton; embedding-based cosine similarity cache (threshold 0.97) with exact-match fallback when embedding model unavailable
   - `__init__.py` - Re-exports all of the above
 - `orchestrators/autogen/` - AutoGen multi-agent orchestrator (uses AutoGen v0.4 agents)
   - `autogen_orchestrator.py` - Thin dispatcher; delegates to workflow modules
@@ -1844,7 +1845,7 @@ All three orchestrators share the same `WORKFLOW_REGISTRY` pattern and delegate 
 
 - Tool names are **unified** with `agent_runner.REGISTRY` so `/tools` and `/tools/{name}/test` work for both orchestrators
 - `run_team()` (`step_utils.py`) is the shared async stream runner used by all workflows
-- Tool results are **cached** in `_tool_cache` passed from `AutoGenOrchestrator` (keyed by `tool_name:json(args)`)
+- Tool results are **cached** via the shared `semantic_cache` singleton (`orchestrators/utils/semantic_cache.py`) — embedding-based cosine similarity (threshold 0.97) replaces the old exact `tool_name:json(args)` dict; the same singleton is also used by `CachingMiddleware` in `llm/middleware.py` for RAG response caching
 - `build_executor_steps()` and `merge_steps()` (`step_utils.py`) are shared by smart_assistant and smart_travel_planner
 - `_normalize_plan_base()` (`plan_normalizer.py`) is the shared core for both `normalize_tool_plan` and `normalize_travel_tool_plan`
 

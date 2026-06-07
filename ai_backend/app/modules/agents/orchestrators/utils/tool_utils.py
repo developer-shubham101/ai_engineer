@@ -109,13 +109,20 @@ async def execute_tool(
     tool_name: str,
     func: Callable,
     args: Dict[str, Any],
-    cache: Dict[str, Any],
+    cache: Any,  # SemanticCache or plain dict
 ) -> Dict[str, Any]:
-    """Execute a single tool with caching. Returns a result envelope."""
-    key = tool_cache_key(tool_name, args)
-    if key in cache:
-        logger.debug("[execute_tool] cache HIT tool=%s args=%s", tool_name, args)
-        return {"tool": tool_name, "args": args, "result": cache[key], "duration_ms": 0.0, "cached": True}
+    """Execute a single tool with semantic caching. Returns a result envelope."""
+    # Support both SemanticCache (get/set API) and plain dict (legacy)
+    if hasattr(cache, "get") and hasattr(cache, "set") and not isinstance(cache, dict):
+        cached_result = cache.get(tool_name, args)
+        if cached_result is not None:
+            logger.debug("[execute_tool] semantic cache HIT tool=%s args=%s", tool_name, args)
+            return {"tool": tool_name, "args": args, "result": cached_result, "duration_ms": 0.0, "cached": True}
+    else:
+        key = tool_cache_key(tool_name, args)
+        if key in cache:
+            logger.debug("[execute_tool] cache HIT tool=%s args=%s", tool_name, args)
+            return {"tool": tool_name, "args": args, "result": cache[key], "duration_ms": 0.0, "cached": True}
 
     logger.debug("[execute_tool] START tool=%s args=%s", tool_name, args)
     start = time.perf_counter()
@@ -128,7 +135,10 @@ async def execute_tool(
     logger.debug("[execute_tool] DONE tool=%s duration_ms=%s cached=False", tool_name, duration_ms)
 
     if isinstance(result, dict):
-        cache[key] = result
+        if hasattr(cache, "set") and not isinstance(cache, dict):
+            cache.set(tool_name, args, result)
+        else:
+            cache[tool_cache_key(tool_name, args)] = result
 
     return {"tool": tool_name, "args": args, "result": result, "duration_ms": duration_ms, "cached": False}
 

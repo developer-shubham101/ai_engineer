@@ -84,39 +84,30 @@ class SecurityMiddleware(RAGMiddleware):
 
 
 class CachingMiddleware(RAGMiddleware):
-    """Simple response caching."""
-    
-    def __init__(self):
-        self._cache: Dict[str, RAGResponse] = {}
-        self._max_cache_size = 100
-    
-    def _get_cache_key(self, request: RAGRequest) -> str:
-        """Generate cache key from request."""
-        return f"{request.provider}:{hash(request.question)}:{request.top_k}"
-    
+    """Semantic response caching using SemanticCache."""
+
+    def __init__(self) -> None:
+        from app.modules.agents.orchestrators.utils.semantic_cache import semantic_cache
+        self._cache = semantic_cache
+
+    def _call_args(self, request: RAGRequest) -> Dict[str, Any]:
+        return {"provider": request.provider, "question": request.question, "top_k": request.top_k}
+
     async def process_request(self, request: RAGRequest) -> RAGRequest:
-        cache_key = self._get_cache_key(request)
-        if cache_key in self._cache:
-            # Mark as cached for response processing
+        hit = self._cache.get("rag_query", self._call_args(request))
+        if hit is not None:
             request.metadata = request.metadata or {}
-            request.metadata["_cached_response"] = self._cache[cache_key]
+            request.metadata["_semantic_cached_response"] = hit
         return request
-    
+
     async def process_response(self, request: RAGRequest, response: RAGResponse) -> RAGResponse:
-        # Return cached response if available
-        if request.metadata and "_cached_response" in request.metadata:
-            cached_response = request.metadata["_cached_response"]
-            cached_response.metadata = cached_response.metadata or {}
-            cached_response.metadata["from_cache"] = True
-            return cached_response
-        
-        # Cache new response
-        cache_key = self._get_cache_key(request)
-        if len(self._cache) >= self._max_cache_size:
-            # Simple LRU: remove first item
-            self._cache.pop(next(iter(self._cache)))
-        
-        self._cache[cache_key] = response
+        if request.metadata and "_semantic_cached_response" in request.metadata:
+            cached: RAGResponse = request.metadata["_semantic_cached_response"]
+            cached.metadata = cached.metadata or {}
+            cached.metadata["from_cache"] = True
+            return cached
+
+        self._cache.set("rag_query", self._call_args(request), response)
         return response
 
 
