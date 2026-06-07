@@ -894,10 +894,10 @@ export default function RAGChat({ onLogout, initialMode = 'rag', initialConvId =
                                   {m.retrieved.map((r, i) => (
                                     <div
                                       key={i}
-                                      className="p-2 mb-2"
+                                      className="p-2 mb-2 border rounded"
                                       style={{
-                                        borderLeft: "3px solid #e9ecef",
-                                        background: "#2d702fff",
+                                        borderLeft: "3px solid var(--bs-primary) !important",
+                                        background: "var(--bs-secondary-bg)",
                                       }}
                                     >
                                       <div className="small text-muted">

@@ -73,7 +73,7 @@ export default function ConversationMessageDetail({ message }) {
               </strong>
               <div className="retrieved-docs">
                 {message.retrieved_context.map((doc, idx) => (
-                  <div key={idx} className="card card-body bg-light mb-2 small">
+                  <div key={idx} className="card card-body border mb-2 small" style={{ background: 'var(--bs-secondary-bg)', color: 'var(--bs-body-color)' }}>
                     <div className="d-flex justify-content-between align-items-start mb-1">
                       <span className="badge bg-primary">Doc {idx + 1}</span>
                       {doc.distance && (
