@@ -41,11 +41,11 @@ This system is built as a **learning playground and reference implementation** f
 ### Key Features
 - ✅ **Multi-provider LLM support** with unified API
 - ✅ **All providers registered** — `local`, `google`, `openai`/`gpt`, `huggingface`/`hf`, `customllm`, `colabllm`, `llamaserver` with alias resolution
-- ✅ **Complete query preprocessing pipeline** — normalization, spell correction (runs before normalization), synonym/acronym expansion, query classification; `QueryPreprocessor` singleton per orchestrator (no per-query re-init); domain vocabulary protected from mis-correction; repeated-char deduplication; run-together word segmentation (`wordninja`); digit-word splitting; auto LLM rewrite for broken grammar (unknown-word ratio > 30%)
-- ✅ **Multi-variant hybrid retrieval** — top-3 query variants searched across BM25 + vector store; results fused with weighted RRF before RBAC filter
+- ✅ **Query preprocessing as a standalone API** — `POST /api/rag/query/preprocess` runs the full pipeline (repeated-char dedup → wordninja segmentation → spell correction → normalization → expansion) and returns a `suggestion` for the user to accept before submitting; `QueryPreprocessor` is **not** wired into the RAG query path — the orchestrator receives exactly what the user submits
+- ✅ **Hybrid retrieval** — single query searched across BM25 + vector store; results fused with balanced RRF (bm25_weight=1.0, vector_weight=1.0) before RBAC filter
 - ✅ **BM25 hybrid retrieval** — `re.findall(r'[a-z0-9]+', ...)` tokenizer handles enterprise identifiers (e.g. `PTO-2024-Q1`); index rebuilt after every document add/update via `_bm25_dirty` flag
-- ✅ **Weighted RRF fusion** — `bm25_weight`/`vector_weight` driven by `query_type` (POLICY/FACTUAL → higher BM25 weight; semantic queries → higher vector weight)
-- ✅ **Cross-encoder reranking** — singleton `self._reranker` on `RAGOrchestrator`; no per-query model reload
+- ✅ **Balanced RRF fusion** — `bm25_weight=1.0, vector_weight=1.0`; no query-type-driven weighting
+- ✅ **Cross-encoder reranking** — lazy singleton `self._reranker` on `RAGOrchestrator`; vague queries (≤ 2 words) use `retrieval_k = max(top_k * 6, 30)` to give reranker more candidates
 - ✅ **Level-based RBAC filtering** — `ROLE_LEVELS[user_role] >= SENSITIVITY_LEVELS[sensitivity]`; `department_confidential` requires both level AND same dept; `personal` requires owner match OR HR+ level
 - ✅ **Paragraph-aware chunking** for semantic coherence
 - ✅ **Enterprise RBAC** with flexible role overrides
@@ -121,8 +121,8 @@ User Request → FastAPI Router → Container → Modular Services → Response
 - `embedding_manager.py` - Embedding model management
 - `reranker.py` - Cross-encoder reranking for improved retrieval quality
 - `bm25_index.py` - BM25 keyword-based retrieval; `_tokenize()` uses `re.findall(r'[a-z0-9]+', ...)` to split on hyphens/underscores for enterprise identifiers
-- `hybrid_retrieval.py` - Weighted Reciprocal Rank Fusion (`bm25_weight`/`vector_weight` params); dead `hybrid_search()` helper removed
-- `query_preprocessor.py` - Query normalization, spell correction (runs on original before normalization), acronym/synonym expansion, query type classification (`QueryType` enum); domain word protection (expansion keys + `rbac`, `pto`, `wfh`, etc. loaded into spell checker at init); `remove_repeated_chars()` collapses 3+ repeated chars; `split_concatenated_words()` via `wordninja`; digit-word splitting in `correct_spelling()`; `_looks_broken()` auto-enables LLM rewrite when unknown-word ratio > 30%
+- `hybrid_retrieval.py` - Reciprocal Rank Fusion; `bm25_weight`/`vector_weight` params (called with 1.0/1.0 balanced weights from `retrieve_documents()`)
+- `query_preprocessor.py` - Standalone preprocessing module; **not used inside `RAGOrchestrator`** — exposed only via `POST /api/rag/query/preprocess`. Pipeline: `remove_repeated_chars()` → `split_concatenated_words()` (wordninja) → `correct_spelling()` (with digit-word split + `PROTECTED_TERMS` guard) → `normalize_query()` (apostrophes preserved) → `expand_query()` → optional LLM rewrite (auto-triggered when unknown-word ratio > 30% via `_looks_broken()`). Module-level `PROTECTED_TERMS` frozenset (Finance, Tech, Auth, HR, internal codes, tools) and `_PROTECTED_LOWER` lookup set prevent mis-correction of domain terms.
 - `interfaces.py` - Vector database interfaces
 
 **🔧 Core Module** (`app/modules/core/`)
@@ -774,6 +774,19 @@ Response: {
 ```
 
 ### Multi-Provider RAG (`/api/rag/`)
+
+**POST /api/rag/query/preprocess** - As-you-type query fix (no auth required)
+```json
+Request:  {"query": "wht is pto polcy"}
+Response: {
+  "original":   "wht is pto polcy",
+  "corrected":  "what is pto policy",
+  "expanded":   "what is pto paid time off vacation leave policy",
+  "query_type": "policy",
+  "suggestion": "what is pto policy"
+}
+```
+Call debounced on keystroke pause. `suggestion` = best single string for "Did you mean?" UI. User accepts before submitting to `/query`.
 
 **POST /api/rag/{provider}/query** - Unified query interface
 - **Providers**: `local`, `google`, `gpt`, `openai`, `huggingface`, `hf`, `colabllm`, `customllm`, `llamaserver`
@@ -3086,11 +3099,15 @@ python tests/test_rbac_comprehensive.py
 - **Clear Output**: Detailed test results and failure reporting
 - **Documentation**: Comprehensive test coverage documentation
 
-## 22.5 Query Input Robustness Pipeline
+## 22.5 Query Input Robustness — `POST /api/rag/query/preprocess`
 
-### Overview
+### Design
 
-The `QueryPreprocessor` (`app/modules/vector_db/query_preprocessor.py`) applies a 6-stage pipeline before any retrieval occurs. All stages run inside `process_query()` in this order:
+`QueryPreprocessor` is **not wired into `RAGOrchestrator`**. The orchestrator receives the query exactly as submitted. The preprocessor is exposed as a dedicated endpoint the frontend calls while the user is typing (debounced), then shows a "Did you mean?" suggestion the user accepts or ignores before submitting.
+
+### `process_query()` Pipeline — 6 stages in order
+
+All stages run inside `process_query()` in this order:
 
 | Stage | Method | Purpose |
 |---|---|---|
@@ -3101,48 +3118,31 @@ The `QueryPreprocessor` (`app/modules/vector_db/query_preprocessor.py`) applies 
 | 5 | `expand_query()` | Acronym/synonym expansion from `self.expansions` dict |
 | 6 | `_looks_broken()` + LLM rewrite | Auto-enable LLM rewrite when unknown-word ratio > 30% |
 
-### Domain Word Protection
+### `PROTECTED_TERMS` — module-level constant
 
-At init, all expansion keys plus hardcoded domain terms are loaded into the spell checker's word frequency table so they are never mis-corrected:
+A `frozenset` of terms that must never be spell-corrected, enforced at two levels:
+1. Loaded into spell checker `word_frequency` at init so `unknown()` never flags them
+2. Explicit `if word.lower() in _PROTECTED_LOWER: continue` guard in `correct_spelling()`
 
-```python
-domain_words = set(self.expansions.keys()) | {
-    'rbac', 'pto', 'wfh', 'ooo', 'rto', 'sso', 'mfa',
-    'onboarding', 'offboarding', 'payroll', 'reimbursement',
-}
-self.spell_checker.word_frequency.load_words(domain_words)
-```
+Categories: Finance (`PAT`, `EBITDA`, `IPO`, `CAGR`, `OPEX`...), Technology (`GPU`, `CPU`, `WiFi`, `IoT`, `SaaS`...), Auth (`RBAC`, `SSO`, `MFA`, `JWT`, `OAuth`), HR (`PTO`, `WFH`, `OOO`, `RTO`), Internal codes (`TBG`, `TADS`, `TOS`, `TDL`), Tools (`Jira`, `Slack`, `GitHub`, `GitLab`).
 
-Without this, `pyspellchecker` would silently corrupt domain queries: `rbac` → `race`, `pto` → `pro`, `wfh` → `who`.
+To add more: append to `PROTECTED_TERMS` at the top of `query_preprocessor.py` — no other changes needed.
 
-### Apostrophe Preservation
+### `suggestion` field
 
-`normalize_query()` uses `[^a-z0-9\s\-']` (apostrophe included) so contractions like `"what's"` survive normalization intact.
+`suggestion = rewritten or corrected or expanded`, `null` if it matches the original.
 
-### Digit-Word Splitting
+### Vague query retrieval boost (in `RAGOrchestrator`)
 
-Inside `correct_spelling()`, before the digit-skip guard, digit-word combos are split:
-- `"3day"` → `["3", "day"]`
-- `"2weeks"` → `["2", "weeks"]`
-
-This ensures BM25 tokenizer receives proper tokens instead of unmatched compound strings.
-
-### Auto LLM Rewrite
-
-`_looks_broken(query)` returns `True` when more than 30% of words are unknown to the spell checker (skips queries ≤ 3 words to avoid false positives on short acronym queries). When triggered and an `llm_provider` is passed to `process_query()`, `use_llm_rewrite` is auto-enabled and `rewrite_with_llm()` fires.
-
-### Vague Query Retrieval Boost
-
-In `RAGOrchestrator.retrieve_documents()`, queries of ≤ 2 words are detected as vague and get a larger candidate pool for the reranker:
-
+Although preprocessing is decoupled, the orchestrator still boosts the candidate pool for short queries:
 ```python
 is_vague = len(query.split()) <= 2
 retrieval_k = max(top_k * 6, 30) if is_vague else max(top_k * 4, 20)
 ```
 
-### New Dependency
+### Dependency
 
-`wordninja` added to `requirements.txt` — pure Python word segmentation, no model download required.
+`wordninja` in `requirements.txt` — pure Python, no model download.
 
 ---
 
@@ -3180,7 +3180,7 @@ retrieval_k = max(top_k * 6, 30) if is_vague else max(top_k * 4, 20)
 
 ---
 
-**Last Updated**: 2025-06-15 (Query input robustness hardening from MISSING_TODO audit — domain word protection, apostrophe fix, repeated-char dedup, digit-word split, wordninja segmentation, auto LLM rewrite, vague query retrieval_k boost)
+**Last Updated**: 2025-06-15 (Query preprocessor decoupled from RAG orchestrator — now a standalone `POST /api/rag/query/preprocess` endpoint; retrieval pipeline simplified to direct single-query BM25+vector with balanced RRF)
 
 **Recent changes (autogen/custom/mcp refactor)**:
 - `orchestrators/utils/` created as shared package — `tool_registry`, `tool_utils`, `json_utils`, `plan_normalizer`, `step_utils` moved here; all three orchestrators import from this single location, zero duplication
