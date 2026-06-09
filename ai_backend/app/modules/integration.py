@@ -146,13 +146,13 @@ class Container:
     def get_metadata_generator(self):
         """Get metadata generator instance."""
         if "metadata_generator" not in self._instances:
-            from .llm.providers.local import LocalLLMProvider
+            # Local LLM archived — use LlamaServer instead.
+            # See archive/local_llm/ for the original LocalLLMProvider implementation.
+            from .llm.providers.llamaserver import LlamaServerProvider
             from .core.metadata_generator import LLMMetadataGenerator
-            
-            # Create local LLM provider for metadata generation
-            llm_provider = LocalLLMProvider()
+            llm_provider = LlamaServerProvider(configs={})
             self._instances["metadata_generator"] = LLMMetadataGenerator(llm_provider)
-            logger.info("Initialized metadata generator with local LLM provider")
+            logger.info("Initialized metadata generator with LlamaServer provider")
         return self._instances.get("metadata_generator")
 
     

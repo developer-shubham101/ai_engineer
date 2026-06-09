@@ -34,29 +34,8 @@ class ProviderPlugin(ABC):
         """Check if provider is available."""
         pass
 
-
-class LocalProviderPlugin(ProviderPlugin):
-    """Local LLM provider plugin."""
-    
-    @property
-    def name(self) -> str:
-        return "local"
-    
-    @property
-    def requires_api_key(self) -> bool:
-        return False
-    
-    async def create_provider(self, config: Optional[Dict[str, Any]] = None):
-        from app.modules.llm.providers.local import LocalLLMProvider
-        model_name = config.get("model_name") if config else None
-        return LocalLLMProvider(model_name=model_name)
-    
-    def is_available(self) -> bool:
-        try:
-            from app.modules.llm.providers.local import LocalLLMProvider
-            return True
-        except ImportError:
-            return False
+# LocalProviderPlugin archived — local LLM no longer supported.
+# See archive/local_llm/ for the original implementation.
 
 
 class GoogleProviderPlugin(ProviderPlugin):
@@ -131,7 +110,6 @@ class ProviderRegistry:
     def _register_default_plugins(self):
         """Register default provider plugins."""
         plugins = [
-            LocalProviderPlugin(),
             GoogleProviderPlugin(),
             OpenAIProviderPlugin(),
             HuggingFaceProviderPlugin(),

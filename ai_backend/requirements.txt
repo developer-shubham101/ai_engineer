@@ -34,12 +34,12 @@ autogen-ext[openai]
 # --- LLM Providers & Hubs ---
 openai
 huggingface_hub
-llama-cpp-python
+# llama-cpp-python  # ARCHIVED — local LLM no longer used (see archive/local_llm/)
 
 # --- Local ML / Embeddings / Vector DB ---
-torch
-transformers
-sentencepiece
+# torch             # ARCHIVED — was required for local GGUF inference (see archive/local_llm/)
+# transformers      # ARCHIVED — was required for local model loading (see archive/local_llm/)
+# sentencepiece     # ARCHIVED — tokenizer dependency for local transformers (see archive/local_llm/)
 sentence-transformers
 chromadb
 faiss-cpu

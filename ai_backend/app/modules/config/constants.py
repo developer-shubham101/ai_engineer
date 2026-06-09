@@ -39,22 +39,23 @@ class Department(Enum):
 
 class LLMProvider(Enum):
     """LLM provider enumeration.
-    
+
     Supported providers:
-    - LOCAL: Local models loaded in RAG system (Mistral, Phi-2, Llama, Gemma)
     - GOOGLE: Google Gemini API models
     - GPT/OPENAI: OpenAI GPT models via API
     - HUGGINGFACE/HF: Hugging Face Inference API models
     - COLABLLM: Custom API endpoints (legacy name for backward compatibility)
     - CUSTOMLLM: Custom/third-party API endpoints (preferred)
-    - LLAMASERVER: llama-server.exe with OpenAI-compatible API (see documents/llm_cpp/)
+    - LLAMASERVER: llama-server.exe with OpenAI-compatible API
+
+    NOTE: LOCAL provider archived — see archive/local_llm/
     """
-    LOCAL = "local"
+    # LOCAL = "local"  # ARCHIVED — see archive/local_llm/
     GOOGLE = "google"
     GPT = "gpt"
     OPENAI = "openai"
     HUGGINGFACE = "huggingface"
-    HF = "hf"   
+    HF = "hf"
     COLABLLM = "colabllm"  # Legacy name for backward compatibility
     CUSTOMLLM = "customllm"  # Custom/third-party LLM APIs
     LLAMASERVER = "llamaserver"

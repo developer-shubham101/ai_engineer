@@ -145,8 +145,8 @@ class RAGOrchestrator(IRAGOrchestrator):
 
         start_time = time.time()
 
-        if request.metadata and "_cached_response" in request.metadata:
-            return await self.middleware_stack.process_response(request, request.metadata["_cached_response"])
+        if request.metadata and "_semantic_cached_response" in request.metadata:
+            return await self.middleware_stack.process_response(request, request.metadata["_semantic_cached_response"])
 
         # # Handle tool-based agent mode
         if request.use_tools:

@@ -13,14 +13,14 @@ A **production-ready multi-provider RAG system** supporting both **offline-first
 
 ### Context & Motivation
 This system is built as a **learning playground and reference implementation** for Advanced RAG patterns. It allows developers to:
--   **Experiment** with different LLM providers (Local vs. Cloud) and observe trade-offs.
+-   **Experiment** with different LLM providers (Cloud, LlamaServer) and observe trade-offs.
 -   **Understand** complex system design patterns like Dependency Injection in Python/FastAPI.
 -   **Study** the implementation of enterprise features like RBAC and precise token management.
 -   **Debug** and trace the full RAG pipeline to demystify how retrieval and generation utilize context.
 
 ### Supported Providers
-- **Local Models**: Auto-selected from local_models.json (Mistral-7B, Phi-2, Llama-3.2, Gemma-2B via llama-cpp-python)
 - **Cloud APIs**: Google Gemini-2.5-Flash/Pro, OpenAI GPT-3.5/4, Hugging Face Inference API
+- **Archived**: Local GGUF models (Mistral-7B, Phi-2, Llama-3.2, Gemma-2B via llama-cpp-python) → `archive/local_llm/`
 - **CustomLLM**: Custom/third-party models via /ask endpoint (preferred for third-party APIs)
 - **ColabLLM**: Legacy name for custom APIs (backward compatibility)
 - **LlamaServer**: llama-server.exe with OpenAI-compatible API
@@ -30,7 +30,7 @@ This system is built as a **learning playground and reference implementation** f
 
 | Provider | Endpoint | Description | Status |
 |----------|----------|-------------|--------|
-| Local Models | `local` | GGUF models via llama-cpp-python | ✅ Active |
+| ~~Local Models~~ | ~~`local`~~ | ~~GGUF models via llama-cpp-python~~ | 🗄️ Archived |
 | OpenAI GPT | `gpt`, `openai` | GPT-3.5, GPT-4 via OpenAI API | ✅ Active |
 | Google Gemini | `google` | Gemini-2.5-Flash/Pro via Google AI | ✅ Active |
 | Hugging Face | `huggingface`, `hf` | Various models via HF Inference API | ✅ Active |
@@ -40,7 +40,7 @@ This system is built as a **learning playground and reference implementation** f
 
 ### Key Features
 - ✅ **Multi-provider LLM support** with unified API
-- ✅ **All providers registered** — `local`, `google`, `openai`/`gpt`, `huggingface`/`hf`, `customllm`, `colabllm`, `llamaserver` with alias resolution
+- ✅ **All providers registered** — `google`, `openai`/`gpt`, `huggingface`/`hf`, `customllm`, `colabllm`, `llamaserver` with alias resolution (~~`local`~~ archived — see `archive/local_llm/`)
 - ✅ **Query preprocessing as a standalone API** — `POST /api/rag/query/preprocess` runs the full pipeline (repeated-char dedup → wordninja segmentation → spell correction → normalization → expansion) and returns a `suggestion` for the user to accept before submitting; `QueryPreprocessor` is **not** wired into the RAG query path — the orchestrator receives exactly what the user submits
 - ✅ **Hybrid retrieval** — single query searched across BM25 + vector store; results fused with balanced RRF (bm25_weight=1.0, vector_weight=1.0) before RBAC filter
 - ✅ **BM25 hybrid retrieval** — `re.findall(r'[a-z0-9]+', ...)` tokenizer handles enterprise identifiers (e.g. `PTO-2024-Q1`); index rebuilt after every document add/update via `_bm25_dirty` flag
@@ -63,7 +63,7 @@ This system is built as a **learning playground and reference implementation** f
 - ✅ **OCR and Image Analysis** with CPU-friendly implementations
 - ✅ **Emotion Detection** from audio inputs
 - ✅ **LLM-assisted metadata generation** — Semantic enrichment for improved RAG
-- ✅ **Offline-first architecture** with cloud integration
+- ✅ **Cloud-first architecture** (local GGUF inference archived — use LlamaServer for on-prem)
 - ✅ **JWT authentication** with comprehensive audit logging
 - ✅ **Prompt optimization** with token budgeting and context truncation (2000 chars/doc)
 - ✅ **Debug capabilities** with final_prompt exposure for optimization
@@ -100,16 +100,15 @@ User Request → FastAPI Router → Container → Modular Services → Response
 
 **🤖 LLM Module** (`app/modules/llm/`)
 - `rag_orchestrator.py` - RAG workflow orchestration
-- `providers/` - LLM provider implementations (Local, Google, GPT, HF, ColabLLM, LlamaServer)
+- `providers/` - LLM provider implementations (Google, GPT, HF, ColabLLM, LlamaServer); `local.py` — **ARCHIVED** → `archive/local_llm/local.py`
 - `services/colabllm_rag_service.py` - ColabLLM RAG service implementation
-- `provider_factory.py` - Factory for dynamic provider selection with alias resolution (`gpt`→`openai`, `hf`→`huggingface`); registers `OpenAIProviderPlugin` and `HuggingFaceProviderPlugin` alongside Local, Google, ColabLLM, LlamaServer
-- `prompt_manager.py` - Optimized prompt construction with token budgeting
+- `provider_factory.py` - Factory for dynamic provider selection with alias resolution (`gpt`→`openai`, `hf`→`huggingface`); registers `OpenAIProviderPlugin` and `HuggingFaceProviderPlugin` alongside Google, ColabLLM, LlamaServer (~~`LocalProviderPlugin`~~ archived)
+- `model_manager.py` - **ARCHIVED** → `archive/local_llm/model_manager.py`
 - `prompt_chain.py` - Chain of Responsibility pattern for dynamic prompt building
 - `prompt_builder.py` - Low-level prompt building utilities
 - `template_manager.py` - Database-backed prompt template management
-- `langchain_prompt_selector.py` - LangChain-based prompt selection
-- `model_manager.py` - Local model loading and caching
 - `middleware.py` - LLM request/response middleware (CachingMiddleware uses shared `semantic_cache` singleton from `orchestrators/utils/semantic_cache.py` for embedding-based response caching)
+- `prompt_manager.py` - Optimized prompt construction with token budgeting
 - `colabllm_plugin.py` - ColabLLM provider plugin
 - `llamaserver_plugin.py` - LlamaServer provider plugin
 - `interfaces.py` - LLM and RAG interfaces
@@ -216,7 +215,7 @@ User Request → FastAPI Router → Container → Modular Services → Response
 - `api_routes_audio.py` - Audio processing (STT, TTS, Emotion)
 - `api_routes_vision.py` - Vision processing (OCR, Image Analysis)
 - `api_routes_media.py` - Media file serving with RBAC
-- `api_routes_models.py` - Model management endpoints
+- `api_routes_models.py` - **ARCHIVED** → `archive/local_llm/api_routes_models.py` (`/api/models/*` removed)
 - `api_routes_agents.py` - Agent workflow endpoints (autogen, custom, mcp, crewai via unified `/api/agents/query`)
 - `api_routes_cleanup.py` - Document cleanup and metadata enrichment
 - `api_routes_templates.py` - Prompt template CRUD endpoints
@@ -239,7 +238,7 @@ User Request → FastAPI Router → Container → Modular Services → Response
 
 #### Why Custom Implementation?
 
-All RAG providers (Local, Google, GPT, HuggingFace) use the **same unified session management system** through inheritance from `BaseRAGService`. This provides:
+All RAG providers (Google, GPT, HuggingFace, LlamaServer) use the **same unified session management system** through inheritance from `BaseRAGService`. This provides:
 
 1. **Persistence**: SQLite storage survives server restarts (critical for production)
 2. **Multi-user Support**: Session-isolated storage with unique `session_id` keys
@@ -268,8 +267,8 @@ All RAG providers (Local, Google, GPT, HuggingFace) use the **same unified sessi
         │                   │                   │              │
         ▼                   ▼                   ▼              ▼
 ┌───────────────┐  ┌───────────────┐  ┌───────────────┐  ┌──────────────┐
-│ LocalRAG      │  │ GoogleRAG     │  │ GPTRAG        │  │ HuggingFace  │
-│ Service       │  │ Service       │  │ Service       │  │ RAGService   │
+│ GoogleRAG     │  │ GPTRAG        │  │ HuggingFace  │  │ LlamaServer  │
+│ Service       │  │ Service       │  │ RAGService   │  │ Provider     │
 └───────────────┘  └───────────────┘  └───────────────┘  └──────────────┘
 ```
 
@@ -586,7 +585,7 @@ ai_backend/
 │   │   │   └── __init__.py        # Module exports
 │   │   ├── llm/             # LLM module
 │   │   │   ├── providers/         # Provider implementations
-│   │   │   │   ├── local.py       # Local llama-cpp provider
+│   │   │   │   ├── local.py       # ARCHIVED → archive/local_llm/local.py
 │   │   │   │   ├── openai.py      # OpenAI GPT provider
 │   │   │   │   ├── google.py      # Google Gemini provider
 │   │   │   │   ├── huggingface.py # Hugging Face provider
@@ -608,7 +607,7 @@ ai_backend/
 │   │   │   ├── prompt_chain.py    # Chain of Responsibility
 │   │   │   ├── prompt_builder.py  # Low-level prompt utilities
 │   │   │   ├── template_manager.py # DB-backed template management
-│   │   │   ├── model_manager.py   # Local model loading
+│   │   │   ├── model_manager.py   # ARCHIVED → archive/local_llm/model_manager.py
 │   │   │   ├── middleware.py      # LLM middleware
 │   │   │   ├── colabllm_plugin.py # ColabLLM plugin
 │   │   │   ├── llamaserver_plugin.py # LlamaServer plugin
@@ -727,7 +726,7 @@ ai_backend/
 ├── data/cleaned/            # Enriched documents (inside data/)
 │   └── company/            # Cleaned company documents
 ├── database/                # SQLite databases
-├── models/                  # Local LLM models (GGUF)
+├── models/                  # Local LLM models (GGUF) — ARCHIVED, no longer used
 ├── embeddings_models/       # Embedding models
 ├── user_uploaded_files/     # User multimodal files (NEW)
 │   └── {user_id}/          # Per-user file isolation
@@ -790,7 +789,7 @@ Response: {
 Call debounced on keystroke pause. `suggestion` = best single string for "Did you mean?" UI. User accepts before submitting to `/query`.
 
 **POST /api/rag/{provider}/query** - Unified query interface
-- **Providers**: `local`, `google`, `gpt`, `openai`, `huggingface`, `hf`, `colabllm`, `customllm`, `llamaserver`
+- **Providers**: `google`, `gpt`, `openai`, `huggingface`, `hf`, `colabllm`, `customllm`, `llamaserver` (~~`local`~~ archived)
 - **Authentication**: Optional (Bearer token for personalization)
 - **RBAC**: Automatic filtering based on user role/department
 
@@ -808,7 +807,7 @@ Request: {
   "category": "string",
   "debug": false,
   "prompt_template": "string",  // Template selection
-  "local_llm_model": "llama32-1b"  // Local provider only
+  "local_llm_model": null          // DEPRECATED — local provider archived
 }
 
 Response: {
@@ -1409,7 +1408,6 @@ async def _build_messages(template_name, user_question, documents, history, ...)
 ### Provider Compatibility
 
 All providers accept message arrays:
-- **LocalLLMProvider**: Converts messages to prompt string
 - **OpenAILLMProvider**: Uses messages directly (native support)
 - **GoogleLLMProvider**: Converts messages to prompt string
 - **HuggingFaceLLMProvider**: Converts messages to prompt string
@@ -1501,17 +1499,12 @@ All RAG providers now support a unified `temperature` parameter that controls re
 
 - **Range**: 0.0 (deterministic) to 1.0 (highly creative)
 - **Default**: 0.1 (balanced, slightly deterministic)
-- **Providers**: Local, Google Gemini, OpenAI GPT, Hugging Face
+- **Providers**: Google Gemini, OpenAI GPT, Hugging Face, LlamaServer
 - **API Integration**: Available in all `/api/rag/{provider}/query` endpoints
 
 ### Temperature Behavior by Provider
 
 ```python
-# Local Models (llama-cpp-python)
-- Uses native temperature parameter in llama.cpp
-- Applied during _call_llm_with_retry() function
-- Supports full 0.0-1.0 range
-
 # Google Gemini API
 - Maps to generation_config.temperature
 - Applied in GoogleRAGService.generate_response()
@@ -2433,7 +2426,7 @@ Context:
 - **Context Retention**: AI remembers previous conversation turns
 - **Follow-up Questions**: Users can ask "What about that?" and AI understands references
 - **Personalized Responses**: AI can reference earlier user statements
-- **Session Continuity**: Works across all LLM providers (Local, Google, GPT, HuggingFace)
+- **Session Continuity**: Works across all LLM providers (Google, GPT, HuggingFace, LlamaServer)
 
 ### Integration with RAG Services
 
@@ -2519,7 +2512,6 @@ def _allowed_by_metadata(metadata, requester):
 ```
 
 ### Provider Services
-- **LocalRAGService**: Mistral-7B/Phi-2/etc via llama-cpp-python (with temperature)
 - **GoogleRAGService**: Gemini API calls (with temperature)
 - **GPTRAGService**: OpenAI API calls (with temperature)
 - **HuggingFaceRAGService**: HF Inference API (with temperature)
@@ -2686,43 +2678,14 @@ VALID_DEPARTMENTS = [
 
 ---
 
-## 17. Local Model Support
+## 17. Local Model Support — ARCHIVED
 
-### Supported Models (GGUF Format)
-```
-models/
-├── mistral-7b-instruct-v0.2.Q3_K_M.gguf
-├── phi-2-q4_k_m.gguf
-├── llama-3.2-1b-instruct-q4_k_m.gguf
-├── gemma-2b-it-q4_k_m.gguf
-└── ... (auto-detected GGUF files)
-```
+Local GGUF inference via llama-cpp-python has been archived. Related files are in `archive/local_llm/`:
+- `local.py` — `LocalLLMProvider` implementation
+- `model_manager.py` — GGUF model detection and caching
+- `api_routes_models.py` — `/api/models/*` endpoints
 
-**Model Capabilities:**
-- **Mistral-7B**: Production-ready, balanced performance
-- **Phi-2**: Optimized for reasoning tasks
-- **Llama-3.2**: Efficient edge models (1B/3B variants)
-- **Gemma-2B**: Google safety-aligned model
-
-### Model Management
-```python
-# local_model_manager.py
-def get_available_models() -> List[Dict]
-def get_best_available_model() -> Optional[str]
-def get_model_info(model_key) -> Dict
-```
-
-### Download Scripts
-```bash
-# List available models
-python scripts/download_hf_model.py --list
-
-# Download specific model  
-python scripts/download_hf_model.py --download phi2
-
-# Download all models
-python scripts/download_hf_model.py --all
-```
+For local inference use **LlamaServer** (`llamaserver` provider) with `LLAMASERVER_BASE_URL` pointing to a running `llama-server.exe`.
 
 ---
 
@@ -2810,11 +2773,6 @@ curl -X POST "/api/auth/token" \
 
 ### Multi-Provider Queries
 ```bash
-# Local model with specific selection
-curl -X POST "/api/rag/local/query" \
-  -H "Authorization: Bearer <token>" \
-  -d '{"question": "What is our policy?", "use_llm": true, "local_llm_model": "phi2"}'
-
 # Google Gemini
 curl -X POST "/api/rag/google/query" \
   -H "Authorization: Bearer <token>" \
@@ -3024,7 +2982,6 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000
 - **Python 3.10+**
 - **ChromaDB** for vector storage
 - **SQLite** for sessions/users/versions
-- **Local models** in `models/` directory
 - **Embedding models** in `embeddings_models/`
 
 ---
@@ -3219,7 +3176,7 @@ retrieval_k = max(top_k * 6, 30) if is_vague else max(top_k * 4, 20)
 **API Endpoints:**
 - ✅ `api_routes_auth.py` - Uses modular auth services
 - ✅ `api_routes_rag.py` - RAG implementation using modular architecture
-- ✅ `api_routes_models.py` - Model management endpoints
+- 🗄️ `api_routes_models.py` - **ARCHIVED** → `archive/local_llm/` (`/api/models/*` removed)
 - ✅ `api_routes_agents.py` - **NEW: Agent workflows with factory pattern**
 - ✅ `dependencies.py` - Container-based dependency injection
 - ✅ `main.py` - Modular architecture initialization

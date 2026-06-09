@@ -57,7 +57,7 @@ class QueryRequest(BaseModel):
     temperature: float = DEFAULT_TEMPERATURE
     category: Optional[str] = None
     debug: bool = False
-    local_llm_model: Optional[str] = None
+    local_llm_model: Optional[str] = None  # DEPRECATED — local provider archived; ignored for all other providers
     prompt_template: Optional[str] = None  # Made optional
 
 
