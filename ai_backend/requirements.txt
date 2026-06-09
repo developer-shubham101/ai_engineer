@@ -76,8 +76,5 @@ pytest
 yfinance
 duckduckgo-search
 
-rank-bm25
-
-
 # MCP (Model Context Protocol) dependencies
 httpx>=0.27.0

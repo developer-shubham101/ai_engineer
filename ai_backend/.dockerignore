@@ -6,10 +6,20 @@ __pycache__
 .gitignore
 .idea
 .vscode
-README.md
+*.md
 venv
+.env
 
-# Runtime directories (will be created in container)
+# Large model/embedding files — mount at runtime if needed
+models/
+embeddings_models/
+
+# Runtime directories (created in container)
 database/
 chroma_storage/
 logs/
+user_uploaded_files/
+
+# Test & dev artifacts
+test_module/
+archive/

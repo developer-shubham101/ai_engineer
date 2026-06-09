@@ -1,0 +1,44 @@
+version: '3.9'
+
+services:
+
+  backend:
+    build:
+      context: ./ai_backend
+    container_name: ai_backend
+    ports:
+      - "8000:8000"
+    env_file:
+      - ./ai_backend/.env
+    volumes:
+      - backend_db:/app/database
+      - backend_chroma:/app/chroma_storage
+      - backend_logs:/app/logs
+      - backend_uploads:/app/user_uploaded_files
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./front_end_react
+      args:
+        # Points the React app at the backend.
+        # In production replace with your real domain/IP.
+        VITE_API_URL: http://localhost:8000
+    container_name: ai_frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  backend_db:
+  backend_chroma:
+  backend_logs:
+  backend_uploads:

@@ -1,4 +1,4 @@
-export const BASE_API_URL = 'http://localhost:8000'
+export const BASE_API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
 export const CONFIG_TOOLTIPS = {
   USE_LLM: 'If you disable this, RAG will not use LLM to generate answers. Only use it to embed and retrieve documents without AI-generated responses',

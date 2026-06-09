@@ -89,6 +89,7 @@ git clone https://github.com/your-username/ai_backend.git
 cd ai_backend
 pip install -r requirements.txt
 cp .env.example .env   # edit with your API keys
+python ./scripts/download_embeddings_models.py # Download embeddings models
 python -m app.main
 ```
 
