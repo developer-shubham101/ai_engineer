@@ -1154,7 +1154,6 @@ export default function RAGChat({ onLogout, initialMode = 'rag', initialConvId =
                         onChange={(e) => setModelProvider(e.target.value)}
                       >
                         <option value="llamaserver">Llama Server</option>
-                        <option value="local">Local</option>
                         <option value="google">Google</option>
                         <option value="gpt">OpenAI GPT</option>
                         <option value="hf">Hugging Face</option>
