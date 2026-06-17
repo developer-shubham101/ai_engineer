@@ -115,13 +115,6 @@ class ProviderRegistry:
             HuggingFaceProviderPlugin(),
         ]
         
-        # Register ColabLLM plugin
-        try:
-            from .colabllm_plugin import ColabLLMProviderPlugin
-            plugins.append(ColabLLMProviderPlugin())
-        except ImportError:
-            logger.warning("ColabLLM plugin not available")
-        
         # Register LlamaServer plugin
         try:
             from .llamaserver_plugin import LlamaServerProviderPlugin

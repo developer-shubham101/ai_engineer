@@ -52,7 +52,6 @@ HTTP Request
 | Google Gemini | `google` | ✅ API |
 | Hugging Face | `huggingface`, `hf` | ✅ API |
 | CustomLLM | `customllm` | ✅ API (preferred for 3rd-party) |
-| ColabLLM | `colabllm` | ✅ API (legacy alias) |
 | LlamaServer | `llamaserver` | ✅ Local server |
 
 ### Agent Orchestrators
@@ -85,11 +84,21 @@ HTTP Request
 ### Installation
 
 ```bash
-git clone https://github.com/your-username/ai_backend.git
-cd ai_backend
+git clone https://github.com/developer-shubham101/ai_engineer.git
+cd ai_engineer/ai_backend
 pip install -r requirements.txt
 cp .env.example .env   # edit with your API keys
 python ./scripts/download_embeddings_models.py # Download embeddings models
+```
+
+> **💡 Local LLM (Optional):** If you want to use a local model instead of cloud APIs:
+> 1. Download the llama.cpp binary from **[github.com/ggml-org/llama.cpp/releases](https://github.com/ggml-org/llama.cpp/releases)** (e.g. `llama-b7445-bin-win-cpu-x64.zip`)
+> 2. Start the server **before** running the app — see **[Run Local LLM Server](documents/llm_cpp/run_local_llm_cpp.md)** for commands
+> 3. Set the URLs in your `.env`: `LLAMASERVER_BASE_URL=http://localhost:8080/v1` and `CREW_BASE_URL=http://localhost:8080`
+>
+> If you prefer cloud providers (OpenAI, Google Gemini, Hugging Face), just add the relevant API keys to your `.env` and skip this step.
+
+```bash
 python -m app.main
 ```
 
@@ -365,6 +374,7 @@ python validate_container_full.py
 - **[API Docs](http://localhost:8000/docs)** — Interactive Swagger UI
 - **[APP_CONTEXT.md](APP_CONTEXT.md)** — Complete technical architecture reference
 - **[AUTO_GEN.md](AUTO_GEN.md)** — AutoGen orchestrator deep-dive
+- **[Run Local LLM Server](documents/llm_cpp/run_local_llm_cpp.md)** — llama.cpp server setup & commands
 
 ---
 
@@ -384,6 +394,6 @@ python validate_container_full.py
 
 **Built with ❤️ for the AI community**
 
-[Report Bug](https://github.com/your-username/ai_backend/issues) • [Request Feature](https://github.com/your-username/ai_backend/issues)
+[Report Bug](https://github.com/developer-shubham101/ai_engineer/issues) • [Request Feature](https://github.com/developer-shubham101/ai_engineer/issues)
 
 </div>

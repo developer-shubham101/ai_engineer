@@ -174,7 +174,7 @@ class FaissVectorStore(IVectorStore):
         """Add multiple documents to the collection with optional pre-computed embeddings."""
         try:
             if embeddings is None:
-                # This is a sync method but we need async encode - log warning
+                # This is a sync method, but we need async encode - log warning
                 logger.warning("add_documents_to_collection called without embeddings. This requires async operation.")
                 raise ValueError("Embeddings must be pre-computed for batch operations in FAISS")
             

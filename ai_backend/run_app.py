@@ -21,5 +21,10 @@ if __name__ == "__main__":
         host=settings.HOST,
         port=settings.PORT,
         reload=True,
-        log_level="info"
+        reload_excludes=[
+            "*.log",
+            "logs/*",
+            "logs/**/*",
+        ],
+        log_level="info",
     )

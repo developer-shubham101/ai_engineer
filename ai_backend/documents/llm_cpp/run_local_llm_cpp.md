@@ -1,10 +1,18 @@
 # Llama.cpp Server Commands
 
+## Download llama.cpp
+
+Download the prebuilt Windows CPU binary from the official releases page:
+
+👉 **[https://github.com/ggml-org/llama.cpp/releases](https://github.com/ggml-org/llama.cpp/releases)**
+
+Look for a release asset named like `llama-b7445-bin-win-cpu-x64.zip`, extract it, and you will have `llama-server.exe` inside.
+
 ## Running Local LLM Server
 
-Navigate to the llama.cpp binary directory:
+Navigate to the extracted llama.cpp binary directory:
 ```bash
-C:\Users\vampire\Downloads\llama-b7445-bin-win-cpu-x64
+cd C:\Users\<your-username>\Downloads\llama-b7445-bin-win-cpu-x64
 ```
 
 ## Command Structure

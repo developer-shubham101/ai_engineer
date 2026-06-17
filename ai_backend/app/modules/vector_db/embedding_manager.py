@@ -64,7 +64,7 @@ class EmbeddingManager(IEmbeddingManager):
                 )
                 model = SentenceTransformer(settings.EMBEDDING_MODEL_NAME)
             
-            model_info = model.get_sentence_embedding_dimension()
+            model_info = model.get_embedding_dimension()
             logger.info(
                 "EMBEDDING_MODEL_SUCCESS: Model loaded successfully | Actual dimensions: %d", 
                 model_info
@@ -145,7 +145,7 @@ class EmbeddingManager(IEmbeddingManager):
         
         if self._model is not None:
             try:
-                info["actual_dimensions"] = self._model.get_sentence_embedding_dimension()
+                info["actual_dimensions"] = self._model.get_embedding_dimension()
                 info["model_loaded"] = True
             except Exception as e:
                 info["model_loaded"] = False
@@ -158,5 +158,5 @@ class EmbeddingManager(IEmbeddingManager):
     def get_embedding_dimension(self) -> int:
         """Get embedding dimension."""
         if self._model:
-            return self._model.get_sentence_embedding_dimension()
+            return self._model.get_embedding_dimension()
         return 0

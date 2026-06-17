@@ -101,7 +101,7 @@ curl -X POST "http://127.0.0.1:8000/api/rag/query/preprocess" \
 POST /api/rag/{provider}/query
 ```
 
-**Providers:** `local` · `google` · `gpt` · `openai` · `huggingface` · `hf` · `customllm` · `colabllm` · `llamaserver`
+**Providers:** `local` · `google` · `gpt` · `openai` · `huggingface` · `hf` · `customllm` · `llamaserver`
 
 Auth is optional — unauthenticated requests are served as Guest.
 
